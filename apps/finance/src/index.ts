@@ -6,17 +6,14 @@ import cors from '@koa/cors'
 import mount from 'koa-mount'
 import serve from 'koa-static'
 import koaBody from 'koa-body'
-import { toLower } from 'ramda'
 import { historyApiFallback } from 'koa2-connect-history-api-fallback'
 
 import router from './router'
 import { logger } from './logger'
 import response from './utils/response'
-import { parseUserInfoByCookie } from './router/user'
-import { port, apiNeededToAuth, cacheTime as maxAge } from './config'
+import { port, cacheTime as maxAge } from './config'
 
 const app = new Koa()
-
 //统一错误处理
 app.use(async (ctx, next) => {
   try {
@@ -48,19 +45,19 @@ app.use(serve(join(__dirname, '../public'), { maxAge }))
 app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 // 统一鉴权
-app.use(async (ctx, next) => {
-  const {
-    url,
-    header: { cookie }
-  } = ctx.request
-  const user = await parseUserInfoByCookie(cookie)
+// app.use(async (ctx, next) => {
+//   const {
+//     url,
+//     header: { cookie }
+//   } = ctx.request
+//   const user = await parseUserInfoByCookie(cookie)
 
-  if (apiNeededToAuth.includes(toLower(url)) && user?.role !== 'admin') {
-    response.success(ctx, null, '没有权限', 403)
-    return
-  }
-  await next()
-})
+//   if (apiNeededToAuth.includes(toLower(url)) && user?.role !== 'admin') {
+//     response.success(ctx, null, '没有权限', 403)
+//     return
+//   }
+//   await next()
+// })
 
 // 解析请求体
 app.use(

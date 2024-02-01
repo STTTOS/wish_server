@@ -1,0 +1,15 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/finance-client"
+}
+
+// 用户
+model Test {
+  id   Int    @id @default(autoincrement())
+  name String
+}
