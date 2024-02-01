@@ -1,0 +1,167 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  admin
+  user
+}
+
+// 用户
+model User {
+  id            Int      @id @default(autoincrement())
+  // 账号
+  username      String   @unique
+  // 密码
+  password      String
+  // 角色
+  role          Role?    @default(user)
+  // 是否是贡献者
+  isContributor Boolean? @default(false)
+  // 昵称
+  name          String?
+  // 头像
+  avatar        String?
+  // 自定义背景
+  backgroundUrl String?
+  // 个性签名
+  desc          String?
+  // 邮箱
+  email         String?  @unique
+  // git地址
+  github        String?
+  createdAt     DateTime @default(now())
+
+  articles Article[]
+
+  TagsOnArticles TagsOnArticles[]
+
+  eBooks EBook[]
+
+  comments Comment[]
+}
+
+// 文章
+model Article {
+  id            Int              @id @default(autoincrement())
+  // 标题
+  title         String
+  // 摘要
+  desc          String?
+  // 阅读量
+  viewCount     Int              @default(0)
+  // 封面图
+  backgroundUrl String?
+  // 内容
+  content       String           @db.LongText
+  // 字数
+  length        Int
+  isOrigin      Boolean          @default(true)
+  // 估计阅读时间
+  readingTime   Int              @default(0)
+  // 关联用户表
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  // chore: 设置为可选 -> 删除用户的时候, 会把文章关联的authorId字段置空
+  authorId      Int?
+  author        User?            @relation(fields: [authorId], references: [id])
+  coAuthorIds   String?
+  // feat: 20230-10-17, 新增仅自己可见字段, 默认为false
+  private       Boolean          @default(false)
+  tags          TagsOnArticles[]
+  comments      Comment[]
+
+  @@unique([authorId, title])
+}
+
+// 标签
+model Tag {
+  id        Int              @id @default(autoincrement())
+  // tag名称
+  name      String           @unique
+  // 立体卡片 背后图标
+  icon      String?
+  // 标签的阅读量
+  viewCount Int              @default(0)
+  articles  TagsOnArticles[]
+}
+
+model TagsOnArticles {
+  // chore: 设置为级联删除, 当删除文章时, 会删除所有关联数据
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId Int
+  // chore: onDelete默认为Restrict -> 删除tag时, 若此表有关系, 则禁止删除
+  tag       Tag     @relation(fields: [tagId], references: [id])
+  tagId     Int
+
+  author   User? @relation(fields: [authorId], references: [id])
+  authorId Int?
+
+  @@id([tagId, articleId])
+}
+
+model Tools {
+  id        Int    @id @default(autoincrement())
+  title     String @unique
+  scriptUrl String
+  cssHref   String
+}
+
+model EBook {
+  id        Int            @id @default(autoincrement())
+  // 电子书名称, 可以重复
+  name      String
+  // 电子书分类
+  category  EBookCategory? @default(other)
+  words     Int?
+  // 电子书资源链接
+  eBookUrl  String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  userId Int?
+  // 上传用户
+  user   User? @relation(fields: [userId], references: [id])
+}
+
+enum EBookCategory {
+  //小说
+  fiction
+  //经济学
+  economics
+  //哲学
+  philosophy
+  //专业书籍
+  professional
+  //纪实文学
+  non_fiction
+  // 传记
+  biography
+  //未分类 
+  other
+}
+
+// 新增评论功能
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.VarChar(1000)
+  createdAt DateTime @default(now())
+
+  // 关联用户
+  author   User @relation(fields: [authorId], references: [id])
+  authorId Int
+  // targetAuthorId Int?
+
+  // 关联文章
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId Int
+
+  parentCommentId Int?
+  parentComment   Comment?  @relation("replies", fields: [parentCommentId], references: [id])
+  replies         Comment[] @relation("replies")
+}
