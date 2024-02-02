@@ -1,6 +1,6 @@
 import type { RequestBody, WithPaginationReq } from '../interface'
 
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import { tools } from '../../models'

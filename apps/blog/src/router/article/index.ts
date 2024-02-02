@@ -3,7 +3,7 @@ import type { GetArticleByPaginationReq } from './interface'
 
 import moment from 'moment'
 import { prop } from 'ramda'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import prisma from '../../models'

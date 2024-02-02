@@ -2,7 +2,7 @@ import type { Identity } from '../interface'
 import type { EBookLookUpList } from './interface'
 
 import moment from 'moment'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import { eBook } from '../../models'

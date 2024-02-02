@@ -1,4 +1,4 @@
-import type { EBookCategory } from '@prisma/client'
+import type { EBookCategory } from '@prisma/blog-client'
 
 import { WithPaginationReq } from '../interface'
 

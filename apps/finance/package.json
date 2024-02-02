@@ -1,12 +1,11 @@
 {
-  "main": "index.js",
   "version": "1.0.0",
   "private": true,
   "description": "财务后台服务",
-  "name": "blog-site-server",
+  "name": "@wishufree/finance-server",
   "scripts": {
     "build": "tsc",
-    "dev": "nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
+    "dev": "npm run db:sync && nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts}\"",
     "eslint:ci": "eslint --cache --ext .ts ./src",
     "lint:fix": "eslint --fix --cache --ext .ts ./src",

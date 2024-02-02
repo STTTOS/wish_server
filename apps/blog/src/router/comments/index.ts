@@ -1,17 +1,17 @@
 import type { Identity } from '../interface'
 
 import moment from 'moment'
-import { prop, includes, not } from 'ramda'
-import { Prisma } from '@prisma/client'
+import { not, prop, includes } from 'ramda'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import prisma from '../../models'
+import { Comment } from './interface'
 import { tag, article } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import { parseUserInfoByCookie } from '../user'
 import combinePath from '../../utils/combinePath'
-import { Comment } from './interface'
 import {
   apiPrefix,
   timeFormat,
@@ -22,7 +22,11 @@ import {
 const commentApi = combinePath(apiPrefix)('/comment')
 
 router.post(commentApi('/add'), async (ctx) => {
-  const { content, articleId, parentCommentId = null }: Comment = ctx.request.body
+  const {
+    content,
+    articleId,
+    parentCommentId = null
+  }: Comment = ctx.request.body
   const { cookie } = ctx.request.header
   const user = await parseUserInfoByCookie(cookie)
 
@@ -110,7 +114,10 @@ router.post(commentApi('/list'), async (ctx) => {
       }
     }
   })
-  response.success(ctx, withList(formatComments(comments), comments.length || 0))
+  response.success(
+    ctx,
+    withList(formatComments(comments), comments.length || 0)
+  )
 })
 function formatComments(list: any[]): any[] {
   return list?.map(({ createdAt, author, ...rest }) => ({

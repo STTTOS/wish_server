@@ -1,7 +1,7 @@
 import type { AddTagReq } from './interface'
 import type { Identity } from '../interface'
 
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import { tag } from '../../models'

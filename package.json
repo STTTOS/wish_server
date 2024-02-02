@@ -1,10 +1,10 @@
 {
-  "name": "wish_mono_server",
+  "name": "@wishufree/server",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "后台服务monorepo",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "sh scripts/dev.sh",
+    "build": "sh scripts/build.sh"
   },
   "dependencies": {
     "@koa/cors": "^3.3.0",

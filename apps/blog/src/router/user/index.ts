@@ -3,7 +3,7 @@ import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
 import moment from 'moment'
 import Cookie from 'cookie'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/blog-client'
 import { map, prop, omit, reduce, compose } from 'ramda'
 
 import router from '../instance'
