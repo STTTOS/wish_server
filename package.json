@@ -8,7 +8,15 @@
     "db:sync": "pnpm  --filter \"@wishufree/*\" db:sync",
     "lint:fix": "pnpm --filter \"@wishufree/*\" lint:fix",
     "lint": "pnpm --filter \"@wishufree/*\" lint",
-    "prettier": "pnpm --filter \"@wishufree/*\" prettier"
+    "prettier": "pnpm --filter \"@wishufree/*\" prettier",
+    "pre-commit": "pnpm lint-staged",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx}": "npm run lint",
+    "**/*.{js,jsx,ts,tsx,less,md,json}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@koa/cors": "^3.3.0",
@@ -34,6 +42,7 @@
     "@types/koa-static": "^4.0.2",
     "@types/koa__cors": "^3.3.0",
     "@types/ramda": "^0.28.23",
+    "husky": "^9.0.10",
     "lint-staged": "^13.0.3",
     "nodemon": "^2.0.16",
     "pre-commit": "^1.2.2",
