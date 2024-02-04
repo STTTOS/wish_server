@@ -3,10 +3,10 @@ import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
 import prisma from '../../models'
-// import { Comment } from './interface'
 import response from '../../utils/response'
-import { withList } from '../../utils/response'
 import { parseUserInfoByCookie } from '../user'
+import { withList } from '../../utils/response'
+// import { Comment } from './interface'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 

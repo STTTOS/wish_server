@@ -7,7 +7,8 @@
     "build": "sh scripts/build.sh",
     "db:sync": "pnpm  --filter \"@wishufree/*\" db:sync",
     "lint:fix": "pnpm --filter \"@wishufree/*\" lint:fix",
-    "lint": "pnpm --filter \"@wishufree/*\" lint"
+    "lint": "pnpm --filter \"@wishufree/*\" lint",
+    "prettier": "pnpm --filter \"@wishufree/*\" prettier"
   },
   "dependencies": {
     "@koa/cors": "^3.3.0",
