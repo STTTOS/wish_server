@@ -2,7 +2,7 @@ import type { Identity } from '../interface'
 import type { GetArticleByPaginationReq } from './interface'
 
 import moment from 'moment'
-import { prop } from 'ramda'
+import { omit, prop } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
@@ -74,9 +74,13 @@ router.post(articleApi('/delete'), async (ctx) => {
 
 router.post(articleApi('/update'), async (ctx) => {
   const {
-    body: { id, tagIds, content, createdAt, updatedAt, coAuthorIds, ...data },
+    body,
     header: { cookie }
   } = ctx.request
+  const { id, tagIds, content, coAuthorIds, ...data } = omit(
+    ['createdAt', 'updatedAt'],
+    body
+  )
 
   if (!id) throw new Error('参数不正确')
 
@@ -199,8 +203,8 @@ router.post(articleApi('/list'), async (ctx) => {
     orderBy
   })
 
-  const newList = list.map(({ author, tags, content, createdAt, ...rest }) => ({
-    ...rest,
+  const newList = list.map(({ author, tags, createdAt, ...rest }) => ({
+    ...omit(['content'], rest),
     authorName: author?.name,
     createdAt: moment(createdAt).format(timeFormat),
     tags: tags.map(({ tagId: id, tag: { name } }) => ({ id, name }))
@@ -269,13 +273,7 @@ router.post(articleApi('/similar'), async (ctx) => {
     },
     take: 5
   })
-  response.success(
-    ctx,
-    withList(
-      list.map(({ content, ...rest }) => rest),
-      list.length
-    )
-  )
+  response.success(ctx, withList(list.map(omit(['content'])), list.length))
 })
 
 // 埋点统计
@@ -352,8 +350,8 @@ router.post(articleApi('/clientList'), async (ctx) => {
     },
     where
   })
-  const newList = list.map(({ createdAt, content, author, ...rest }) => ({
-    ...rest,
+  const newList = list.map(({ createdAt, author, ...rest }) => ({
+    ...omit(['content'], rest),
     avatar: author?.avatar,
     authorName: author?.name,
     createdAt: moment(createdAt).format(timeFormat)

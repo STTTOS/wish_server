@@ -34,8 +34,8 @@ router.post(tagApi('/delete'), async (ctx) => {
   try {
     await tag.delete({ where: { id } })
     response.success(ctx)
-  } catch (error) {
-    const { code } = error as any
+  } catch (error: unknown) {
+    const { code } = error as { code: string }
 
     const errMsg = (() => {
       if (code === 'P2003') return '请先删除相关联的文章'

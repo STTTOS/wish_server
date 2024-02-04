@@ -1,23 +1,18 @@
-const path = require("path");
-
-const project = path.resolve(process.cwd(), "tsconfig.json");
-
 module.exports = {
-  extends: [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:@typescript-eslint/eslint-recommended",
-  ],
+  env: {
+    node: true,
+  },
+  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
   parser: "@typescript-eslint/parser",
   parserOptions: {
     ecmaVersion: "latest",
     sourceType: "module",
-    project,
   },
   plugins: ["@typescript-eslint"],
   rules: {
-    "no-unused-vars": "error",
     "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-explicit-any": "error",
+    "no-undef": "off",
     indent: ["error", 2],
     "linebreak-style": ["error", "unix"],
     quotes: ["error", "single"],
@@ -26,14 +21,14 @@ module.exports = {
     "comma-spacing": "error",
     "object-curly-spacing": ["error", "always"],
     "@typescript-eslint/no-non-null-assertion": "off",
-    "no-console": "warn",
+    "no-console": "error",
     "no-const-assign": "error",
     "no-constant-condition": "error",
     "no-empty": "warn",
     "no-func-assign": "error",
     "no-inline-comments": "error",
     "no-lonely-if": "error",
-    "no-multi-spaces": "error",
+    "no-multiple-empty-lines": ["error", { max: 1 }],
     "no-trailing-spaces": "error",
     camelcase: "error",
     "no-dupe-keys": "error",

@@ -1,28 +1,16 @@
-import type { Identity } from '../interface'
-
 import moment from 'moment'
-import { not, prop, includes } from 'ramda'
-import { Prisma } from '@prisma/blog-client'
+import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
 import prisma from '../../models'
-import { Comment } from './interface'
-import { tag, article } from '../../models'
+// import { Comment } from './interface'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import { parseUserInfoByCookie } from '../user'
 import combinePath from '../../utils/combinePath'
-import {
-  apiPrefix,
-  timeFormat,
-  wordsToMinuteBaseNumber,
-  timeFormatWithoutSeconds
-} from '../../config'
+import { apiPrefix, timeFormat } from '../../config'
 
 const commentApi = combinePath(apiPrefix)('/comment')
-
-const a = 3
-console.log(3)
 
 router.post(commentApi('/add'), async (ctx) => {
   const {
@@ -122,6 +110,7 @@ router.post(commentApi('/list'), async (ctx) => {
     withList(formatComments(comments), comments.length || 0)
   )
 })
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatComments(list: any[]): any[] {
   return list?.map(({ createdAt, author, ...rest }) => ({
     ...rest,

@@ -2,10 +2,7 @@
   "singleQuote": true,
   "semi": false,
   "trailingComma": "none",
-  "plugins": [
-    "prettier-plugin-classify-imports"
-  ],
-  "importOrder": [
-    "^[./]|(@\/)"
-  ]
+  "plugins": ["prettier-plugin-classify-imports"],
+  "importOrder": ["^[./]|(@/)"],
+  "ignore": ["public"]
 }

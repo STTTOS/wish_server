@@ -165,8 +165,8 @@ router.post(userApi('/list'), async (ctx) => {
     take: pageSize,
     skip: (current - 1) * pageSize
   })
-  const newList = list.map(({ password, createdAt, articles, ...rest }) => ({
-    ...rest,
+  const newList = list.map(({ createdAt, articles, ...rest }) => ({
+    ...omit(['password'], rest),
     createdAt: moment(createdAt).format(timeFormat),
     viewCount: articles.reduce((acc, { viewCount }) => acc + viewCount, 0)
   }))
@@ -183,7 +183,8 @@ router.post(userApi('/recommend'), async (ctx) => {
       }
     }
   })
-  const newList = list.map(({ articles, password, ...rest }) => ({
+  const newList = list.map(({ articles, ...rest }) => ({
+    ...omit(['password'], rest),
     totalViewCount: sumViewCounts(articles),
     ...rest
   }))
@@ -215,13 +216,7 @@ router.post(userApi('/detail'), async (ctx) => {
 
 router.post(userApi('/all'), async (ctx) => {
   const list = await user.findMany()
-  response.success(
-    ctx,
-    withList(
-      list.map(({ password, ...rest }) => rest),
-      list.length
-    )
-  )
+  response.success(ctx, withList(list.map(omit(['password'])), list.length))
 })
 
 export const sum = (a: number, b: number) => a + b
@@ -251,9 +246,9 @@ router.post(userApi('/card'), async (ctx) => {
     response.success(ctx, null)
     return
   }
-  const { articles, password, ...rest } = data
+  const { articles, ...rest } = data
   response.success(ctx, {
     totalViewCount: sumViewCounts(articles),
-    ...rest
+    ...omit(['password'], rest)
   })
 })
