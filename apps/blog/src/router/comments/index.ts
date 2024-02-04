@@ -21,6 +21,9 @@ import {
 
 const commentApi = combinePath(apiPrefix)('/comment')
 
+const a = 3
+console.log(3)
+
 router.post(commentApi('/add'), async (ctx) => {
   const {
     content,

@@ -21,6 +21,10 @@
   },
   "author": "三分",
   "license": "ISC",
+  "devDependencies": {
+    "tsconfig": "workspace:*",
+    "eslint-config-custom": "workspace:*"
+  },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": "npm run eslint:ci",
     "**/*.{js,jsx,ts,tsx,less,md,json}": [

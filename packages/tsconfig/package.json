@@ -1,0 +1,11 @@
+{
+  "name": "tsconfig",
+  "version": "0.0.0",
+  "description": "",
+  "private": true,
+  "keywords": [],
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public"
+  }
+}
