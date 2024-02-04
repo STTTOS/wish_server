@@ -13,9 +13,9 @@
     "prepare": "husky"
   },
   "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "npm run lint",
+    "**/*.{js,jsx,ts,tsx}": "pnpm run lint",
     "**/*.{js,jsx,ts,tsx,less,md,json}": [
-      "prettier --write"
+      "pnpm run prettier"
     ]
   },
   "dependencies": {

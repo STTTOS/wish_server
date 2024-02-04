@@ -15,7 +15,6 @@
     "db:generate": "npx prisma generate",
     "db:sync": "npm run db:migrate--dev && npm run db:generate",
     "db:watch": "nodemon -w prisma/schema.prisma --exec \"npm run db:sync\"",
-    "precommit": "lint-staged",
     "copy-env": "cp ./.local.env .env",
     "publish": "yarn lint && yarn build && scp -r ./dist/* root@www.wishufree.com:/root/server/dist"
   },
@@ -25,14 +24,5 @@
     "tsconfig": "workspace:*",
     "eslint-config-custom": "workspace:*",
     "prettier-config": "workspace:*"
-  },
-  "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "npm run lint",
-    "**/*.{js,jsx,ts,tsx,less,md,json}": [
-      "prettier --write"
-    ]
-  },
-  "gitHooks": {
-    "pre-commit": "lint-staged"
   }
 }
