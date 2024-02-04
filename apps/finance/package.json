@@ -23,7 +23,8 @@
   "license": "ISC",
   "devDependencies": {
     "tsconfig": "workspace:*",
-    "eslint-config-custom": "workspace:*"
+    "eslint-config-custom": "workspace:*",
+    "prettier-config": "workspace:*"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": "npm run lint",

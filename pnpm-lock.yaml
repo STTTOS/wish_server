@@ -70,17 +70,21 @@ importers:
   apps/blog:
     specifiers:
       eslint-config-custom: workspace:*
+      prettier-config: workspace:*
       tsconfig: workspace:*
     devDependencies:
       eslint-config-custom: link:../../packages/eslint-config-custom
+      prettier-config: link:../../packages/prettier-config
       tsconfig: link:../../packages/tsconfig
 
   apps/finance:
     specifiers:
       eslint-config-custom: workspace:*
+      prettier-config: workspace:*
       tsconfig: workspace:*
     devDependencies:
       eslint-config-custom: link:../../packages/eslint-config-custom
+      prettier-config: link:../../packages/prettier-config
       tsconfig: link:../../packages/tsconfig
 
   packages/eslint-config-custom:
@@ -92,6 +96,9 @@ importers:
       '@typescript-eslint/eslint-plugin': 5.62.0_ldss7zsvu32fsd57pp4tntgdvu
       '@typescript-eslint/parser': 5.62.0_eslint@8.56.0
       eslint: 8.56.0
+
+  packages/prettier-config:
+    specifiers: {}
 
   packages/tsconfig:
     specifiers: {}
