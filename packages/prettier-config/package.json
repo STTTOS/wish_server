@@ -1,7 +1,7 @@
 {
   "name": "prettier-config",
   "version": "0.0.0",
-  "description": "",
+  "description": "prettier通用配置",
   "private": true,
   "keywords": [],
   "main": "index.json",

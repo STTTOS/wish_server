@@ -4,6 +4,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "description": "eslint通用配置",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.28.0",
     "@typescript-eslint/parser": "^5.28.0",
