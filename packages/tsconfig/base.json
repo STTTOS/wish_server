@@ -5,7 +5,6 @@
     "sourceMap": true,
     "target": "ESNext",
     "noImplicitAny": false,
-    "outDir": "./dist",
     "module": "commonJS",
     "skipLibCheck": true,
     "removeComments": true,
