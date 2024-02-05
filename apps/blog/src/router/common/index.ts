@@ -1,5 +1,6 @@
 import { join } from 'path'
 import { constants } from 'fs'
+import koaBody from 'koa-body'
 import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
@@ -10,16 +11,31 @@ import combinePath from '../../utils/combinePath'
 const commonApi = combinePath(apiPrefix)('/common')
 
 // 接收二进制流
-router.post(commonApi('/upload'), async (ctx) => {
-  const file = ctx.request.files?.file
+router.post(
+  commonApi('/upload'),
+  koaBody({
+    // 支持文件格式
+    multipart: true,
+    formidable: {
+      // 保留文件扩展名
+      keepExtensions: true,
+      // 上传目录
+      uploadDir: join(__dirname, '../../../static')
+    }
+  }),
+  async (ctx) => {
+    const file = ctx.request.files?.file
 
-  if (!file) throw new Error('空文件!')
+    if (!file) throw new Error('空文件!')
 
-  const files = Array.isArray(file) ? file : [file]
-  const url = files.map(({ newFilename }) => `/static/${newFilename}`).join(',')
+    const files = Array.isArray(file) ? file : [file]
+    const url = files
+      .map(({ newFilename }) => `/static/${newFilename}`)
+      .join(',')
 
-  response.success(ctx, { url })
-})
+    response.success(ctx, { url })
+  }
+)
 
 async function countView(filePath: string, increment = 0) {
   if (increment === 0) return

@@ -44,8 +44,6 @@ app.use(historyApiFallback({ index: '/index.html' }))
 
 // 访问 网站静态文件
 app.use(serve(join(__dirname, '../public'), { maxAge }))
-// 注册静态资源前缀 /static
-app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 // 统一鉴权
 app.use(async (ctx, next) => {
@@ -62,19 +60,11 @@ app.use(async (ctx, next) => {
   await next()
 })
 
+// 注册静态资源前缀 /static
+app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
+
 // 解析请求体
-app.use(
-  koaBody({
-    // 支持文件格式
-    multipart: true,
-    formidable: {
-      // 保留文件扩展名
-      keepExtensions: true,
-      // 上传目录
-      uploadDir: join(__dirname, '../static')
-    }
-  })
-)
+app.use(koaBody())
 
 //路由中间件
 app.use(router.routes())
