@@ -9,7 +9,7 @@
     "lint:fix": "pnpm --filter \"@wishufree/*\" lint:fix",
     "lint": "pnpm --filter \"@wishufree/*\" lint",
     "prettier": "pnpm --filter \"@wishufree/*\" prettier",
-    "pre-commit": "pnpm lint-staged",
+    "pre-commit": "lint-staged",
     "prepare": "husky"
   },
   "lint-staged": {

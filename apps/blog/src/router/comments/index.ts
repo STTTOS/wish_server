@@ -2,8 +2,8 @@ import moment from 'moment'
 import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
-import prisma from '../../models'
 import response from '../../utils/response'
+import prisma, { comment } from '../../models'
 import { parseUserInfoByCookie } from '../user'
 import { withList } from '../../utils/response'
 // import { Comment } from './interface'
@@ -110,6 +110,37 @@ router.post(commentApi('/list'), async (ctx) => {
     withList(formatComments(comments), comments.length || 0)
   )
 })
+
+router.post(commentApi('/delete'), async (ctx) => {
+  const { cookie } = ctx.header
+  const { id, hasChildren } = ctx.request.body
+  const user = await parseUserInfoByCookie(cookie)
+  const target = await comment.findUnique({ where: id })
+
+  // 判定必须本人操作
+  if (!user || !target || target.authorId !== user.id) {
+    response.error(ctx, 500, '非法操作')
+    return
+  }
+  if (!id) {
+    response.error(ctx, 500, '参数不正确')
+    return
+  }
+
+  // 如果有子评论, 跟着一起删除
+  if (hasChildren) {
+    const childrenIds = await comment.findMany({
+      where: { parentCommentId: id }
+    })
+    await comment.deleteMany({
+      where: { id: { in: childrenIds.map((item) => item.id).concat(id) } }
+    })
+  } else {
+    await comment.delete({ where: { id } })
+  }
+  response.success(ctx)
+})
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatComments(list: any[]): any[] {
   return list?.map(({ createdAt, author, ...rest }) => ({

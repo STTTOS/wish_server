@@ -1,5 +1,3 @@
-import type { BizError } from './router/interface'
-
 import Koa from 'koa'
 import { join } from 'path'
 import cors from '@koa/cors'
@@ -21,11 +19,11 @@ const app = new Koa()
 app.use(async (ctx, next) => {
   try {
     await next()
-  } catch (err) {
-    const { status = 500, message = '系统异常' } = err as BizError
-
-    logger.error(message)
-    response.error(ctx, status, message)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (err: any) {
+    logger.error(err.stack)
+    ctx.status = 500
+    response.error(ctx, 500, '系统异常')
   }
 })
 
