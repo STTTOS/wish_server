@@ -13,6 +13,8 @@ export const cacheTime = 30 * 24 * 60 * 60
 
 export const secretKey = process.env.SECRET_KEY!
 
+export const imageCompressRatio = 0.4
+
 export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',

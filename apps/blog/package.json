@@ -16,7 +16,8 @@
     "db:sync": "npm run db:migrate--dev && npm run db:generate",
     "db:watch": "nodemon -w prisma/schema.prisma --exec \"npm run db:sync\"",
     "copy-env": "cp ./.local.env .env",
-    "publish": "yarn build && scp -r ./dist/* root@www.wishufree.com:/root/server/dist"
+    "publish": "yarn build && scp -r ./dist/* root@www.wishufree.com:/root/server/dist",
+    "setup": "ts-node ./scripts/initSystem.ts"
   },
   "author": "三分",
   "license": "ISC",

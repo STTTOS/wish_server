@@ -1,12 +1,13 @@
+import sharp from 'sharp'
 import { join } from 'path'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
 import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
-import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { apiPrefix, imageCompressRatio } from '../../config'
 
 const commonApi = combinePath(apiPrefix)('/common')
 
@@ -20,7 +21,7 @@ router.post(
       // 保留文件扩展名
       keepExtensions: true,
       // 上传目录
-      uploadDir: join(__dirname, '../../../static')
+      uploadDir: join(__dirname, '../../../static/origin')
     }
   }),
   async (ctx) => {
@@ -29,6 +30,14 @@ router.post(
     if (!file) throw new Error('空文件!')
 
     const files = Array.isArray(file) ? file : [file]
+
+    // 压缩文件
+    for (const item of files) {
+      await sharp(item.filepath)
+        .jpeg({ quality: imageCompressRatio * 100 })
+        .toFile(join(__dirname, `../../../static/${item.newFilename}`))
+    }
+
     const url = files
       .map(({ newFilename }) => `/static/${newFilename}`)
       .join(',')
