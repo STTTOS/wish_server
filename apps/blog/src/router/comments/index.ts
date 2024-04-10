@@ -115,7 +115,7 @@ router.post(commentApi('/delete'), async (ctx) => {
   const { cookie } = ctx.header
   const { id, hasChildren } = ctx.request.body
   const user = await parseUserInfoByCookie(cookie)
-  const target = await comment.findUnique({ where: id })
+  const target = await comment.findUnique({ where: { id } })
 
   // 判定必须本人操作
   if (!user || !target || target.authorId !== user.id) {
