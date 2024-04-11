@@ -10,7 +10,8 @@
     "lint": "pnpm --filter \"@wishufree/*\" lint",
     "prettier": "pnpm --filter \"@wishufree/*\" prettier",
     "pre-commit": "lint-staged",
-    "prepare": "husky"
+    "prepare": "husky",
+    "commit-msg": "commitlint -e -V"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx}": "pnpm run lint",
@@ -36,6 +37,7 @@
     "sharp": "^0.33.3"
   },
   "devDependencies": {
+    "@commitlint/config-conventional": "^19.1.0",
     "@types/cookie": "^0.5.1",
     "@types/crypto-js": "^4.1.1",
     "@types/koa": "^2.13.4",
@@ -45,6 +47,7 @@
     "@types/koa__cors": "^3.3.0",
     "@types/node-cron": "^3.0.11",
     "@types/ramda": "^0.28.23",
+    "commitlint": "^19.2.1",
     "husky": "^9.0.10",
     "lint-staged": "^13.0.3",
     "nodemon": "^2.0.16",
