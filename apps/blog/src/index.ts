@@ -7,6 +7,7 @@ import koaBody from 'koa-body'
 import { toLower } from 'ramda'
 import { historyApiFallback } from 'koa2-connect-history-api-fallback'
 
+import './tasks'
 import router from './router'
 import { logger } from './logger'
 import response from './utils/response'
