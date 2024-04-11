@@ -3,6 +3,7 @@ import './user'
 import './tools'
 import './eBook'
 import './common'
+import './storage'
 import './article'
 import './comments'
 

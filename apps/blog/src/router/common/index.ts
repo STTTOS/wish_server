@@ -6,10 +6,90 @@ import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
 import response from '../../utils/response'
+import { getFileName } from '../../utils/file'
 import combinePath from '../../utils/combinePath'
-import { apiPrefix, imageCompressRatio } from '../../config'
+import { apiPrefix, fileNameSpliter, imageCompressRatio } from '../../config'
 
 const commonApi = combinePath(apiPrefix)('/common')
+
+interface Args {
+  newFilename: string
+  originalFilename: string | null
+}
+
+export const hashAndKeepOriginalName = ({
+  newFilename,
+  originalFilename
+}: Args) =>
+  `${getFileName(
+    originalFilename || 'file_unknown'
+  )}${fileNameSpliter}${newFilename}`
+
+router.post(
+  commonApi('/upload_temp_file'),
+  koaBody({
+    // 支持文件格式
+    multipart: true,
+    formidable: {
+      // 保留文件扩展名
+      maxFileSize: 1024 * 1024 * 600,
+      keepExtensions: true,
+      // 上传目录
+      uploadDir: join(__dirname, '../../../static/temp'),
+      onFileBegin(_, file) {
+        const newFileName = hashAndKeepOriginalName(file)
+        file.filepath = join(__dirname, `../../../static/temp/${newFileName}`)
+        file.newFilename = newFileName
+      }
+    }
+  }),
+  async (ctx) => {
+    const file = ctx.request.files?.file
+
+    if (!file) throw new Error('空文件!')
+
+    const files = Array.isArray(file) ? file : [file]
+
+    const url = files
+      .map(({ newFilename }) => `/static/temp/${newFilename}`)
+      .join(',')
+
+    response.success(ctx, { url })
+  }
+)
+
+router.post(
+  commonApi('/upload_file'),
+  koaBody({
+    // 支持文件格式
+    multipart: true,
+    formidable: {
+      maxFileSize: 1024 * 1024 * 600,
+      // 保留文件扩展名
+      keepExtensions: true,
+      // 上传目录
+      uploadDir: join(__dirname, '../../../static/files'),
+      onFileBegin(_, file) {
+        const newFileName = hashAndKeepOriginalName(file)
+        file.filepath = join(__dirname, `../../../static/files/${newFileName}`)
+        file.newFilename = newFileName
+      }
+    }
+  }),
+  async (ctx) => {
+    const file = ctx.request.files?.file
+
+    if (!file) throw new Error('空文件!')
+
+    const files = Array.isArray(file) ? file : [file]
+
+    const url = files
+      .map(({ newFilename }) => `/static/files/${newFilename}`)
+      .join(',')
+
+    response.success(ctx, { url })
+  }
+)
 
 // 接收二进制流
 router.post(
@@ -18,6 +98,7 @@ router.post(
     // 支持文件格式
     multipart: true,
     formidable: {
+      maxFileSize: 1024 * 1024 * 3,
       // 保留文件扩展名
       keepExtensions: true,
       // 上传目录
@@ -35,11 +116,16 @@ router.post(
     for (const item of files) {
       await sharp(item.filepath)
         .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(join(__dirname, `../../../static/${item.newFilename}`))
+        .toFile(
+          join(
+            __dirname,
+            `../../../static/origin/${hashAndKeepOriginalName(item)}`
+          )
+        )
     }
 
     const url = files
-      .map(({ newFilename }) => `/static/${newFilename}`)
+      .map((item) => `/static/origin/${hashAndKeepOriginalName(item)}`)
       .join(',')
 
     response.success(ctx, { url })

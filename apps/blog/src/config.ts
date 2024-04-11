@@ -15,6 +15,8 @@ export const secretKey = process.env.SECRET_KEY!
 
 export const imageCompressRatio = 0.4
 
+export const fileNameSpliter = '__'
+
 export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',
@@ -38,5 +40,7 @@ export const apiNeededToAuth = [
   '/api/tools/update',
   '/api/tools/delete',
 
-  '/api/common/upload'
+  '/api/common/upload',
+  '/api/common/upload_file',
+  '/api/common//upload_temp_file'
 ]
