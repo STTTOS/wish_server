@@ -1,7 +1,8 @@
-/* eslint-disable no-console */
 import fs from 'fs'
 import { join } from 'path'
 import { access } from 'fs/promises'
+
+import { logger } from '../logger'
 
 async function createFiles() {
   await access('./static').catch(() => {
@@ -16,7 +17,7 @@ async function createFiles() {
   })
 }
 
-console.log('初始化系统中...')
+logger.info('初始化系统中...')
 createFiles().then(() => {
-  console.log('初始化系统完成')
+  logger.info('初始化系统完成')
 })

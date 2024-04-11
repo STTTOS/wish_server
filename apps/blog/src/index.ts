@@ -8,6 +8,7 @@ import { toLower } from 'ramda'
 import { historyApiFallback } from 'koa2-connect-history-api-fallback'
 
 import './tasks'
+import './scripts'
 import router from './router'
 import { logger } from './logger'
 import response from './utils/response'
