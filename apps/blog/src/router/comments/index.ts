@@ -105,10 +105,12 @@ router.post(commentApi('/list'), async (ctx) => {
       }
     }
   })
-  response.success(
-    ctx,
-    withList(formatComments(comments), comments.length || 0)
-  )
+  const count = await prisma.comment.count({
+    where: {
+      articleId
+    }
+  })
+  response.success(ctx, withList(formatComments(comments), count))
 })
 
 router.post(commentApi('/delete'), async (ctx) => {
