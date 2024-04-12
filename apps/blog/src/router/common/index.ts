@@ -98,7 +98,7 @@ router.post(
     // 支持文件格式
     multipart: true,
     formidable: {
-      maxFileSize: 1024 * 1024 * 3,
+      maxFileSize: 1024 * 1024 * 10,
       // 保留文件扩展名
       keepExtensions: true,
       // 上传目录
