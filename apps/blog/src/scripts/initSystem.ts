@@ -5,12 +5,12 @@ import { access } from 'fs/promises'
 import { logger } from '../logger'
 
 async function createFiles() {
-  await access('./static').catch(() => {
-    fs.mkdirSync(join(__dirname, '../static/origin'), { recursive: true })
-    fs.mkdirSync(join(__dirname, '../static/files'), { recursive: true })
-    fs.mkdirSync(join(__dirname, '../static/temp'), { recursive: true })
+  await access(join(__dirname, './static')).catch(() => {
+    fs.mkdirSync(join(__dirname, '../../static/origin'), { recursive: true })
+    fs.mkdirSync(join(__dirname, '../../static/files'), { recursive: true })
+    fs.mkdirSync(join(__dirname, '../../static/temp'), { recursive: true })
   })
-  await access('../system.json').catch(() => {
+  await access(join(__dirname, '../system.json')).catch(() => {
     fs.writeFileSync(join(__dirname, '../system.json'), '{ "viewCount": 0 }', {
       encoding: 'utf-8'
     })
