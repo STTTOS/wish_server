@@ -9,6 +9,7 @@ async function createFiles() {
     fs.mkdirSync(join(__dirname, '../../static/origin'), { recursive: true })
     fs.mkdirSync(join(__dirname, '../../static/files'), { recursive: true })
     fs.mkdirSync(join(__dirname, '../../static/temp'), { recursive: true })
+    fs.mkdirSync(join(__dirname, '../../public'))
   })
   await access(join(__dirname, '../system.json')).catch(() => {
     fs.writeFileSync(join(__dirname, '../system.json'), '{ "viewCount": 0 }', {
