@@ -111,7 +111,7 @@ router.post(
     // const file = ctx.request.files?.file as unknown as any
     logger.info('上传静态资源到cdn...')
     // 读取编译后文件夹目录
-    const assets = await getAllFiles(join(__dirname, '../../public'), {
+    const assets = await getAllFiles(join(__dirname, '../../../public'), {
       exclude: ['index.html']
     })
     for (const file of assets) {
