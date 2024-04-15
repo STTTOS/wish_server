@@ -1,13 +1,15 @@
 import sharp from 'sharp'
-import { join } from 'path'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
+import { join, basename } from 'path'
 import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
+import { logger } from '../../logger'
 import response from '../../utils/response'
-import { getFileName } from '../../utils/file'
 import combinePath from '../../utils/combinePath'
+import uploadFileToCos from '../../utils/uploadFileToCos'
+import { getAllFiles, getFileName } from '../../utils/file'
 import { apiPrefix, fileNameSpliter, imageCompressRatio } from '../../config'
 
 const commonApi = combinePath(apiPrefix)('/common')
@@ -88,6 +90,35 @@ router.post(
       .join(',')
 
     response.success(ctx, { url })
+  }
+)
+
+router.post(
+  commonApi('/deploy_blog_frontend'),
+  koaBody({
+    // 支持文件格式
+    multipart: true,
+    formidable: {
+      maxFileSize: 1024 * 1024 * 5,
+      // 保留文件扩展名
+      keepExtensions: true,
+      // 上传目录
+      uploadDir: join(__dirname, '../../../static/temp')
+    }
+  }),
+  async (ctx) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // const file = ctx.request.files?.file as unknown as any
+    logger.info('上传静态资源到cdn...')
+    // 读取编译后文件夹目录
+    const assets = await getAllFiles(join(__dirname, '../../public'), {
+      exclude: ['index.html']
+    })
+    for (const file of assets) {
+      const filename = basename(file)
+      await uploadFileToCos('blog', filename, file)
+    }
+    response.success(ctx, null, '部署成功')
   }
 )
 
