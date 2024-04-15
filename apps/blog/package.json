@@ -18,7 +18,7 @@
     "copy-env": "cp ./.local.env .env",
     "publish": "npm run build && scp -r ./dist root@www.wishufree.com:/root/server",
     "setup": "npm run build && npm run db:sync",
-    "deploy": ".ts-node src/scripts/deploy_client_to_cdn.ts"
+    "deploy": "ts-node src/scripts/deploy_client_to_cdn.ts"
   },
   "author": "三分",
   "license": "ISC",
