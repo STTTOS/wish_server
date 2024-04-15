@@ -43,5 +43,5 @@ export const apiNeededToAuth = [
   '/api/common/upload',
   '/api/common/upload_file',
   '/api/common//upload_temp_file',
-  '/api/common//deploy_blog_frontend'
+  '/api/common/deploy_blog_frontend'
 ]
