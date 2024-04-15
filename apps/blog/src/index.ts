@@ -1,6 +1,5 @@
 import Koa from 'koa'
 import { join } from 'path'
-import cors from '@koa/cors'
 import mount from 'koa-mount'
 import serve from 'koa-static'
 import koaBody from 'koa-body'
@@ -23,20 +22,19 @@ app.use(async (ctx, next) => {
     await next()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    logger.error(err.stack)
+    logger.error(err.stack || err.message)
     ctx.status = 500
     response.error(ctx, 500, '系统异常')
   }
 })
 
 app.use(async (ctx, next) => {
-  const { ip, url } = ctx.request
+  const { url } = ctx.request
+  const ip = ctx.request.headers[' X-Real-IP']
+
   logger.info(`ip: ${ip}, request for ${url}`)
   await next()
 })
-// 请求跨域
-app.use(cors())
-
 // 配合history模式
 // 放在静态资源服务中间件前面加载
 // 404  重定向到 /public/index.html
