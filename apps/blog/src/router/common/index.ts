@@ -93,34 +93,20 @@ router.post(
   }
 )
 
-router.post(
-  commonApi('/deploy_blog_frontend'),
-  koaBody({
-    // 支持文件格式
-    multipart: true,
-    formidable: {
-      maxFileSize: 1024 * 1024 * 5,
-      // 保留文件扩展名
-      keepExtensions: true,
-      // 上传目录
-      uploadDir: join(__dirname, '../../../static/temp')
-    }
-  }),
-  async (ctx) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    // const file = ctx.request.files?.file as unknown as any
-    logger.info('上传静态资源到cdn...')
-    // 读取编译后文件夹目录
-    const assets = await getAllFiles(join(__dirname, '../../../public'), {
-      exclude: ['index.html']
-    })
-    for (const file of assets) {
-      const filename = basename(file)
-      await uploadFileToCos('blog', filename, file)
-    }
-    response.success(ctx, null, '部署成功')
+router.post(commonApi('/deploy_blog_frontend'), async (ctx) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // const file = ctx.request.files?.file as unknown as any
+  logger.info('上传静态资源到cdn...')
+  // 读取编译后文件夹目录
+  const assets = await getAllFiles(join(__dirname, '../../../public'), {
+    exclude: ['index.html']
+  })
+  for (const file of assets) {
+    const filename = basename(file)
+    await uploadFileToCos('blog', filename, file)
   }
-)
+  response.success(ctx, null, '部署成功')
+})
 
 // 接收二进制流
 router.post(
