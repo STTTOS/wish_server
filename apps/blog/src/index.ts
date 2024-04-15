@@ -30,7 +30,7 @@ app.use(async (ctx, next) => {
 
 app.use(async (ctx, next) => {
   const { url } = ctx.request
-  const ip = ctx.request.headers[' X-Real-IP']
+  const ip = ctx.headers['x-real-ip'] || ctx.request.ip
 
   logger.info(`ip: ${ip}, request for ${url}`)
   await next()
