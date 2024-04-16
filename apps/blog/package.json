@@ -17,7 +17,8 @@
     "db:watch": "nodemon -w prisma/schema.prisma --exec \"npm run db:sync\"",
     "copy-env": "cp ./.local.env .env",
     "publish": "npm run build && scp -r ./dist root@www.wishufree.com:/root/wish_server/apps/blog",
-    "deploy": "ts-node src/scripts/deploy_client_to_cdn.ts"
+    "deploy": "ts-node src/scripts/deploy_client_to_cdn.ts",
+    "setup": "pnpm run copy-env && pnpm run db:sync"
   },
   "author": "三分",
   "license": "ISC",
