@@ -1,4 +1,3 @@
-// export const port = process.env.SERVER_PORT!
 export const port = '7500'
 
 export const apiPrefix = '/api'
@@ -10,8 +9,6 @@ export const timeFormatWithoutSeconds = 'yyyy-MM-DD HH:mm'
 export const wordsToMinuteBaseNumber = 500
 
 export const cacheTime = 30 * 24 * 60 * 60
-
-export const secretKey = 'pgactgwdf9ap6uojb7r5lu8q'
 
 export const imageCompressRatio = 0.4
 
