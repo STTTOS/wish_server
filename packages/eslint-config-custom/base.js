@@ -13,7 +13,6 @@ module.exports = {
     "@typescript-eslint/no-unused-vars": "error",
     "@typescript-eslint/no-explicit-any": "error",
     "no-undef": "off",
-    indent: ["error", 2],
     "linebreak-style": ["error", "unix"],
     quotes: ["error", "single"],
     semi: ["error", "never"],

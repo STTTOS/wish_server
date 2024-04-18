@@ -3,5 +3,6 @@
   "semi": false,
   "trailingComma": "none",
   "plugins": ["prettier-plugin-classify-imports"],
-  "importOrder": ["^[./]|(@/)"]
+  "importOrder": ["^[./]|(@/)"],
+  "tabWidth": 2
 }
