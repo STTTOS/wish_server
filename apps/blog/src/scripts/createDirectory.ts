@@ -13,16 +13,16 @@ async function createDirectory() {
       logger.info('创建public文件夹')
       fs.mkdirSync(join(__dirname, '../../public'))
     }),
-    access(join(__dirname, './static')).catch(() => {
+    access(join(__dirname, '../../static')).catch(() => {
       logger.info('创建static文件夹')
       fs.mkdirSync(join(__dirname, '../../static/origin'), { recursive: true })
       fs.mkdirSync(join(__dirname, '../../static/files'), { recursive: true })
       fs.mkdirSync(join(__dirname, '../../static/temp'), { recursive: true })
     }),
-    access(join(__dirname, '../system.json')).catch(() => {
+    access(join(__dirname, '../../system.json')).catch(() => {
       logger.info('写入system.json文件')
       fs.writeFileSync(
-        join(__dirname, '../system.json'),
+        join(__dirname, '../../system.json'),
         '{ "viewCount": 0 }',
         {
           encoding: 'utf-8'
