@@ -9,15 +9,9 @@
     "lint:fix": "pnpm --filter \"@wishufree/*\" lint:fix",
     "lint": "pnpm --filter \"@wishufree/*\" lint",
     "prettier": "pnpm --filter \"@wishufree/*\" prettier",
-    "pre-commit": "lint-staged",
+    "pre-commit": "pnpm lint-staged",
     "prepare": "husky",
     "commit-msg": "commitlint -e -V"
-  },
-  "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "pnpm run lint",
-    "**/*.{js,jsx,ts,tsx,less,md,json}": [
-      "pnpm run prettier"
-    ]
   },
   "dependencies": {
     "@koa/cors": "^3.3.0",

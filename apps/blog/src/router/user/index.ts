@@ -45,7 +45,11 @@ router.post(userApi('/signin'), async (ctx) => {
 
   // 注册
   const userInfo = await user.create({
-    data: { username, password, name: '用户昵称_' + Math.random() }
+    data: {
+      username,
+      password,
+      name: '用户昵称_' + Math.random()
+    }
   })
   const token = encrypt(`${userInfo.id}`)
   response.success(ctx, { token }, '注册成功')

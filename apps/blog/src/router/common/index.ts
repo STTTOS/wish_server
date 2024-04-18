@@ -2,7 +2,9 @@ import sharp from 'sharp'
 import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
+import Router from 'koa-router'
 import { join, basename } from 'path'
+import { ParameterizedContext } from 'koa'
 import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
@@ -28,68 +30,88 @@ export const hashAndKeepOriginalName = ({
     originalFilename || 'file_unknown'
   )}${fileNameSpliter}${newFilename}`
 
-router.post(
-  commonApi('/upload_temp_file'),
-  koaBody({
+const getKoaBodyConfig = (
+  directoryName: string,
+  maxFileSize: number
+): koaBody.IKoaBodyOptions => {
+  return {
     // 支持文件格式
     multipart: true,
     formidable: {
+      maxFileSize,
       // 保留文件扩展名
-      maxFileSize: 1024 * 1024 * 600,
       keepExtensions: true,
-      // 上传目录
-      uploadDir: join(__dirname, '../../../static/temp'),
       onFileBegin(_, file) {
         const newFileName = hashAndKeepOriginalName(file)
-        file.filepath = join(__dirname, `../../../static/temp/${newFileName}`)
+        file.filepath = join(
+          __dirname,
+          `../../../static/${directoryName}/${newFileName}`
+        )
         file.newFilename = newFileName
       }
     }
-  }),
-  async (ctx) => {
+  }
+}
+const handleUpload =
+  (directoryName: string) =>
+  async (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ctx: ParameterizedContext<any, Router.IRouterParamContext<any, object>, any>
+  ) => {
     const file = ctx.request.files?.file
-
     if (!file) throw new Error('空文件!')
 
     const files = Array.isArray(file) ? file : [file]
-
     const url = files
-      .map(({ newFilename }) => `/static/temp/${newFilename}`)
+      .map(({ newFilename }) => `/static/${directoryName}/${newFilename}`)
       .join(',')
-
     response.success(ctx, { url })
   }
+
+router.post(
+  commonApi('/upload_temp_file'),
+  koaBody(getKoaBodyConfig('temp', 3000)),
+  handleUpload('temp')
 )
 
 router.post(
   commonApi('/upload_file'),
+  koaBody(getKoaBodyConfig('files', 600)),
+  handleUpload('files')
+)
+// 接收二进制流
+router.post(
+  commonApi('/upload'),
   koaBody({
     // 支持文件格式
     multipart: true,
     formidable: {
-      maxFileSize: 1024 * 1024 * 600,
+      maxFileSize: 1024 * 1024 * 10,
       // 保留文件扩展名
       keepExtensions: true,
       // 上传目录
-      uploadDir: join(__dirname, '../../../static/files'),
-      onFileBegin(_, file) {
-        const newFileName = hashAndKeepOriginalName(file)
-        file.filepath = join(__dirname, `../../../static/files/${newFileName}`)
-        file.newFilename = newFileName
-      }
+      uploadDir: join(__dirname, '../../../static/origin')
     }
   }),
   async (ctx) => {
     const file = ctx.request.files?.file
-
     if (!file) throw new Error('空文件!')
 
     const files = Array.isArray(file) ? file : [file]
-
+    // 压缩文件
+    for (const item of files) {
+      await sharp(item.filepath)
+        .jpeg({ quality: imageCompressRatio * 100 })
+        .toFile(
+          join(
+            __dirname,
+            `../../../static/origin/${hashAndKeepOriginalName(item)}`
+          )
+        )
+    }
     const url = files
-      .map(({ newFilename }) => `/static/files/${newFilename}`)
+      .map((item) => `/static/origin/${hashAndKeepOriginalName(item)}`)
       .join(',')
-
     response.success(ctx, { url })
   }
 )
@@ -109,47 +131,6 @@ router.post(commonApi('/deploy_blog_frontend'), async (ctx) => {
   logger.info('成功上传静态资源到cdn, 发布应用: blog')
   response.success(ctx, null, '部署成功')
 })
-
-// 接收二进制流
-router.post(
-  commonApi('/upload'),
-  koaBody({
-    // 支持文件格式
-    multipart: true,
-    formidable: {
-      maxFileSize: 1024 * 1024 * 10,
-      // 保留文件扩展名
-      keepExtensions: true,
-      // 上传目录
-      uploadDir: join(__dirname, '../../../static/origin')
-    }
-  }),
-  async (ctx) => {
-    const file = ctx.request.files?.file
-
-    if (!file) throw new Error('空文件!')
-
-    const files = Array.isArray(file) ? file : [file]
-
-    // 压缩文件
-    for (const item of files) {
-      await sharp(item.filepath)
-        .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(
-          join(
-            __dirname,
-            `../../../static/origin/${hashAndKeepOriginalName(item)}`
-          )
-        )
-    }
-
-    const url = files
-      .map((item) => `/static/origin/${hashAndKeepOriginalName(item)}`)
-      .join(',')
-
-    response.success(ctx, { url })
-  }
-)
 
 async function countView(filePath: string, increment = 0) {
   if (increment === 0) return
