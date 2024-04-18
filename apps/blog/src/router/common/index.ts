@@ -1,4 +1,5 @@
 import sharp from 'sharp'
+import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
 import { join, basename } from 'path'
@@ -157,8 +158,8 @@ async function countView(filePath: string, increment = 0) {
     // 文件是否存在
     await access(filePath, constants.F_OK)
 
-    const buffer = await readFile(filePath)
-    const { viewCount } = JSON.parse(buffer.toString())
+    const input = await readFile(filePath, { encoding: 'utf-8' })
+    const { viewCount } = JSON.parse(input)
 
     const newData = { viewCount: viewCount + increment }
     await writeFile(filePath, JSON.stringify(newData))
@@ -169,12 +170,11 @@ async function countView(filePath: string, increment = 0) {
 }
 
 let tmpCount = 0
-setInterval(() => {
+cron.schedule('*/5 * * * * *', async () => {
   const filePath = join(__dirname, '../../../system.json')
-  countView(filePath, tmpCount)
+  await countView(filePath, tmpCount)
   tmpCount = 0
-}, 1000 * 60 * 60)
-
+})
 // 网站访问量埋点
 router.post(commonApi('/webViewCount'), async (ctx) => {
   tmpCount++
