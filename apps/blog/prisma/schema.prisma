@@ -44,7 +44,9 @@ model User {
 
   eBooks EBook[]
 
-  comments Comment[]
+  comments         Comment[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 }
 
 // 文章
@@ -76,6 +78,7 @@ model Article {
   private       Boolean          @default(false)
   tags          TagsOnArticles[]
   comments      Comment[]
+  message       Message[]
 
   @@unique([authorId, title])
 }
@@ -165,4 +168,29 @@ model Comment {
   parentCommentId Int?
   parentComment   Comment?  @relation("replies", fields: [parentCommentId], references: [id])
   replies         Comment[] @relation("replies")
+}
+
+enum MessageType {
+  // 系统消息
+  // system
+  // 评论回复
+  reply
+  // 点赞
+  like
+}
+
+// 新增消息中心
+model Message {
+  id        Int         @id @default(autoincrement())
+  type      MessageType
+  createdAt DateTime    @default(now())
+
+  sender     User?    @relation("SentMessages", fields: [senderId], references: [id])
+  senderId   Int?
+  receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  receiverId Int?
+  article    Article? @relation(fields: [articleId], references: [id])
+  articleId  Int?
+  content    String?
+  isRead     Boolean  @default(false)
 }

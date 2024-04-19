@@ -4,6 +4,7 @@ import './tools'
 import './eBook'
 import './common'
 import './storage'
+import './mssages'
 import './article'
 import './comments'
 

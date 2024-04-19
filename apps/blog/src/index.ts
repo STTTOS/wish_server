@@ -24,7 +24,7 @@ app.use(async (ctx, next) => {
   } catch (err: any) {
     logger.error(err.stack || err.message)
     ctx.status = 500
-    response.error(ctx, 500, '系统异常')
+    response.error(ctx, 500, err.message || '系统异常')
   }
 })
 

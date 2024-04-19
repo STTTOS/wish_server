@@ -3,12 +3,12 @@ import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
 import response from '../../utils/response'
-import prisma, { comment } from '../../models'
 import { parseUserInfoByCookie } from '../user'
 import { withList } from '../../utils/response'
 // import { Comment } from './interface'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
+import prisma, { comment, message } from '../../models'
 
 const commentApi = combinePath(apiPrefix)('/comment')
 
@@ -25,12 +25,26 @@ router.post(commentApi('/add'), async (ctx) => {
 
   const { id: authorId } = user
 
+  // 通过文章id查询对应user
+  const target = await prisma.article.findUnique({
+    where: { id: articleId },
+    include: { author: { select: { id: true } } }
+  })
   await prisma.comment.create({
     data: {
       content,
       authorId,
       articleId,
       parentCommentId
+    }
+  })
+  await message.create({
+    data: {
+      articleId,
+      senderId: user.id,
+      receiverId: target?.author?.id,
+      type: 'reply',
+      content
     }
   })
   response.success(ctx)
