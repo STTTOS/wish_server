@@ -25,11 +25,18 @@ router.post(commentApi('/add'), async (ctx) => {
 
   const { id: authorId } = user
 
+  const receiver = await (() => {
+    if (parentCommentId)
+      return prisma.comment.findUnique({
+        where: { id: parentCommentId },
+        include: { author: { select: { id: true } } }
+      })
+    return prisma.article.findUnique({
+      where: { id: articleId },
+      include: { author: { select: { id: true } } }
+    })
+  })()
   // 通过文章id查询对应user
-  const target = await prisma.article.findUnique({
-    where: { id: articleId },
-    include: { author: { select: { id: true } } }
-  })
   await prisma.comment.create({
     data: {
       content,
@@ -42,7 +49,7 @@ router.post(commentApi('/add'), async (ctx) => {
     data: {
       articleId,
       senderId: user.id,
-      receiverId: target?.author?.id,
+      receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
       content
     }
