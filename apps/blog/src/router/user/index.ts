@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/blog-client'
 import { map, prop, omit, reduce, compose } from 'ramda'
 
 import router from '../instance'
-import { user } from '../../models'
+import prisma, { user } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
@@ -57,6 +57,22 @@ router.post(userApi('/signin'), async (ctx) => {
 
 router.post(userApi('/logout'), async (ctx) => {
   ctx.cookies.set('token', null, { domain: 'wishufree.com' })
+  response.success(ctx)
+})
+
+router.post(userApi('/resetPwd'), async (ctx) => {
+  const { cookie } = ctx.request.header
+  const { id } = ctx.request.body
+  const user = await parseUserInfoByCookie(cookie)
+
+  if (user?.role !== 'admin') {
+    response.error(ctx, 403, '没有操作权限')
+    return
+  }
+  await prisma.user.update({
+    where: { id },
+    data: { password: '12345678' }
+  })
   response.success(ctx)
 })
 
