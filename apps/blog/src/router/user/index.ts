@@ -3,7 +3,7 @@ import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
 import moment from 'moment'
 import Cookie from 'cookie'
-import { MD5 } from 'crypto-js'
+import { SHA256 } from 'crypto-js'
 import { Prisma } from '@prisma/blog-client'
 import { map, prop, omit, reduce, compose } from 'ramda'
 
@@ -72,7 +72,7 @@ router.post(userApi('/resetPwd'), async (ctx) => {
   }
   await prisma.user.update({
     where: { id },
-    data: { password: MD5('12345678').toString() }
+    data: { password: SHA256('12345678').toString() }
   })
   response.success(ctx)
 })
