@@ -177,6 +177,8 @@ enum MessageType {
   reply
   // 点赞
   like
+  // 文章评论
+  comment
 }
 
 // 新增消息中心

@@ -43,7 +43,7 @@ router.post(commentApi('/add'), async (ctx) => {
       articleId,
       senderId: user.id,
       receiverId: target?.author?.id,
-      type: 'reply',
+      type: parentCommentId ? 'reply' : 'comment',
       content
     }
   })
