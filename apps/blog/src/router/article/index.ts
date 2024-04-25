@@ -145,7 +145,7 @@ router.post(articleApi('/list'), async (ctx) => {
       // 可见的文章
       { private: false },
       { authorId: user?.id },
-      { coAuthorIds: { contains: user?.id } }
+      ...(user ? [{ coAuthorIds: { contains: String(user.id) } }] : [])
     ]
   }
 
@@ -327,7 +327,7 @@ router.post(articleApi('/clientList'), async (ctx) => {
       { private: false },
       // 当前用户的文章
       { authorId: user?.id },
-      { coAuthorIds: { contains: user?.id } }
+      ...(user ? [{ coAuthorIds: { contains: String(user.id) } }] : [])
     ]
   }
 
