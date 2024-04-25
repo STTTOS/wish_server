@@ -74,21 +74,30 @@ const handleUpload =
     response.success(ctx, { url })
   }
 
+// 上传文件到临时目录
 router.post(
   commonApi('/upload_temp_file'),
   koaBody(getKoaBodyConfig('temp', 3000)),
   handleUpload('temp')
 )
-
+// 上传文件到files目录
 router.post(
-  commonApi('/upload_file'),
-  koaBody(getKoaBodyConfig('files', 600)),
+  commonApi('/upload_persistent'),
+  koaBody(getKoaBodyConfig('files', 2000)),
   handleUpload('files')
 )
-// 接收二进制流
+
+// 上传任意文件到static文件下
 router.post(
-  commonApi('/upload'),
-  koaBody(getKoaBodyConfig('origin', 1000)),
+  commonApi('/upload_file'),
+  koaBody(getKoaBodyConfig('', 2000)),
+  handleUpload('')
+)
+
+// 上传图片
+router.post(
+  commonApi('/upload_image'),
+  koaBody(getKoaBodyConfig('origin', 10)),
   async (ctx) => {
     const file = ctx.request.files?.file
     if (!file) throw new Error('空文件!')
