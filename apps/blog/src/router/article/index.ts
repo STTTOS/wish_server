@@ -144,7 +144,8 @@ router.post(articleApi('/list'), async (ctx) => {
     OR: [
       // 可见的文章
       { private: false },
-      { authorId: user?.id }
+      { authorId: user?.id },
+      { coAuthorIds: { contains: user?.id } }
     ]
   }
 
@@ -233,7 +234,11 @@ router.post(articleApi('/detail'), async (ctx) => {
     response.success(ctx, null)
     return
   }
-  if (data.private && data.authorId !== user?.id) {
+  if (
+    data.private &&
+    (data.authorId !== user?.id ||
+      !data.coAuthorIds?.includes(String(user?.id)))
+  ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
   }
@@ -321,11 +326,8 @@ router.post(articleApi('/clientList'), async (ctx) => {
       // 可见的文章
       { private: false },
       // 当前用户的文章
-      {
-        authorId: {
-          equals: user?.id
-        }
-      }
+      { authorId: user?.id },
+      { coAuthorIds: { contains: user?.id } }
     ]
   }
 
