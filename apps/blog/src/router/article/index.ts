@@ -6,7 +6,7 @@ import { omit, prop } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
-import prisma from '../../models'
+import prisma, { user } from '../../models'
 import { tag, article } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
@@ -375,3 +375,24 @@ async function getTagIdsByArticleId(id: number) {
 
   return data.tags.map(prop('tagId'))
 }
+
+router.post(articleApi('/visibleUsers'), async (ctx) => {
+  const { id } = ctx.request.body
+
+  if (!id) throw new Error('参数异常')
+
+  const data = await article.findUnique({
+    where: { id }
+  })
+  const userIds = data?.coAuthorIds?.split(',').map(Number) || []
+  const users = await user.findMany({
+    where: { id: { in: userIds } },
+    select: {
+      id: true,
+      avatar: true,
+      username: true,
+      name: true
+    }
+  })
+  response.success(ctx, withList(users, users.length))
+})
