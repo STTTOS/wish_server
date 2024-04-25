@@ -10,7 +10,7 @@ export const wordsToMinuteBaseNumber = 500
 
 export const cacheTime = 30 * 24 * 60 * 60
 
-export const imageCompressRatio = 0.5
+export const imageCompressRatio = 0.4
 
 export const fileNameSpliter = '__'
 

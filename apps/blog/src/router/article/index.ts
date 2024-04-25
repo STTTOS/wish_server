@@ -204,12 +204,15 @@ router.post(articleApi('/list'), async (ctx) => {
     orderBy
   })
 
-  const newList = list.map(({ author, tags, createdAt, ...rest }) => ({
-    ...omit(['content'], rest),
-    authorName: author?.name,
-    createdAt: moment(createdAt).format(timeFormat),
-    tags: tags.map(({ tagId: id, tag: { name } }) => ({ id, name }))
-  }))
+  const newList = list.map(
+    ({ author, tags, createdAt, updatedAt, ...rest }) => ({
+      ...omit(['content'], rest),
+      authorName: author?.name,
+      createdAt: moment(createdAt).format(timeFormat),
+      updatedAt: moment(updatedAt).format(timeFormat),
+      tags: tags.map(({ tagId: id, tag: { name } }) => ({ id, name }))
+    })
+  )
   response.success(ctx, withList(newList, total))
 })
 
@@ -244,11 +247,12 @@ router.post(articleApi('/detail'), async (ctx) => {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
   }
-  const { tags, createdAt, ...rest } = data
+  const { tags, createdAt, updatedAt, ...rest } = data
   response.success(ctx, {
     tagIds: tags.map(({ tag: { id } }) => id),
     tags: tags.map(({ tag: { id, name } }) => ({ id, name })),
     createdAt: moment(createdAt).format(timeFormatWithoutSeconds),
+    updatedAt: moment(updatedAt).format(timeFormatWithoutSeconds),
     ...rest
   })
 })
