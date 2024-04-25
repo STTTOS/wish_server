@@ -236,8 +236,10 @@ router.post(articleApi('/detail'), async (ctx) => {
   }
   if (
     data.private &&
-    (data.authorId !== user?.id ||
-      !data.coAuthorIds?.includes(String(user?.id)))
+    !(data.coAuthorIds || '')
+      .split(',')
+      .concat(String(data.authorId))
+      .includes(String(user?.id))
   ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
