@@ -21,6 +21,7 @@ const commonApi = combinePath(apiPrefix)('/common')
 interface Args {
   newFilename: string
   originalFilename: string | null
+  filepath: string
 }
 
 const removeBlanks = (input: string) => input.replaceAll(/\s/g, '')
@@ -90,8 +91,15 @@ router.post(
 // 上传任意文件到static文件下
 router.post(
   commonApi('/upload_file'),
-  koaBody(getKoaBodyConfig('', 2000)),
-  handleUpload('')
+  koaBody(getKoaBodyConfig('temp', 2000)),
+  async (ctx) => {
+    const file = ctx.request.files?.file as Args
+
+    if (!file) throw new Error('空文件!')
+
+    const url = await uploadFileToCos('videos', file.newFilename, file.filepath)
+    response.success(ctx, { url: `https://${url}` })
+  }
 )
 
 // 上传图片
