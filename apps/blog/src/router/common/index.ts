@@ -32,20 +32,21 @@ export const hashAndKeepOriginalName = ({
 
 const getKoaBodyConfig = (
   directoryName: string,
+  /**单位: mb */
   maxFileSize: number
 ): koaBody.IKoaBodyOptions => {
   return {
     // 支持文件格式
     multipart: true,
     formidable: {
-      maxFileSize,
+      maxFileSize: maxFileSize * 1024 * 1024,
       // 保留文件扩展名
       keepExtensions: true,
       onFileBegin(_, file) {
         const newFileName = hashAndKeepOriginalName(file)
         file.filepath = join(
           __dirname,
-          `../../../static/${directoryName}/${newFileName}`
+          join('../../../static/', directoryName, newFileName)
         )
         file.newFilename = newFileName
       }
@@ -82,17 +83,7 @@ router.post(
 // 接收二进制流
 router.post(
   commonApi('/upload'),
-  koaBody({
-    // 支持文件格式
-    multipart: true,
-    formidable: {
-      maxFileSize: 1024 * 1024 * 10,
-      // 保留文件扩展名
-      keepExtensions: true,
-      // 上传目录
-      uploadDir: join(__dirname, '../../../static/origin')
-    }
-  }),
+  koaBody(getKoaBodyConfig('origin', 10)),
   async (ctx) => {
     const file = ctx.request.files?.file
     if (!file) throw new Error('空文件!')
@@ -102,16 +93,9 @@ router.post(
     for (const item of files) {
       await sharp(item.filepath)
         .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(
-          join(
-            __dirname,
-            `../../../static/origin/${hashAndKeepOriginalName(item)}`
-          )
-        )
+        .toFile(join(__dirname, `../../../static/${item.newFilename}`))
     }
-    const url = files
-      .map((item) => `/static/origin/${hashAndKeepOriginalName(item)}`)
-      .join(',')
+    const url = files.map((item) => `/static/${item.newFilename}`).join(',')
     response.success(ctx, { url })
   }
 )
