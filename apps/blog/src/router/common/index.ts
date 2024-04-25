@@ -3,6 +3,7 @@ import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
 import Router from 'koa-router'
+import { compose } from 'ramda'
 import { join, basename } from 'path'
 import { ParameterizedContext } from 'koa'
 import { access, readFile, writeFile } from 'fs/promises'
@@ -21,6 +22,12 @@ interface Args {
   newFilename: string
   originalFilename: string | null
 }
+
+const removeBlanks = (input: string) => input.replaceAll(/\s/g, '')
+const mapFileNameToURI =
+  (directory = '') =>
+  (file: Args) =>
+    join('/static', directory, removeBlanks(file.newFilename))
 
 export const hashAndKeepOriginalName = ({
   newFilename,
@@ -43,7 +50,7 @@ const getKoaBodyConfig = (
       // 保留文件扩展名
       keepExtensions: true,
       onFileBegin(_, file) {
-        const newFileName = hashAndKeepOriginalName(file)
+        const newFileName = compose(removeBlanks, hashAndKeepOriginalName)(file)
         file.filepath = join(
           __dirname,
           join('../../../static/', directoryName, newFileName)
@@ -63,9 +70,7 @@ const handleUpload =
     if (!file) throw new Error('空文件!')
 
     const files = Array.isArray(file) ? file : [file]
-    const url = files
-      .map(({ newFilename }) => `/static/${directoryName}/${newFilename}`)
-      .join(',')
+    const url = files.map(mapFileNameToURI(directoryName)).join(',')
     response.success(ctx, { url })
   }
 
@@ -83,7 +88,7 @@ router.post(
 // 接收二进制流
 router.post(
   commonApi('/upload'),
-  koaBody(getKoaBodyConfig('origin', 10)),
+  koaBody(getKoaBodyConfig('origin', 1000)),
   async (ctx) => {
     const file = ctx.request.files?.file
     if (!file) throw new Error('空文件!')
@@ -95,7 +100,7 @@ router.post(
         .jpeg({ quality: imageCompressRatio * 100 })
         .toFile(join(__dirname, `../../../static/${item.newFilename}`))
     }
-    const url = files.map((item) => `/static/${item.newFilename}`).join(',')
+    const url = files.map(mapFileNameToURI()).join(',')
     response.success(ctx, { url })
   }
 )
