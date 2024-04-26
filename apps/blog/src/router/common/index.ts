@@ -132,7 +132,7 @@ router.post(commonApi('/deploy_blog_frontend'), async (ctx) => {
   })
   for (const file of assets) {
     const filename = basename(file)
-    await uploadFileToCos('blog', filename, file)
+    await uploadFileToCos('base/blog', filename, file)
   }
   logger.info('成功上传静态资源到cdn, 发布应用: blog')
   response.success(ctx, null, '部署成功')

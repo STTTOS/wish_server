@@ -22,7 +22,7 @@ const uploadFileToCos = (
         /* 存储桶所在地域，例如ap-beijing，必须字段 */
         Region: 'ap-chengdu',
         /* 存储在桶里的对象键（例如1.jpg，a/b/test.txt），必须字段 */
-        Key: `base/${appName}/${fileName}`,
+        Key: fileName,
         /* 必须，上传文件对象，可以是input[type="file"]标签选择本地文件后得到的file对象 */
         FilePath: filePath,
         /* 触发分块上传的阈值，超过5MB使用分块上传，非必须 */
