@@ -44,21 +44,6 @@ app.use(serve(join(__dirname, '../public'), { maxAge }))
 // 注册静态资源前缀 /static
 app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
-// 统一鉴权
-// app.use(async (ctx, next) => {
-//   const {
-//     url,
-//     header: { cookie }
-//   } = ctx.request
-//   const user = await parseUserInfoByCookie(cookie)
-
-//   if (apiNeededToAuth.includes(toLower(url)) && user?.role !== 'admin') {
-//     response.success(ctx, null, '没有权限', 403)
-//     return
-//   }
-//   await next()
-// })
-
 // 解析请求体
 app.use(
   koaBody({

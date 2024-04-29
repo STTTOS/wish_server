@@ -3,7 +3,6 @@ import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
 import response from '../../utils/response'
-import { parseUserInfoByCookie } from '../user'
 import { withList } from '../../utils/response'
 // import { Comment } from './interface'
 import combinePath from '../../utils/combinePath'
@@ -18,9 +17,8 @@ router.post(commentApi('/add'), async (ctx) => {
     articleId,
     parentCommentId = null
   }: Comment = ctx.request.body
-  const { cookie } = ctx.request.header
-  const user = await parseUserInfoByCookie(cookie)
 
+  const user = ctx.userInfo
   if (!user) throw new Error('未登录')
 
   const { id: authorId } = user
@@ -135,11 +133,10 @@ router.post(commentApi('/list'), async (ctx) => {
 })
 
 router.post(commentApi('/delete'), async (ctx) => {
-  const { cookie } = ctx.header
   const { id, hasChildren } = ctx.request.body
-  const user = await parseUserInfoByCookie(cookie)
   const target = await comment.findUnique({ where: { id } })
 
+  const user = ctx.userInfo
   // 判定必须本人操作
   if (!user || !target || target.authorId !== user.id) {
     response.error(ctx, 500, '非法操作')

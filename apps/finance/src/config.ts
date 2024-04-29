@@ -17,6 +17,7 @@ export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',
   '/api/user/delete',
+  '/api/user/resetPwd',
 
   '/api/article/add',
   '/api/article/update',

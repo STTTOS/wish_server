@@ -10,7 +10,6 @@ import prisma, { user } from '../../models'
 import { tag, article } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
-import { parseUserInfoByCookie } from '../user'
 import combinePath from '../../utils/combinePath'
 import {
   apiPrefix,
@@ -23,14 +22,11 @@ const articleApi = combinePath(apiPrefix)('/article')
 
 router.post(articleApi('/add'), async (ctx) => {
   const {
-    body: { tagIds, content, coAuthorIds, ...data },
-    header: { cookie }
+    body: { tagIds, content, coAuthorIds, ...data }
   } = ctx.request
-  const user = await parseUserInfoByCookie(cookie)
 
-  if (!user) throw new Error('系统异常')
-
-  const { id: authorId } = user
+  const authorId = ctx.userInfo.id
+  // const { id: authorId } = user
   const length = content.replace(/[\s#*-<>~]/g, '').length
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
@@ -54,12 +50,11 @@ router.post(articleApi('/add'), async (ctx) => {
 
 router.post(articleApi('/delete'), async (ctx) => {
   const { id }: Partial<Identity> = ctx.request.body
-  const { cookie } = ctx.request.header
   if (!id) throw new Error('参数不正确')
 
-  const user = await parseUserInfoByCookie(cookie)
   const thisOne = await article.findUnique({ where: { id } })
-  if (user?.id !== thisOne?.authorId) {
+  323
+  if (ctx.userInfo?.id !== thisOne?.authorId) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }
@@ -73,10 +68,7 @@ router.post(articleApi('/delete'), async (ctx) => {
 })
 
 router.post(articleApi('/update'), async (ctx) => {
-  const {
-    body,
-    header: { cookie }
-  } = ctx.request
+  const { body } = ctx.request
   const { id, tagIds, content, coAuthorIds, ...data } = omit(
     ['createdAt', 'updatedAt'],
     body
@@ -89,8 +81,8 @@ router.post(articleApi('/update'), async (ctx) => {
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
   const thisOne = await article.findUnique({ where: { id } })
-  const user = await parseUserInfoByCookie(cookie)
-  if (user?.id !== thisOne?.authorId) {
+
+  if (ctx.userInfo.id !== thisOne?.authorId) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }
@@ -131,9 +123,8 @@ router.post(articleApi('/list'), async (ctx) => {
     current: skip,
     pageSize: take
   }: GetArticleByPaginationReq = ctx.request.body
-  const { cookie } = ctx.request.header
-  const user = await parseUserInfoByCookie(cookie)
 
+  const authorId = ctx.userInfo.id
   if (!skip || !take) throw new Error('分页参数不正确')
 
   // 条件查询
@@ -144,8 +135,8 @@ router.post(articleApi('/list'), async (ctx) => {
     OR: [
       // 可见的文章
       { private: false },
-      { authorId: user?.id },
-      ...(user ? [{ coAuthorIds: { contains: String(user.id) } }] : [])
+      { authorId },
+      ...(user ? [{ coAuthorIds: { contains: String(authorId) } }] : [])
     ]
   }
 
@@ -218,11 +209,9 @@ router.post(articleApi('/list'), async (ctx) => {
 
 router.post(articleApi('/detail'), async (ctx) => {
   const { id }: Identity = ctx.request.body
-  const { cookie } = ctx.request.header
 
   if (!id) throw new Error('参数不正确')
 
-  const user = await parseUserInfoByCookie(cookie)
   const data = await article.findUnique({
     include: {
       tags: {
@@ -242,7 +231,8 @@ router.post(articleApi('/detail'), async (ctx) => {
     !(data.coAuthorIds || '')
       .split(',')
       .concat(String(data.authorId))
-      .includes(String(user?.id))
+
+      .includes(String(ctx.userInfo.id))
   ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
@@ -324,16 +314,16 @@ router.post(articleApi('/count'), async (ctx) => {
 
 router.post(articleApi('/clientList'), async (ctx) => {
   const { authorId, tagId } = ctx.request.body
-  const { cookie } = ctx.request.header
-  const user = await parseUserInfoByCookie(cookie)
 
   const where: Prisma.ArticleWhereInput = {
     OR: [
       // 可见的文章
       { private: false },
       // 当前用户的文章
-      { authorId: user?.id },
-      ...(user ? [{ coAuthorIds: { contains: String(user.id) } }] : [])
+
+      { authorId: ctx.userInfo.id },
+
+      ...(user ? [{ coAuthorIds: { contains: String(ctx.userInfo.id) } }] : [])
     ]
   }
 

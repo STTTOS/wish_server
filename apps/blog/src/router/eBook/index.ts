@@ -7,7 +7,6 @@ import { Prisma } from '@prisma/blog-client'
 import router from '../instance'
 import { eBook } from '../../models'
 import response from '../../utils/response'
-import { parseUserInfoByCookie } from '../user'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
@@ -15,18 +14,18 @@ import { apiPrefix, timeFormat } from '../../config'
 const eBookApi = combinePath(apiPrefix)('/ebook')
 
 router.post(eBookApi('/add'), async (ctx) => {
-  const { cookie = '' } = ctx.request.header
   const { name, category, words, eBookUrl }: Prisma.EBookCreateInput =
     ctx.request.body
 
-  const { id: userId } = (await parseUserInfoByCookie(cookie)) || {}
+  ctx.request
+
+  const { id: userId } = ctx.userInfo
 
   await eBook.create({ data: { name, category, eBookUrl, words, userId } })
   response.success(ctx)
 })
 
 router.post(eBookApi('/update'), async (ctx) => {
-  const { cookie = '' } = ctx.request.header
   const {
     name,
     category,
@@ -37,7 +36,7 @@ router.post(eBookApi('/update'), async (ctx) => {
 
   if (!id) throw new Error('id 不能为空')
 
-  const { id: userId } = (await parseUserInfoByCookie(cookie)) || {}
+  const { id: userId } = ctx.userInfo
   try {
     await eBook.update({
       data: { name, category, eBookUrl, words, userId },

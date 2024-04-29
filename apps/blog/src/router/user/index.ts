@@ -2,24 +2,38 @@ import type { Identity, PrismaError } from '../interface'
 import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
 import moment from 'moment'
-import Cookie from 'cookie'
+import { Context } from 'koa'
 import { SHA256 } from 'crypto-js'
-import { Prisma } from '@prisma/blog-client'
-import { map, prop, omit, reduce, compose } from 'ramda'
+import { User, Prisma } from '@prisma/blog-client'
+import { map, prop, omit, pick, reduce, compose } from 'ramda'
 
 import router from '../instance'
 import prisma, { user } from '../../models'
 import response from '../../utils/response'
+import { encrypt } from '../../utils/cryptor'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
-import { apiPrefix, timeFormat } from '../../config'
-import { encrypt, decrypt } from '../../utils/cryptor'
+import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')
 
+function setCookie(
+  ctx: Context,
+  payload: Pick<User, 'id' | 'role'>,
+  keepLogin: boolean
+) {
+  const token = encrypt(pick(['role', 'id'])(payload))
+  ctx.cookies.set('token', token, {
+    httpOnly: true,
+    domain: 'wishufree.com',
+    expires: keepLogin
+      ? new Date(Date.now() + tokenValidatedTime * 1000)
+      : undefined
+  })
+}
 // 登录注册 合并一起
 router.post(userApi('/signin'), async (ctx) => {
-  const { username, password } = ctx.request.body
+  const { username, password, keepLogin } = ctx.request.body
 
   if (!username || !password) throw new Error('参数异常')
 
@@ -30,17 +44,11 @@ router.post(userApi('/signin'), async (ctx) => {
   if (u) {
     const target = await user.findFirst({ where: { username, password } })
     if (!target) {
-      response.error(ctx, 403, '用户信息不正确')
+      response.error(ctx, 1000, '用户信息不正确')
       return
     }
-
-    const token = encrypt(`${u.id}`)
-    ctx.cookies.set('token', token, {
-      httpOnly: true,
-      domain: 'wishufree.com',
-      expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    })
-    response.success(ctx, { token }, '登录成功')
+    setCookie(ctx, target, keepLogin)
+    response.success(ctx, null, '登录成功')
     return
   }
 
@@ -52,8 +60,8 @@ router.post(userApi('/signin'), async (ctx) => {
       name: '用户昵称_' + Math.random()
     }
   })
-  const token = encrypt(`${userInfo.id}`)
-  response.success(ctx, { token }, '注册成功')
+  setCookie(ctx, pick(['role', 'id'], userInfo), keepLogin)
+  response.success(ctx, null, '注册成功')
 })
 
 router.post(userApi('/logout'), async (ctx) => {
@@ -62,14 +70,8 @@ router.post(userApi('/logout'), async (ctx) => {
 })
 
 router.post(userApi('/resetPwd'), async (ctx) => {
-  const { cookie } = ctx.request.header
   const { id } = ctx.request.body
-  const user = await parseUserInfoByCookie(cookie)
 
-  if (user?.role !== 'admin') {
-    response.error(ctx, 403, '没有操作权限')
-    return
-  }
   await prisma.user.update({
     where: { id },
     data: { password: SHA256('12345678').toString() }
@@ -77,28 +79,15 @@ router.post(userApi('/resetPwd'), async (ctx) => {
   response.success(ctx)
 })
 
-// 从cookie中查询用户
-export async function parseUserInfoByCookie(input?: string) {
-  if (!input) return null
-
-  const { token = '' } = Cookie.parse(input)
-  const id = decrypt(token)
-
-  if (!id) return null
-
-  const u = await user.findUnique({ where: { id: Number(id) } })
-  return u && omit(['password'], u)
-}
-
 router.post(userApi('/info'), async (ctx) => {
-  const { cookie = '' } = ctx.request.header
+  const target = await user.findUnique({ where: { id: ctx.userInfo.id } })
+  response.success(ctx, omit(['passowrd'], target))
+})
 
-  const user = await parseUserInfoByCookie(cookie)
-  // if (!user) {
-  //   response.error(ctx, 403, '未登录')
-  // } else {
-  response.success(ctx, user)
-  // }
+// 俩接口返回一样, 但是次接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
+router.post(userApi('/loginCheck'), async (ctx) => {
+  const target = await user.findUnique({ where: { id: ctx.userInfo.id } })
+  response.success(ctx, omit(['passowrd'], target))
 })
 
 router.post(userApi('/add'), async (ctx) => {

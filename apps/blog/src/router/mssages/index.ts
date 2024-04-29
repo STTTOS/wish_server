@@ -2,7 +2,6 @@ import moment from 'moment'
 
 import router from '../instance'
 import { message } from '../../models'
-import { parseUserInfoByCookie } from '../user'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '../../utils/response'
@@ -40,16 +39,15 @@ router.post(messageApi('/list'), async (ctx) => {
 
 router.post(messageApi('/read'), async (ctx) => {
   const { id } = ctx.request.body
-  const { cookie } = ctx.request.header
+  const user = ctx.userInfo
 
-  const user = await parseUserInfoByCookie(cookie)
   if (!id || !user) throw new Error('操作失败')
 
   const data = await message.findUnique({
     where: { id }
   })
   // 需要验证这条消息的归属是否为本人
-  if (data?.receiverId && data.receiverId === user?.id)
+  if (data?.receiverId && data.receiverId === ctx.userInfo.id)
     await message.update({
       where: {
         id
@@ -62,9 +60,7 @@ router.post(messageApi('/read'), async (ctx) => {
 })
 
 router.post(messageApi('/unread'), async (ctx) => {
-  const { cookie } = ctx.request.header
-  const user = await parseUserInfoByCookie(cookie)
-
+  const user = ctx.userInfo
   if (!user) throw new Error('非法操作')
 
   const total = await message.count({

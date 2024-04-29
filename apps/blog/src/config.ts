@@ -14,10 +14,13 @@ export const imageCompressRatio = 0.4
 
 export const fileNameSpliter = '__'
 
+export const tokenValidatedTime = 30 * 24 * 60 * 60
+
 export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',
   '/api/user/delete',
+  '/api/user/loginCheck',
 
   '/api/article/add',
   '/api/article/update',
@@ -37,8 +40,13 @@ export const apiNeededToAuth = [
   '/api/tools/update',
   '/api/tools/delete',
 
-  '/api/common/upload',
   '/api/common/upload_file',
+  '/api/common/upload_image',
+  '/api/common/upload_persistent',
   '/api/common//upload_temp_file',
-  '/api/common/deploy_blog_frontend'
+  '/api/common/deploy_blog_frontend',
+
+  // '/api/storage/persistent/list',
+  // '/api/storage/temp/list',
+  '/api/storage/persistent/delete'
 ]
