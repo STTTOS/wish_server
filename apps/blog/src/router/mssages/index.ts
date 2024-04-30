@@ -39,9 +39,8 @@ router.post(messageApi('/list'), async (ctx) => {
 
 router.post(messageApi('/read'), async (ctx) => {
   const { id } = ctx.request.body
-  const user = ctx.userInfo
 
-  if (!id || !user) throw new Error('操作失败')
+  if (!id) throw new Error('参数异常')
 
   const data = await message.findUnique({
     where: { id }
@@ -61,7 +60,6 @@ router.post(messageApi('/read'), async (ctx) => {
 
 router.post(messageApi('/unread'), async (ctx) => {
   const user = ctx.userInfo
-  if (!user) throw new Error('非法操作')
 
   const total = await message.count({
     where: { receiverId: user.id, isRead: false }

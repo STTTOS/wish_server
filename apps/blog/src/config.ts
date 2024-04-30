@@ -16,6 +16,7 @@ export const fileNameSpliter = '__'
 
 export const tokenValidatedTime = 30 * 24 * 60 * 60
 
+// 记录需要用户身份的接口
 export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',
@@ -48,5 +49,8 @@ export const apiNeededToAuth = [
 
   // '/api/storage/persistent/list',
   // '/api/storage/temp/list',
-  '/api/storage/persistent/delete'
+  '/api/storage/persistent/delete',
+
+  '/api/message/read',
+  '/api/message/unread'
 ]
