@@ -4,7 +4,7 @@
   "description": "博客后台服务",
   "name": "@wishufree/blog-server",
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc --noEmitOnError",
     "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts}\"",
     "lint": "eslint --cache --ext .ts ./src",
