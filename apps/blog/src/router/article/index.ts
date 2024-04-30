@@ -231,7 +231,6 @@ router.post(articleApi('/detail'), async (ctx) => {
     !(data.coAuthorIds || '')
       .split(',')
       .concat(String(data.authorId))
-
       .includes(String(ctx.userInfo.id))
   ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)

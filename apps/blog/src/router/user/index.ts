@@ -80,14 +80,12 @@ router.post(userApi('/resetPwd'), async (ctx) => {
 })
 
 router.post(userApi('/info'), async (ctx) => {
-  const target = await user.findUnique({ where: { id: ctx.userInfo.id } })
-  response.success(ctx, omit(['passowrd'], target))
+  response.success(ctx, omit(['passowrd'], ctx.userInfo.data))
 })
 
 // 俩接口返回一样, 但是次接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
 router.post(userApi('/loginCheck'), async (ctx) => {
-  const target = await user.findUnique({ where: { id: ctx.userInfo.id } })
-  response.success(ctx, omit(['passowrd'], target))
+  response.success(ctx, omit(['passowrd'], ctx.userInfo.data))
 })
 
 router.post(userApi('/add'), async (ctx) => {

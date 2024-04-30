@@ -4,7 +4,6 @@ import { Comment } from '@prisma/blog-client'
 import router from '../instance'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
-// import { Comment } from './interface'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import prisma, { comment, message } from '../../models'
@@ -18,10 +17,7 @@ router.post(commentApi('/add'), async (ctx) => {
     parentCommentId = null
   }: Comment = ctx.request.body
 
-  const user = ctx.userInfo
-  if (!user) throw new Error('未登录')
-
-  const { id: authorId } = user
+  const { id: authorId } = ctx.userInfo
 
   const receiver = await (() => {
     if (parentCommentId)
@@ -46,7 +42,7 @@ router.post(commentApi('/add'), async (ctx) => {
   await message.create({
     data: {
       articleId,
-      senderId: user.id,
+      senderId: authorId,
       receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
       content
