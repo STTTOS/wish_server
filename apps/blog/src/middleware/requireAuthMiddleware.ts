@@ -8,7 +8,9 @@ const requireAuthMiddleware = async (
   ctx: Context,
   next: () => Promise<void>
 ) => {
-  if (apiNeededToAuth.some((url) => toLower(url) === ctx.request.url)) {
+  if (
+    apiNeededToAuth.some((url) => toLower(url) === toLower(ctx.request.url))
+  ) {
     const {
       userInfo: { tokenStatus, data }
     } = ctx
