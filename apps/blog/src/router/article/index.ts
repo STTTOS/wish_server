@@ -53,7 +53,7 @@ router.post(articleApi('/delete'), async (ctx) => {
   if (!id) throw new Error('参数不正确')
 
   const thisOne = await article.findUnique({ where: { id } })
-  323
+
   if (ctx.userInfo?.id !== thisOne?.authorId) {
     response.success(ctx, null, '无操作权限', 403)
     return

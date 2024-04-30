@@ -1,6 +1,6 @@
 {
   "extends": "tsconfig/base.json",
-  "include": ["src", "global.env.d.ts", "src/koa-extension.d.ts"],
+  "include": ["src", "global.env.d.ts", "koa-extension.d.ts"],
   "compilerOptions": {
     "outDir": "./dist"
   }
