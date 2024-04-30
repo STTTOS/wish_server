@@ -5,7 +5,7 @@
   "name": "@wishufree/blog-server",
   "scripts": {
     "build": "tsc",
-    "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
+    "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"ts-node --files ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts}\"",
     "lint": "eslint --cache --ext .ts ./src",
     "lint:fix": "eslint --fix --cache --ext .ts ./src",
