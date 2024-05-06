@@ -69,7 +69,7 @@ router.post(userApi('/signin'), async (ctx) => {
       name: '用户昵称_' + Math.random()
     }
   })
-  setCookie(ctx, pick(['role', 'id'], userInfo), keepLogin)
+  setCookie(ctx, userInfo, keepLogin)
   response.success(ctx, null, '注册成功')
 })
 

@@ -81,7 +81,7 @@ router.post(articleApi('/update'), async (ctx) => {
 
   const thisOne = await article.findUnique({ where: { id } })
 
-  const allowedUserIds = [thisOne?.id].concat(coAuthorIds)
+  const allowedUserIds = [thisOne?.authorId].concat(coAuthorIds)
   if (!allowedUserIds.includes(ctx.state.user?.id)) {
     response.success(ctx, null, '无操作权限', 403)
     return
