@@ -10,9 +10,9 @@ import { map, prop, omit, pick, reduce, compose } from 'ramda'
 import router from '../instance'
 import prisma, { user } from '../../models'
 import response from '../../utils/response'
-import { encrypt } from '../../utils/cryptor'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { decrypt, encrypt } from '../../utils/cryptor'
 import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')
@@ -88,6 +88,15 @@ router.post(userApi('/resetPwd'), async (ctx) => {
 })
 
 router.post(userApi('/info'), async (ctx) => {
+  const { cookie } = ctx.request.header
+  try {
+    const payload = decrypt(cookie || '')
+    const data = await getUserInfo(payload?.userId)
+    response.success(ctx, omit(['password'], data))
+  } catch (error) {
+    response.success(ctx)
+  }
+
   const data = await getUserInfo(ctx.state.user.id)
   response.success(ctx, omit(['password'], data))
 })

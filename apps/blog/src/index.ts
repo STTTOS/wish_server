@@ -23,22 +23,22 @@ app.use(errorHandlerMiddleware)
 
 // Custom 401 handling (first middleware)
 app.use(async function (ctx, next) {
-  return next().catch(async (err) => {
+  try {
+    await next()
+  } catch (error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const err = error as any
     if (err.status === 401) {
-      if (ctx.request.url !== '/api/user/info') {
-        response.success(
-          ctx,
-          null,
-          err.originalError ? err.originalError.message : err.message,
-          401
-        )
-      } else {
-        await next()
-      }
+      response.success(
+        ctx,
+        null,
+        err.originalError ? err.originalError.message : err.message,
+        401
+      )
     } else {
       throw err
     }
-  })
+  }
 })
 // 配合history模式
 // 放在静态资源服务中间件前面加载
@@ -57,7 +57,7 @@ app.use(
     path: [
       /^\/static/,
       /^\/public/,
-      /^\/api\/user\/(logout|signin|recommend|all|card)/,
+      /^\/api\/user\/(logout|signin|recommend|all|card|info)/,
       /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/,
       '/api/tag/all',
       '/api/tag/view/platform',

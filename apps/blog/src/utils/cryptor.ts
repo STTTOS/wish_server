@@ -4,7 +4,7 @@ import { tokenValidatedTime } from '../config'
 
 const { SECRET_KEY } = process.env
 export function decrypt(token: string) {
-  const user = jwt.verify(token, SECRET_KEY!) as { userId: string }
+  const user = jwt.verify(token, SECRET_KEY!) as { userId: number } | undefined
   return user
 }
 
