@@ -23,8 +23,8 @@ const customHandle401 = async (
   if (!user) {
     if (
       paths.some((path) => {
-        const url = ctx.request.url.toLowerCase()
-        if (typeof path === 'string') return toLower(path) === url
+        const { url } = ctx.request
+        if (typeof path === 'string') return toLower(path) === toLower(url)
         return url.match(path)
       })
     ) {
