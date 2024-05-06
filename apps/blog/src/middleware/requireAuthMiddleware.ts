@@ -17,6 +17,8 @@ const requireAuthMiddleware = async (
     const data = await user.findUnique({ where: { id: userId } })
     if (data?.role !== 'admin') {
       response.success(ctx, null, '无操作权限', 403)
+    } else {
+      await next()
     }
   } else {
     await next()
