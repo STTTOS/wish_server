@@ -1,3 +1,4 @@
+import { toLower } from 'ramda'
 import { ParameterizedContext } from 'koa'
 
 import response from '../utils/response'
@@ -23,7 +24,7 @@ const customHandle401 = async (
     if (
       paths.some((path) => {
         const url = ctx.request.url.toLowerCase()
-        if (typeof path === 'string') return path === url
+        if (typeof path === 'string') return toLower(path) === url
         return url.match(path)
       })
     ) {
