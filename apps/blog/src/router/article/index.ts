@@ -53,7 +53,10 @@ router.post(articleApi('/delete'), async (ctx) => {
 
   const thisOne = await article.findUnique({ where: { id } })
 
-  if (ctx.state.user?.id !== thisOne?.authorId) {
+  const allowedUserIds = [thisOne?.authorId].concat(
+    thisOne?.coAuthorIds?.split(',').map(Number)
+  )
+  if (!allowedUserIds.includes(ctx.state.user?.id)) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }

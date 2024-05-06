@@ -22,9 +22,9 @@ export const apiNeededToAuth = [
   '/api/user/update',
   '/api/user/delete',
 
-  '/api/article/add',
-  '/api/article/update',
-  '/api/article/delete',
+  // '/api/article/add',
+  // '/api/article/update',
+  // '/api/article/delete',
 
   '/api/tag/add',
   '/api/tag/update',
