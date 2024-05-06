@@ -25,7 +25,7 @@ const customHandle401 = async (
       paths.some((path) => {
         const { url } = ctx.request
         if (typeof path === 'string') return toLower(path) === toLower(url)
-        return url.match(path)
+        return path.test(url)
       })
     ) {
       await next()
