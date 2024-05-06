@@ -23,13 +23,12 @@ app.use(errorHandlerMiddleware)
 // 配合history模式
 // 放在静态资源服务中间件前面加载
 // 404  重定向到 /public/index.html
-app.use(historyApiFallback({ index: '/index.html' }))
+app.use(historyApiFallback({ index: '/public/index.html' }))
 
 app.use(
   koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
     // 排除一些不需要401跳转的接口
     path: [
-      '/',
       /^\/static/,
       /^\/public/,
       /^\/api\/user\/(logout|signin|recommend|all|card)/,
