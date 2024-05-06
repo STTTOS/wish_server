@@ -26,6 +26,7 @@ app.use(
     path: [
       '/',
       /^\/static/,
+      /^\/public/,
       /^\/api\/user\/(logout|signin|recommend|all|card)/,
       /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/
     ]
