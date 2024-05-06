@@ -17,12 +17,20 @@ import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')
 
+async function getUserInfo(id?: number) {
+  try {
+    if (!id) return null
+    return user.findUnique({ where: { id } })
+  } catch (error) {
+    return null
+  }
+}
 function setCookie(
   ctx: Context,
-  payload: Pick<User, 'id' | 'role'>,
+  payload: Pick<User, 'id'>,
   keepLogin: boolean
 ) {
-  const token = encrypt(pick(['role', 'id'])(payload))
+  const token = encrypt(pick(['id'])(payload))
   ctx.cookies.set('token', token, {
     httpOnly: true,
     domain: 'wishufree.com',
@@ -80,12 +88,14 @@ router.post(userApi('/resetPwd'), async (ctx) => {
 })
 
 router.post(userApi('/info'), async (ctx) => {
-  response.success(ctx, omit(['passowrd'], ctx.userInfo.data))
+  const data = await getUserInfo(ctx.state.user.id)
+  response.success(ctx, omit(['password'], data))
 })
 
-// 俩接口返回一样, 但是次接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
+// 俩接口返回一样, 但是此接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
 router.post(userApi('/loginCheck'), async (ctx) => {
-  response.success(ctx, omit(['passowrd'], ctx.userInfo.data))
+  const data = await getUserInfo(ctx.state.user.id)
+  response.success(ctx, omit(['password'], data))
 })
 
 router.post(userApi('/add'), async (ctx) => {

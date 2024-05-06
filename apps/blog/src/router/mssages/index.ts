@@ -9,7 +9,6 @@ import response, { withList } from '../../utils/response'
 const messageApi = combinePath(apiPrefix)('/message')
 
 router.post(messageApi('/list'), async (ctx) => {
-  // message.
   const { current: skip, pageSize: take } = ctx.request.body
 
   const list = await message.findMany({
@@ -46,7 +45,7 @@ router.post(messageApi('/read'), async (ctx) => {
     where: { id }
   })
   // 需要验证这条消息的归属是否为本人
-  if (data?.receiverId && data.receiverId === ctx.userInfo.id)
+  if (data?.receiverId && data.receiverId === ctx.state.user.id)
     await message.update({
       where: {
         id
@@ -59,7 +58,7 @@ router.post(messageApi('/read'), async (ctx) => {
 })
 
 router.post(messageApi('/unread'), async (ctx) => {
-  const user = ctx.userInfo
+  const user = ctx.state.user
 
   const total = await message.count({
     where: { receiverId: user.id, isRead: false }

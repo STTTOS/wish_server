@@ -25,8 +25,7 @@ router.post(articleApi('/add'), async (ctx) => {
     body: { tagIds, content, coAuthorIds, ...data }
   } = ctx.request
 
-  const authorId = ctx.userInfo.id
-  // const { id: authorId } = user
+  const authorId = ctx.state.user.id
   const length = content.replace(/[\s#*-<>~]/g, '').length
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
@@ -54,7 +53,7 @@ router.post(articleApi('/delete'), async (ctx) => {
 
   const thisOne = await article.findUnique({ where: { id } })
 
-  if (ctx.userInfo?.id !== thisOne?.authorId) {
+  if (ctx.state.user?.id !== thisOne?.authorId) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }
@@ -82,7 +81,8 @@ router.post(articleApi('/update'), async (ctx) => {
 
   const thisOne = await article.findUnique({ where: { id } })
 
-  if (ctx.userInfo.id !== thisOne?.authorId) {
+  const allowedUserIds = [thisOne?.id].concat(coAuthorIds)
+  if (!allowedUserIds.includes(ctx.state.user?.id)) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }
@@ -124,7 +124,7 @@ router.post(articleApi('/list'), async (ctx) => {
     pageSize: take
   }: GetArticleByPaginationReq = ctx.request.body
 
-  const authorId = ctx.userInfo.id
+  const authorId = ctx.state.user.id
   if (!skip || !take) throw new Error('分页参数不正确')
 
   // 条件查询
@@ -231,7 +231,7 @@ router.post(articleApi('/detail'), async (ctx) => {
     !(data.coAuthorIds || '')
       .split(',')
       .concat(String(data.authorId))
-      .includes(String(ctx.userInfo.id))
+      .includes(String(ctx.state.user.id))
   ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
@@ -320,9 +320,11 @@ router.post(articleApi('/clientList'), async (ctx) => {
       { private: false },
       // 当前用户的文章
 
-      { authorId: ctx.userInfo.id },
+      { authorId: ctx.state.user?.id },
 
-      ...(user ? [{ coAuthorIds: { contains: String(ctx.userInfo.id) } }] : [])
+      ...(user
+        ? [{ coAuthorIds: { contains: String(ctx.state.user?.id) } }]
+        : [])
     ]
   }
 

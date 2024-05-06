@@ -19,7 +19,7 @@ router.post(eBookApi('/add'), async (ctx) => {
 
   ctx.request
 
-  const { id: userId } = ctx.userInfo
+  const userId = ctx.state.user.id
 
   await eBook.create({ data: { name, category, eBookUrl, words, userId } })
   response.success(ctx)
@@ -36,7 +36,7 @@ router.post(eBookApi('/update'), async (ctx) => {
 
   if (!id) throw new Error('id 不能为空')
 
-  const { id: userId } = ctx.userInfo
+  const userId = ctx.state.user.id
   try {
     await eBook.update({
       data: { name, category, eBookUrl, words, userId },

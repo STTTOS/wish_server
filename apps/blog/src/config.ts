@@ -21,7 +21,6 @@ export const apiNeededToAuth = [
   '/api/user/add',
   '/api/user/update',
   '/api/user/delete',
-  '/api/user/loginCheck',
 
   '/api/article/add',
   '/api/article/update',
@@ -47,10 +46,5 @@ export const apiNeededToAuth = [
   '/api/common//upload_temp_file',
   '/api/common/deploy_blog_frontend',
 
-  // '/api/storage/persistent/list',
-  // '/api/storage/temp/list',
-  '/api/storage/persistent/delete',
-
-  '/api/message/read',
-  '/api/message/unread'
+  '/api/storage/persistent/delete'
 ]

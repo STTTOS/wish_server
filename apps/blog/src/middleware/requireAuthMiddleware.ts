@@ -1,30 +1,22 @@
-import { Context } from 'koa'
 import { toLower } from 'ramda'
+import { ParameterizedContext } from 'koa'
 
+import { user } from '../models'
 import response from '../utils/response'
 import { apiNeededToAuth } from '../config'
+import { DefaultState } from '../router/instance'
 
 const requireAuthMiddleware = async (
-  ctx: Context,
+  ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
 ) => {
   if (
     apiNeededToAuth.some((url) => toLower(url) === toLower(ctx.request.url))
   ) {
-    const {
-      userInfo: { tokenStatus, data }
-    } = ctx
-    const [code, message] = (() => {
-      if (tokenStatus === 'expire') return [401, '身份凭证过期, 请重新登陆']
-      if (tokenStatus === 'invalid') return [401, '身份凭证无效, 请重新登录']
-      if (data?.role !== 'admin') return [403, '哦豁, 莫得访问权限']
-
-      return [200, '成功']
-    })()
-    if (code === 200) {
-      await next()
-    } else {
-      response.error(ctx, code, message)
+    const userId = ctx.state.user.id
+    const data = await user.findUnique({ where: { id: userId } })
+    if (data?.role !== 'admin') {
+      response.success(ctx, null, '无操作权限', 403)
     }
   } else {
     await next()

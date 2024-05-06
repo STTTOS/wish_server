@@ -11,9 +11,13 @@ const errorHandlerMiddleware = async (
     await next()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
+    if (err.name === 'UnauthorizedError') {
+      response.error(ctx, 401, '身份凭证失效')
+      return
+    }
     logger.error(err.stack || err.message)
     ctx.status = 500
-    response.error(ctx, 500, '遭了, 服务器内部出问题了')
+    response.error(ctx, err.status || 500, '遭了, 服务器内部出问题了')
   }
 }
 export default errorHandlerMiddleware

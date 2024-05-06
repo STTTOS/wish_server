@@ -17,7 +17,7 @@ router.post(commentApi('/add'), async (ctx) => {
     parentCommentId = null
   }: Comment = ctx.request.body
 
-  const { id: authorId } = ctx.userInfo
+  const authorId = ctx.state.user.id
 
   const receiver = await (() => {
     if (parentCommentId)
@@ -132,7 +132,7 @@ router.post(commentApi('/delete'), async (ctx) => {
   const { id, hasChildren } = ctx.request.body
   const target = await comment.findUnique({ where: { id } })
 
-  const user = ctx.userInfo
+  const user = ctx.state.user
   // 判定必须本人操作
   if (!user || !target || target.authorId !== user.id) {
     response.error(ctx, 500, '非法操作')

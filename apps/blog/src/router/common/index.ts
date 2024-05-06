@@ -97,11 +97,8 @@ router.post(
 
     if (!file) throw new Error('空文件!')
 
-    // const url = await uploadFileToCos('videos', file.newFilename, file.filepath)
-    // response.success(ctx, { url: `https://${url}` })
-    response.success(ctx, {
-      url: `http://localhost:7500/static/temp/${file.newFilename}`
-    })
+    const url = await uploadFileToCos('videos', file.newFilename, file.filepath)
+    response.success(ctx, { url: `https://${url}` })
   }
 )
 

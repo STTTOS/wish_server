@@ -1,5 +1,6 @@
 import Koa from 'koa'
 import { join } from 'path'
+import koaJwt from 'koa-jwt'
 import mount from 'koa-mount'
 import serve from 'koa-static'
 import koaBody from 'koa-body'
@@ -11,7 +12,6 @@ import router from './router'
 import { logger } from './logger'
 import { port, cacheTime as maxAge } from './config'
 import loggerMiddleware from './middleware/loggerMiddleware'
-import authenticateMiddleware from './middleware/authenticate'
 import requireAuthMiddleware from './middleware/requireAuthMiddleware'
 import errorHandlerMiddleware from './middleware/errorHandlerMiddleware'
 
@@ -20,13 +20,12 @@ const app = new Koa()
 //统一错误处理
 app.use(errorHandlerMiddleware)
 
-// 解析用户信息, 并改在到context中间件
 app.use(
-  authenticateMiddleware({
-    secret: process.env.SECRET_KEY!
+  koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
+    path: [/^\/static/, /^\/api\/user\/(logout|signin)/]
   })
 )
-// 权限校验中间件, 确保后续要用到`context.userInfo`信息的路由能拿到信息, 否则进行401/403跳转
+// 权限校验中间件, 非管理员403跳转
 app.use(requireAuthMiddleware)
 
 app.use(loggerMiddleware)
