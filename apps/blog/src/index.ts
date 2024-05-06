@@ -42,7 +42,8 @@ app.use(
       '/api/tag/all',
       '/api/tag/view/platform',
       '/api/tag/view/personal',
-      '/api/comment/list'
+      '/api/comment/list',
+      '/api/common/webViewCount'
     ]
   })
 )
