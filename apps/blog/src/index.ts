@@ -38,7 +38,11 @@ app.use(
       /^\/static/,
       /^\/public/,
       /^\/api\/user\/(logout|signin|recommend|all|card)/,
-      /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/
+      /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/,
+      '/api/tag/all',
+      '/api/tag/view/platform',
+      '/api/tag/view/personal',
+      '/api/comments/list'
     ]
   })
 )
