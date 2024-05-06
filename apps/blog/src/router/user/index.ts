@@ -91,7 +91,7 @@ router.post(userApi('/info'), async (ctx) => {
   const { cookie } = ctx.request.header
   try {
     const payload = decrypt(cookie || '')
-    const data = await getUserInfo(payload?.userId)
+    const data = await getUserInfo(payload?.id)
     response.success(ctx, omit(['password'], data))
   } catch (error) {
     response.success(ctx)
