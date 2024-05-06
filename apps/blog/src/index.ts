@@ -22,7 +22,13 @@ app.use(errorHandlerMiddleware)
 
 app.use(
   koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
-    path: [/^\/static/, /^\/api\/user\/(logout|signin)/]
+    // 排除一些不需要401跳转的接口
+    path: [
+      '/',
+      /^\/static/,
+      /^\/api\/user\/(logout|signin|recommend|all|card)/,
+      /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/
+    ]
   })
 )
 // 权限校验中间件, 非管理员403跳转
@@ -36,7 +42,7 @@ app.use(loggerMiddleware)
 app.use(historyApiFallback({ index: '/index.html' }))
 
 // 访问 网站静态文件
-app.use(serve(join(__dirname, '../public'), { maxAge }))
+app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
 
 // 注册静态资源前缀 /static
 app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
