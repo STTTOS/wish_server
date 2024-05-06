@@ -21,9 +21,6 @@ const app = new Koa()
 //统一错误处理
 app.use(errorHandlerMiddleware)
 
-// Custom 401 handling
-app.use(customHandle401)
-
 // 配合history模式
 // 放在静态资源服务中间件前面加载
 // 404  重定向到 /public/index.html
@@ -36,21 +33,15 @@ app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
 app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 app.use(
-  koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
-    // 排除一些不需要401跳转的接口
-    path: [
-      /^\/static/,
-      /^\/public/,
-      /^\/api\/user\/(logout|signin|recommend|all|card)/,
-      /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/,
-      '/api/tag/all',
-      '/api/tag/view/platform',
-      '/api/tag/view/personal',
-      '/api/comment/list',
-      '/api/common/webViewCount'
-    ]
+  koaJwt({
+    secret: process.env.SECRET_KEY,
+    cookie: 'token',
+    passthrough: true
   })
 )
+// Custom 401 handling
+app.use(customHandle401)
+
 // 权限校验中间件, 非管理员403跳转
 app.use(requireAuthMiddleware)
 
