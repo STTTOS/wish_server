@@ -20,6 +20,11 @@ const app = new Koa()
 //统一错误处理
 app.use(errorHandlerMiddleware)
 
+// 配合history模式
+// 放在静态资源服务中间件前面加载
+// 404  重定向到 /public/index.html
+app.use(historyApiFallback({ index: '/index.html' }))
+
 app.use(
   koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
     // 排除一些不需要401跳转的接口
@@ -36,11 +41,6 @@ app.use(
 app.use(requireAuthMiddleware)
 
 app.use(loggerMiddleware)
-
-// 配合history模式
-// 放在静态资源服务中间件前面加载
-// 404  重定向到 /public/index.html
-app.use(historyApiFallback({ index: '/index.html' }))
 
 // 访问 网站静态文件
 app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
