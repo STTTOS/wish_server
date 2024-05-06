@@ -42,7 +42,7 @@ app.use(
       '/api/tag/all',
       '/api/tag/view/platform',
       '/api/tag/view/personal',
-      '/api/comments/list'
+      '/api/comment/list'
     ]
   })
 )
