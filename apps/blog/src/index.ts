@@ -57,7 +57,7 @@ app.use(
     path: [
       /^\/static/,
       /^\/public/,
-      /^\/api\/user\/(logout|signin|recommend|all|card|info)/,
+      /^\/api\/user\/(logout|signin|recommend|all|card)/,
       /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/,
       '/api/tag/all',
       '/api/tag/view/platform',

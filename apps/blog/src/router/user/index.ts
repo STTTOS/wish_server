@@ -2,6 +2,7 @@ import type { Identity, PrismaError } from '../interface'
 import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
 import moment from 'moment'
+import Cookie from 'cookie'
 import { Context } from 'koa'
 import { SHA256 } from 'crypto-js'
 import { User, Prisma } from '@prisma/blog-client'
@@ -90,7 +91,7 @@ router.post(userApi('/resetPwd'), async (ctx) => {
 router.post(userApi('/info'), async (ctx) => {
   const { cookie } = ctx.request.header
   try {
-    const payload = decrypt(cookie || '')
+    const payload = decrypt(Cookie.parse(cookie || '').token)
     const data = await getUserInfo(payload?.id)
     response.success(ctx, omit(['password'], data))
   } catch (error) {
