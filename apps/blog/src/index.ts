@@ -25,6 +25,12 @@ app.use(errorHandlerMiddleware)
 // 404  重定向到 /public/index.html
 app.use(historyApiFallback({ index: '/public/index.html' }))
 
+// 访问 网站静态文件
+app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
+
+// 注册静态资源前缀 /static
+app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
+
 app.use(
   koaJwt({ secret: process.env.SECRET_KEY, cookie: 'token' }).unless({
     // 排除一些不需要401跳转的接口
@@ -40,12 +46,6 @@ app.use(
 app.use(requireAuthMiddleware)
 
 app.use(loggerMiddleware)
-
-// 访问 网站静态文件
-app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
-
-// 注册静态资源前缀 /static
-app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 // 解析请求体
 app.use(koaBody())
