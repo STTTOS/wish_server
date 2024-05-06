@@ -10,6 +10,7 @@ import './tasks'
 import './scripts'
 import router from './router'
 import { logger } from './logger'
+import response from './utils/response'
 import { port, cacheTime as maxAge } from './config'
 import loggerMiddleware from './middleware/loggerMiddleware'
 import requireAuthMiddleware from './middleware/requireAuthMiddleware'
@@ -20,6 +21,25 @@ const app = new Koa()
 //统一错误处理
 app.use(errorHandlerMiddleware)
 
+// Custom 401 handling (first middleware)
+app.use(async function (ctx, next) {
+  return next().catch(async (err) => {
+    if (err.status === 401) {
+      if (ctx.request.url !== '/api/user/info') {
+        response.success(
+          ctx,
+          null,
+          err.originalError ? err.originalError.message : err.message,
+          401
+        )
+      } else {
+        await next()
+      }
+    } else {
+      throw err
+    }
+  })
+})
 // 配合history模式
 // 放在静态资源服务中间件前面加载
 // 404  重定向到 /public/index.html
