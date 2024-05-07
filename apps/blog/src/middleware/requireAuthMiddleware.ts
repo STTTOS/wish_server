@@ -13,7 +13,7 @@ const requireAuthMiddleware = async (
   if (
     apiNeededToAuth.some((url) => toLower(url) === toLower(ctx.request.url))
   ) {
-    const userId = ctx.state.user.id
+    const userId = ctx.state.user?.id
     const data = await user.findUnique({ where: { id: userId } })
     if (data?.role !== 'admin') {
       response.success(ctx, null, '无操作权限', 403)

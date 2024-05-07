@@ -45,7 +45,7 @@ router.post(messageApi('/read'), async (ctx) => {
     where: { id }
   })
   // 需要验证这条消息的归属是否为本人
-  if (data?.receiverId && data.receiverId === ctx.state.user.id)
+  if (data?.receiverId && data.receiverId === ctx.state.user?.id)
     await message.update({
       where: {
         id
@@ -61,10 +61,10 @@ router.post(messageApi('/unread'), async (ctx) => {
   const user = ctx.state.user
 
   const total = await message.count({
-    where: { receiverId: user.id, isRead: false }
+    where: { receiverId: user?.id, isRead: false }
   })
   const list = await message.findMany({
-    where: { receiverId: user.id, isRead: false },
+    where: { receiverId: user?.id, isRead: false },
     // 默认查询20条未读消息
     take: 20,
     include: {

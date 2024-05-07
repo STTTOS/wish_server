@@ -17,7 +17,7 @@ router.post(commentApi('/add'), async (ctx) => {
     parentCommentId = null
   }: Comment = ctx.request.body
 
-  const authorId = ctx.state.user.id
+  const authorId = ctx.state.user!.id
 
   const receiver = await (() => {
     if (parentCommentId)

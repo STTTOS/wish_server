@@ -101,7 +101,7 @@ router.post(userApi('/info'), async (ctx) => {
 
 // 俩接口返回一样, 但是此接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
 router.post(userApi('/loginCheck'), async (ctx) => {
-  const data = await getUserInfo(ctx.state.user.id)
+  const data = await getUserInfo(ctx.state.user?.id)
   response.success(ctx, omit(['password'], data))
 })
 

@@ -17,9 +17,7 @@ router.post(eBookApi('/add'), async (ctx) => {
   const { name, category, words, eBookUrl }: Prisma.EBookCreateInput =
     ctx.request.body
 
-  ctx.request
-
-  const userId = ctx.state.user.id
+  const userId = ctx.state.user!.id
 
   await eBook.create({ data: { name, category, eBookUrl, words, userId } })
   response.success(ctx)
@@ -36,7 +34,7 @@ router.post(eBookApi('/update'), async (ctx) => {
 
   if (!id) throw new Error('id 不能为空')
 
-  const userId = ctx.state.user.id
+  const userId = ctx.state.user!.id
   try {
     await eBook.update({
       data: { name, category, eBookUrl, words, userId },

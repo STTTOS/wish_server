@@ -25,7 +25,7 @@ router.post(articleApi('/add'), async (ctx) => {
     body: { tagIds, content, coAuthorIds, ...data }
   } = ctx.request
 
-  const authorId = ctx.state.user.id
+  const authorId = ctx.state.user?.id
   const length = content.replace(/[\s#*-<>~]/g, '').length
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
@@ -127,7 +127,7 @@ router.post(articleApi('/list'), async (ctx) => {
     pageSize: take
   }: GetArticleByPaginationReq = ctx.request.body
 
-  const authorId = ctx.state.user.id
+  const authorId = ctx.state.user?.id
   if (!skip || !take) throw new Error('分页参数不正确')
 
   // 条件查询
@@ -234,7 +234,7 @@ router.post(articleApi('/detail'), async (ctx) => {
     !(data.coAuthorIds || '')
       .split(',')
       .concat(String(data.authorId))
-      .includes(String(ctx.state.user.id))
+      .includes(String(ctx.state.user?.id))
   ) {
     response.success(ctx, null, '资源不存在或者无权限访问', 404)
     return
