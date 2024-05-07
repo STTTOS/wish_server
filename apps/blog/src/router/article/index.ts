@@ -287,8 +287,16 @@ router.post(articleApi('/count'), async (ctx) => {
 
   if (!id) throw new Error('参数不正确')
 
-  const tagIds = await getTagIdsByArticleId(id)
+  const data = await article.findUnique({
+    where: { id },
+    include: { tags: true }
+  })
+  if (!data) {
+    response.success(ctx)
+    return
+  }
 
+  const tagIds = data.tags.map(prop('tagId'))
   const updateArticleViewCounts = article.update({
     where: {
       id
