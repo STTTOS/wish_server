@@ -236,7 +236,7 @@ router.post(articleApi('/detail'), async (ctx) => {
   ].filter(complement(isNil))
 
   const { id: userId } = ctx.state.user || {}
-  if (data.private || !userId || !allowedUserIds.includes(userId)) {
+  if (data.private && (!userId || !allowedUserIds.includes(userId))) {
     response.success(ctx, null, '无权限访问', 403)
     return
   }
