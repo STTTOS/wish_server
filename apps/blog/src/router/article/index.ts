@@ -2,8 +2,8 @@ import type { Identity } from '../interface'
 import type { GetArticleByPaginationReq } from './interface'
 
 import moment from 'moment'
-import { omit, prop } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
+import { omit, prop, isNil, complement } from 'ramda'
 
 import router from '../instance'
 import prisma, { user } from '../../models'
@@ -226,19 +226,21 @@ router.post(articleApi('/detail'), async (ctx) => {
     where: { id }
   })
   if (!data) {
-    response.success(ctx, null)
+    response.success(ctx, null, '资源不存在', 404)
     return
   }
-  if (
-    data.private &&
-    !(data.coAuthorIds || '')
-      .split(',')
-      .concat(String(data.authorId))
-      .includes(String(ctx.state.user?.id))
-  ) {
-    response.success(ctx, null, '资源不存在或者无权限访问', 404)
+
+  const allowedUserIds = [
+    ...(data.coAuthorIds || '').split(',').map(Number),
+    data.authorId
+  ].filter(complement(isNil))
+
+  const { id: userId } = ctx.state.user || {}
+  if (data.private || !userId || !allowedUserIds.includes(userId)) {
+    response.success(ctx, null, '无权限访问', 403)
     return
   }
+
   const { tags, createdAt, updatedAt, ...rest } = data
   response.success(ctx, {
     tagIds: tags.map(({ tag: { id } }) => id),
