@@ -29,22 +29,31 @@ router.post(articleApi('/add'), async (ctx) => {
   const length = content.replace(/[\s#*-<>~]/g, '').length
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
-  await article.create({
-    data: {
-      ...data,
-      coAuthorIds: coAuthorIds?.join(','),
-      authorId,
-      content,
-      length,
-      readingTime,
-      tags: {
-        createMany: {
-          data: tagIds.map((tagId: number) => ({ tagId, authorId }))
+  try {
+    await article.create({
+      data: {
+        ...data,
+        coAuthorIds: coAuthorIds?.join(','),
+        authorId,
+        content,
+        length,
+        readingTime,
+        tags: {
+          createMany: {
+            data: tagIds.map((tagId: number) => ({ tagId, authorId }))
+          }
         }
       }
+    })
+    response.success(ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (e: any) {
+    if (e.code === 'P2002') {
+      response.error(ctx, 10000, '名称重复')
+    } else {
+      throw e
     }
-  })
-  response.success(ctx)
+  }
 })
 
 router.post(articleApi('/delete'), async (ctx) => {
