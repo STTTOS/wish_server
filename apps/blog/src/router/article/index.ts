@@ -106,6 +106,8 @@ router.post(articleApi('/update'), async (ctx) => {
     data: {
       ...data,
       coAuthorIds: coAuthorIds?.join(','),
+      // 仅当内容变更时, 才更新`updatedAt`
+      updatedAt: content === thisOne?.content ? thisOne?.updatedAt : new Date(),
       content,
       length,
       readingTime,
