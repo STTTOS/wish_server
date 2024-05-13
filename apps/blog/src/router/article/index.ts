@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/blog-client'
 import { omit, prop, isNil, complement } from 'ramda'
 
 import router from '../instance'
-import prisma, { user } from '../../models'
+import prisma, { user } from '@/models'
 import { tag, article } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
