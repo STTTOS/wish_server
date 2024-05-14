@@ -10,7 +10,7 @@ cron.schedule('00 00 * * *', async () => {
   const thirtyDaysAgo = dayjs().subtract(30, 'day')
 
   const result = await article.deleteMany({
-    where: { deletedAt: { lt: thirtyDaysAgo.toDate() } }
+    where: { deletedAt: { lte: thirtyDaysAgo.toDate() } }
   })
   logger.info(`自动删除回收站文件: ${result.count}个`)
 })
