@@ -20,6 +20,9 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.2.0
+      dayjs:
+        specifier: ^1.11.11
+        version: 1.11.11
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
@@ -1729,6 +1732,10 @@ packages:
   /date-format@4.0.14:
     resolution: {integrity: sha512-39BOQLs9ZjKh0/patS9nrT8wc3ioX3/eA/zgbKNopnF2wCqJEoxywwwElATYvRsXdnOxA/OQeQoFZ3rFjVajhg==}
     engines: {node: '>=4.0'}
+    dev: false
+
+  /dayjs@1.11.11:
+    resolution: {integrity: sha512-okzr3f11N6WuqYtZSvm+F776mB41wRZMhKP+hc34YdW+KmtYYK9iqvHSwo2k9FEH3fhGXvOPV6yz2IcSrfRUDg==}
     dev: false
 
   /debounce-fn@4.0.0:
