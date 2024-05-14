@@ -1,7 +1,24 @@
 import { PrismaClient } from '@prisma/blog-client'
 
-const prisma = new PrismaClient()
+const client = new PrismaClient()
 
+const prisma = client.$extends({
+  query: {
+    article: {
+      async $allOperations({ operation, args, query }) {
+        if (
+          operation === 'findUnique' ||
+          operation === 'findFirst' ||
+          operation === 'findMany'
+        ) {
+          // 默认查询未删除的数据
+          args.where = { deletedAt: null, ...args.where }
+        }
+        return query(args)
+      }
+    }
+  }
+})
 export const {
   user,
   article,
@@ -13,4 +30,5 @@ export const {
   message
 } = prisma
 
+article.findMany
 export default prisma
