@@ -529,3 +529,29 @@ router.post(articleApi('/recover'), async (ctx) => {
     throw new Error('文章不存在')
   }
 })
+
+router.post(articleApi('/changeVisibility'), async (ctx) => {
+  const { id, isPrivate }: Partial<Identity> & { isPrivate: boolean } =
+    ctx.request.body
+  if (!id || isNil(isPrivate)) throw new Error('参数不正确')
+
+  const thisOne = await article.findUnique({
+    where: { id, deletedAt: null }
+  })
+  const { user: { id: userId } = {} } = ctx.state
+
+  if (thisOne?.authorId !== userId) {
+    response.success(ctx, null, '无操作权限', 403)
+    return
+  }
+
+  try {
+    await article.update({
+      where: { id: Number(id) },
+      data: { private: isPrivate }
+    })
+    response.success(ctx)
+  } catch (error) {
+    throw new Error('文章不存在')
+  }
+})
