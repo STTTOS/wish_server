@@ -71,6 +71,28 @@ router.post(articleApi('/delete'), async (ctx) => {
   }
 
   try {
+    await article.update({
+      where: { id: Number(id) },
+      data: { deletedAt: new Date() }
+    })
+    response.success(ctx)
+  } catch (error) {
+    throw new Error('文章不存在')
+  }
+})
+
+router.post(articleApi('/physicalDelete'), async (ctx) => {
+  const { id }: Partial<Identity> = ctx.request.body
+  if (!id) throw new Error('参数不正确')
+
+  const thisOne = await article.findUnique({ where: { id } })
+  const { user: { id: userId } = {} } = ctx.state
+  if (thisOne?.authorId !== userId) {
+    response.success(ctx, null, '无操作权限', 403)
+    return
+  }
+
+  try {
     await article.delete({ where: { id: Number(id) } })
     response.success(ctx)
   } catch (error) {
@@ -414,4 +436,96 @@ router.post(articleApi('/visibleUsers'), async (ctx) => {
     }
   })
   response.success(ctx, withList(users, users.length))
+})
+
+router.post(articleApi('/recycle/list'), async (ctx) => {
+  const { current: skip, pageSize: take } = ctx.request.body
+  const authorId = ctx.state.user!.id
+
+  // 条件查询
+  const where: Prisma.ArticleWhereInput = {
+    authorId,
+    deletedAt: {
+      not: null
+    }
+  }
+  const total = await article.count({ where })
+  const list = await article.findMany({
+    where,
+    include: {
+      author: {
+        select: {
+          name: true
+        }
+      },
+      tags: {
+        include: {
+          tag: {
+            select: {
+              name: true
+            }
+          }
+        }
+      }
+    },
+    take,
+    skip: (skip - 1) * take
+  })
+
+  const newList = list.map(
+    ({ author, tags, createdAt, updatedAt, ...rest }) => ({
+      ...omit(['content'], rest),
+      authorName: author?.name,
+      createdAt: moment(createdAt).format(timeFormat),
+      updatedAt: moment(updatedAt).format(timeFormat),
+      tags: tags.map(({ tagId: id, tag: { name } }) => ({ id, name }))
+    })
+  )
+  response.success(ctx, withList(newList, total))
+})
+
+router.post(articleApi('/visibleUsers'), async (ctx) => {
+  const { id } = ctx.request.body
+
+  if (!id) throw new Error('参数异常')
+
+  const data = await article.findUnique({
+    where: { id }
+  })
+  const userIds = data?.coAuthorIds?.split(',').map(Number) || []
+  const users = await user.findMany({
+    where: { id: { in: userIds } },
+    select: {
+      id: true,
+      avatar: true,
+      username: true,
+      name: true
+    }
+  })
+  response.success(ctx, withList(users, users.length))
+})
+
+router.post(articleApi('/recover'), async (ctx) => {
+  const { id }: Partial<Identity> = ctx.request.body
+  if (!id) throw new Error('参数不正确')
+
+  const thisOne = await article.findUnique({
+    where: { id, deletedAt: { not: null } }
+  })
+  const { user: { id: userId } = {} } = ctx.state
+
+  if (thisOne?.authorId !== userId) {
+    response.success(ctx, null, '无操作权限', 403)
+    return
+  }
+
+  try {
+    await article.update({
+      where: { id: Number(id) },
+      data: { deletedAt: null }
+    })
+    response.success(ctx)
+  } catch (error) {
+    throw new Error('文章不存在')
+  }
 })
