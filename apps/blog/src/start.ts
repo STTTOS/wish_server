@@ -28,7 +28,6 @@ app.use(errorHandlerMiddleware)
 // 404  重定向到 /public/index.html
 app.use(historyApiFallback({ index: '/public/index.html' }))
 
-app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
 // 访问 网站静态文件
 app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
 
