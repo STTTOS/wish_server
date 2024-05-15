@@ -12,7 +12,8 @@ const paths = [
   '/api/tag/view/platform',
   '/api/tag/view/personal',
   '/api/comment/list',
-  '/api/common/webViewCount'
+  '/api/common/webViewCount',
+  '/api/article/needPwd'
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
