@@ -285,7 +285,7 @@ router.post(articleApi('/detail'), async (ctx) => {
     return
   }
 
-  const { tags, createdAt, updatedAt, ...rest } = data
+  const { tags, createdAt, updatedAt, ...rest } = omit(['author'], data)
   response.success(ctx, {
     tagIds: tags.map(({ tag: { id } }) => id),
     tags: tags.map(({ tag: { id, name } }) => ({ id, name })),
