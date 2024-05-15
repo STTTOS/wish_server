@@ -13,7 +13,8 @@ const paths = [
   '/api/tag/view/personal',
   '/api/comment/list',
   '/api/common/webViewCount',
-  '/api/article/needPwd'
+  '/api/article/needPwd',
+  'api/user/veirfySecureKey'
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,

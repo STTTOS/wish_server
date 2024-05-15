@@ -9,10 +9,10 @@ import { User, Prisma } from '@prisma/blog-client'
 import { map, prop, omit, pick, reduce, compose } from 'ramda'
 
 import router from '../instance'
-import prisma, { user } from '../../models'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import prisma, { user, article } from '../../models'
 import { decrypt, encrypt } from '../../utils/cryptor'
 import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
@@ -279,4 +279,16 @@ router.post(userApi('/card'), async (ctx) => {
     totalViewCount: sumViewCounts(articles),
     ...omit(['password', 'secureKey'], rest)
   })
+})
+
+router.post(userApi('/veirfySecureKey'), async (ctx) => {
+  const { secureKey, id } = ctx.request.body
+  if (!id) return response.success(ctx, { access: false })
+
+  const data = await article.findUnique({
+    where: { id },
+    include: { author: { select: { secureKey: true } } }
+  })
+  const accessKey = data?.author?.secureKey
+  response.success(ctx, { access: accessKey && secureKey === accessKey })
 })
