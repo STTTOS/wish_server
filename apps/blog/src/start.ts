@@ -36,7 +36,7 @@ app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 app.use(
   koaJwt({
-    secret: process.env.SECRET_KEY,
+    secret: process.env.SECRET_KEY!,
     cookie: 'token',
     passthrough: true
   })

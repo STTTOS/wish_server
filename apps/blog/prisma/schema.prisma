@@ -37,6 +37,7 @@ model User {
   // git地址
   github        String?
   createdAt     DateTime @default(now())
+  secureKey     String?
 
   articles Article[]
 
@@ -73,6 +74,8 @@ model Article {
   deletedAt     DateTime?
   // chore: 设置为可选 -> 删除用户的时候, 会把文章关联的authorId字段置空
   authorId      Int?
+  // 是否加密访问, 默认不用
+  secure        Boolean?         @default(false)
   author        User?            @relation(fields: [authorId], references: [id])
   coAuthorIds   String?
   // feat: 20230-10-17, 新增仅自己可见字段, 默认为false

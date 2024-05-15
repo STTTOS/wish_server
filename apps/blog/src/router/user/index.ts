@@ -93,7 +93,7 @@ router.post(userApi('/info'), async (ctx) => {
   try {
     const payload = decrypt(Cookie.parse(cookie || '').token)
     const data = await getUserInfo(payload?.id)
-    response.success(ctx, omit(['password'], data))
+    response.success(ctx, omit(['password', 'secureKey'], data))
   } catch (error) {
     response.success(ctx)
   }
@@ -102,7 +102,7 @@ router.post(userApi('/info'), async (ctx) => {
 // 俩接口返回一样, 但是此接口受权限控制, 若token无效, 会返回401/403, 让客户端重定向
 router.post(userApi('/loginCheck'), async (ctx) => {
   const data = await getUserInfo(ctx.state.user?.id)
-  response.success(ctx, omit(['password'], data))
+  response.success(ctx, omit(['password', 'secureKey'], data))
 })
 
 router.post(userApi('/add'), async (ctx) => {
@@ -191,7 +191,7 @@ router.post(userApi('/list'), async (ctx) => {
     skip: (current - 1) * pageSize
   })
   const newList = list.map(({ createdAt, articles, ...rest }) => ({
-    ...omit(['password'], rest),
+    ...omit(['password', 'secureKey'], rest),
     createdAt: moment(createdAt).format(timeFormat),
     viewCount: articles.reduce((acc, { viewCount }) => acc + viewCount, 0)
   }))
@@ -209,7 +209,7 @@ router.post(userApi('/recommend'), async (ctx) => {
     }
   })
   const newList = list.map(({ articles, ...rest }) => ({
-    ...omit(['password'], rest),
+    ...omit(['password', 'secureKey'], rest),
     totalViewCount: sumViewCounts(articles),
     ...rest
   }))
@@ -241,7 +241,10 @@ router.post(userApi('/detail'), async (ctx) => {
 
 router.post(userApi('/all'), async (ctx) => {
   const list = await user.findMany()
-  response.success(ctx, withList(list.map(omit(['password'])), list.length))
+  response.success(
+    ctx,
+    withList(list.map(omit(['password', 'secureKey'])), list.length)
+  )
 })
 
 export const sum = (a: number, b: number) => a + b
@@ -274,6 +277,6 @@ router.post(userApi('/card'), async (ctx) => {
   const { articles, ...rest } = data
   response.success(ctx, {
     totalViewCount: sumViewCounts(articles),
-    ...omit(['password'], rest)
+    ...omit(['password', 'secureKey'], rest)
   })
 })

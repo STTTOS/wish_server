@@ -244,7 +244,7 @@ router.post(articleApi('/list'), async (ctx) => {
 })
 
 router.post(articleApi('/detail'), async (ctx) => {
-  const { id }: Identity = ctx.request.body
+  const { id, secureKey }: Identity & { secureKey?: string } = ctx.request.body
 
   if (!id) throw new Error('参数不正确')
 
@@ -260,6 +260,16 @@ router.post(articleApi('/detail'), async (ctx) => {
   })
   if (!data) {
     response.success(ctx, null, '资源不存在', 404)
+    return
+  }
+
+  const u = await (async () => {
+    if (data.authorId) return user.findUnique({ where: { id: data.authorId } })
+    return null
+  })()
+
+  if (data.secure && u?.secureKey && secureKey !== u.secureKey) {
+    response.success(ctx, null, '密码不正确', 10000)
     return
   }
 
@@ -282,6 +292,17 @@ router.post(articleApi('/detail'), async (ctx) => {
     updatedAt: moment(updatedAt).format(timeFormatWithoutSeconds),
     ...rest
   })
+})
+
+router.post(articleApi('/needPwd'), async (ctx) => {
+  const { id }: Identity = ctx.request.body
+
+  if (!id) throw new Error('参数不正确')
+
+  const data = await article.findUnique({
+    where: { id }
+  })
+  response.success(ctx, { needPwd: Boolean(data?.secure) })
 })
 
 router.post(articleApi('/similar'), async (ctx) => {
