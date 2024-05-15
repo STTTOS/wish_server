@@ -254,6 +254,11 @@ router.post(articleApi('/detail'), async (ctx) => {
         include: {
           tag: true
         }
+      },
+      author: {
+        select: {
+          secureKey: true
+        }
       }
     },
     where: { id }
@@ -263,12 +268,8 @@ router.post(articleApi('/detail'), async (ctx) => {
     return
   }
 
-  const u = await (async () => {
-    if (data.authorId) return user.findUnique({ where: { id: data.authorId } })
-    return null
-  })()
-
-  if (data.secure && (!u?.secureKey || secureKey !== u.secureKey)) {
+  const userSecureKey = data?.author?.secureKey
+  if (data.secure && (!userSecureKey || secureKey !== userSecureKey)) {
     response.success(ctx, null, '密码不正确', 10000)
     return
   }
