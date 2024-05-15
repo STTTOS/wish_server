@@ -268,7 +268,7 @@ router.post(articleApi('/detail'), async (ctx) => {
     return null
   })()
 
-  if (data.secure && u?.secureKey && secureKey !== u.secureKey) {
+  if (data.secure && (!u?.secureKey || secureKey !== u.secureKey)) {
     response.success(ctx, null, '密码不正确', 10000)
     return
   }
