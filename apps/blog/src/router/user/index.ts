@@ -286,7 +286,7 @@ router.post(userApi('/veirfySecureKey'), async (ctx) => {
   if (!id) return response.success(ctx, { access: false })
 
   const data = await article.findUnique({
-    where: { id },
+    where: { id: Number(id) },
     include: { author: { select: { secureKey: true } } }
   })
   const accessKey = data?.author?.secureKey
