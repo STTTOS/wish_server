@@ -65,6 +65,9 @@ importers:
       sharp:
         specifier: ^0.33.3
         version: 0.33.3
+      uuid:
+        specifier: ^9.0.1
+        version: 9.0.1
     devDependencies:
       '@commitlint/config-conventional':
         specifier: ^19.1.0
@@ -102,6 +105,9 @@ importers:
       '@types/ramda':
         specifier: ^0.28.23
         version: 0.28.25
+      '@types/uuid':
+        specifier: ^9.0.8
+        version: 9.0.8
       commitlint:
         specifier: ^19.2.1
         version: 19.2.1(@types/node@20.12.7)(typescript@4.9.5)
@@ -1033,6 +1039,10 @@ packages:
       '@types/http-errors': 2.0.4
       '@types/mime': 3.0.4
       '@types/node': 20.11.14
+    dev: true
+
+  /@types/uuid@9.0.8:
+    resolution: {integrity: sha512-jg+97EGIcY9AGHJJRaaPVgetKDsrTgbRjQ5Msgjh/DQKEFl0DtyRr/VCOyD1T2R1MNeWPK/u7JoGhlDZnKBAfA==}
     dev: true
 
   /@typescript-eslint/eslint-plugin@5.62.0(@typescript-eslint/parser@5.62.0)(eslint@8.56.0)(typescript@4.9.5):
@@ -4026,6 +4036,11 @@ packages:
 
   /uuid@8.3.2:
     resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
+    hasBin: true
+    dev: false
+
+  /uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
     hasBin: true
     dev: false
 

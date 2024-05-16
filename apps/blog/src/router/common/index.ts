@@ -1,11 +1,12 @@
+import { v4 } from 'uuid'
 import sharp from 'sharp'
 import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
 import Router from 'koa-router'
 import { compose } from 'ramda'
-import { join, basename } from 'path'
 import { ParameterizedContext } from 'koa'
+import { join, extname, basename } from 'path'
 import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
@@ -30,13 +31,10 @@ const mapFileNameToURI =
   (file: Args) =>
     join('/static', directory, removeBlanks(file.newFilename))
 
-export const hashAndKeepOriginalName = ({
-  newFilename,
-  originalFilename
-}: Args) =>
+export const hashAndKeepOriginalName = ({ originalFilename }: Args) =>
   `${getFileName(
     originalFilename || 'file_unknown'
-  )}${fileNameSpliter}${newFilename}`
+  )}${fileNameSpliter}${v4()}${extname(originalFilename || '')}`
 
 const getKoaBodyConfig = (
   directoryName: string,
@@ -52,6 +50,7 @@ const getKoaBodyConfig = (
       keepExtensions: true,
       onFileBegin(_, file) {
         const newFileName = compose(removeBlanks, hashAndKeepOriginalName)(file)
+
         file.filepath = join(
           __dirname,
           join('../../../static/', directoryName, newFileName)

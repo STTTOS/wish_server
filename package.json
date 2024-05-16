@@ -32,7 +32,8 @@
     "moment": "^2.29.3",
     "node-cron": "^3.0.3",
     "ramda": "^0.28.0",
-    "sharp": "^0.33.3"
+    "sharp": "^0.33.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^19.1.0",
@@ -47,6 +48,7 @@
     "@types/module-alias": "^2.0.4",
     "@types/node-cron": "^3.0.11",
     "@types/ramda": "^0.28.23",
+    "@types/uuid": "^9.0.8",
     "commitlint": "^19.2.1",
     "cos-nodejs-sdk-v5": "^2.13.4",
     "husky": "^9.0.10",
