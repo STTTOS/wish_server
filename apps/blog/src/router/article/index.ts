@@ -275,9 +275,15 @@ router.post(articleApi('/detail'), async (ctx) => {
   ].filter(complement(isNil))
 
   const { id: userId } = ctx.state.user || {}
-  if (data.private && (!userId || !allowedUserIds.includes(userId))) {
-    response.success(ctx, null, '无权限访问', 403)
-    return
+  if (data.private) {
+    if (!userId) {
+      response.success(ctx, null, '未登录', 401)
+      return
+    }
+    if (!allowedUserIds.includes(userId)) {
+      response.success(ctx, null, '无权限访问', 403)
+      return
+    }
   }
 
   const userSecureKey = data?.author?.secureKey
