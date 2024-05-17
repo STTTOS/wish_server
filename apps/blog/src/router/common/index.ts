@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { v4 } from 'uuid'
 import sharp from 'sharp'
+import Cookie from 'cookie'
 import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
@@ -10,6 +11,7 @@ import { ParameterizedContext } from 'koa'
 import { join, extname, basename } from 'path'
 import { access, readFile, writeFile } from 'fs/promises'
 
+import { user } from '@/models'
 import router from '../instance'
 import { logger } from '../../logger'
 import imageEncrypt from '@/utils/cryptor'
@@ -106,7 +108,9 @@ router.post(
       response.success(ctx, {
         url: join(
           '/images',
-          `${newFileName}?token=${btoa(encrypt({ id: newFileName }))}`
+          `${newFileName}?token=${btoa(
+            encrypt({ fileId: newFileName, userId: ctx.state.user!.id })
+          )}`
         )
       })
     }
@@ -115,19 +119,28 @@ router.post(
 const parseFileIdFromToken = (token?: string) => {
   try {
     if (!token) return null
-    const decoded = decrypt<{ id: string }>(atob(token))
-    return decoded.id
+    const decoded = decrypt<{ fileId: string; userId: number }>(atob(token))
+    return decoded
   } catch (error) {
     return null
   }
 }
 router.get('/images/:id', async (ctx) => {
   const fileName = ctx.params.id
-  // 从token中解析出 fileId, 比较两者 是否一致
+  // 解析安全密码, 并且比较
+  const { secureKey } = Cookie.parse(ctx.header.cookie || '')
+  // token
   const { token } = ctx.request.query as Record<string, string | undefined>
+  const info = parseFileIdFromToken(token)
+  const target = await user.findUnique({ where: { id: info?.userId } })
 
-  const fileId = parseFileIdFromToken(token)
-  if (!fileId || fileId !== fileName) {
+  if (
+    !info ||
+    !target ||
+    !secureKey ||
+    info.fileId !== fileName ||
+    target?.secureKey !== secureKey
+  ) {
     ctx.set('Content-Type', 'application/xml')
     ctx.body = `<?xml version='1.0' encoding='utf-8' ?>
 <Error>
