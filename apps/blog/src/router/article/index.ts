@@ -269,13 +269,6 @@ router.post(articleApi('/detail'), async (ctx) => {
     response.success(ctx, null, '资源不存在', 404)
     return
   }
-
-  const userSecureKey = data?.author?.secureKey
-  if (data.secure && (!userSecureKey || userSecureKey !== secureKey)) {
-    response.success(ctx, null)
-    return
-  }
-
   const allowedUserIds = [
     ...(data.coAuthorIds || '').split(',').map(Number),
     data.authorId
@@ -284,6 +277,12 @@ router.post(articleApi('/detail'), async (ctx) => {
   const { id: userId } = ctx.state.user || {}
   if (data.private && (!userId || !allowedUserIds.includes(userId))) {
     response.success(ctx, null, '无权限访问', 403)
+    return
+  }
+
+  const userSecureKey = data?.author?.secureKey
+  if (data.secure && (!userSecureKey || userSecureKey !== secureKey)) {
+    response.success(ctx, null)
     return
   }
 
