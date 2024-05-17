@@ -282,7 +282,7 @@ router.post(articleApi('/detail'), async (ctx) => {
 
   const userSecureKey = data?.author?.secureKey
   if (data.secure && (!userSecureKey || userSecureKey !== secureKey)) {
-    response.success(ctx, null)
+    response.success(ctx, null, '安全密码错误或者未配置', 10001)
     return
   }
 
