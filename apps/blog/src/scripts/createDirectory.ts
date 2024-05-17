@@ -13,6 +13,10 @@ async function createDirectory() {
       logger.info('创建public文件夹')
       fs.mkdirSync(join(__dirname, '../../public'))
     }),
+    access(join(__dirname, '../../encryptedImageData')).catch(() => {
+      logger.info('创建encryptedImageData文件夹')
+      fs.mkdirSync(join(__dirname, '../../encryptedImageData'))
+    }),
     access(join(__dirname, '../../static')).catch(() => {
       logger.info('创建static文件夹')
       fs.mkdirSync(join(__dirname, '../../static/origin'), { recursive: true })
