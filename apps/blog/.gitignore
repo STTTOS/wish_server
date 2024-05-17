@@ -5,6 +5,7 @@ logs
 static
 public
 source
+encryptedImageData
 .env
 system.json
 

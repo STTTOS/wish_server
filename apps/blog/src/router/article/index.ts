@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/blog-client'
 import { omit, prop, isNil, complement } from 'ramda'
 
 import router from '../instance'
+import cryptor from '@/utils/cryptor'
 import prisma, { user } from '@/models'
 import { tag, article } from '../../models'
 import response from '../../utils/response'
@@ -22,7 +23,7 @@ const articleApi = combinePath(apiPrefix)('/article')
 
 router.post(articleApi('/add'), async (ctx) => {
   const {
-    body: { tagIds, content, coAuthorIds, ...data }
+    body: { tagIds, content, coAuthorIds, secure, ...data }
   } = ctx.request
 
   const authorId = ctx.state.user?.id
@@ -35,7 +36,8 @@ router.post(articleApi('/add'), async (ctx) => {
         ...data,
         coAuthorIds: coAuthorIds?.join(','),
         authorId,
-        content,
+        secure,
+        content: secure ? cryptor.text.encrypt(content) : content,
         length,
         readingTime,
         tags: {
@@ -102,7 +104,7 @@ router.post(articleApi('/physicalDelete'), async (ctx) => {
 
 router.post(articleApi('/update'), async (ctx) => {
   const { body } = ctx.request
-  const { id, tagIds, content, coAuthorIds, ...data } = omit(
+  const { id, tagIds, content, coAuthorIds, secure, ...data } = omit(
     ['createdAt', 'updatedAt'],
     body
   )
@@ -130,7 +132,7 @@ router.post(articleApi('/update'), async (ctx) => {
       coAuthorIds: coAuthorIds?.join(','),
       // 仅当内容变更时, 才更新`updatedAt`
       updatedAt: content === thisOne?.content ? thisOne?.updatedAt : new Date(),
-      content,
+      content: secure ? cryptor.text.encrypt(content) : content,
       length,
       readingTime,
       tags: {
@@ -285,8 +287,13 @@ router.post(articleApi('/detail'), async (ctx) => {
     return
   }
 
-  const { tags, createdAt, updatedAt, ...rest } = omit(['author'], data)
+  const { tags, createdAt, updatedAt, secure, content, ...rest } = omit(
+    ['author'],
+    data
+  )
   response.success(ctx, {
+    secure,
+    content: secure ? cryptor.text.decrypt(content) : content,
     tagIds: tags.map(({ tag: { id } }) => id),
     tags: tags.map(({ tag: { id, name } }) => ({ id, name })),
     createdAt: moment(createdAt).format(timeFormatWithoutSeconds),

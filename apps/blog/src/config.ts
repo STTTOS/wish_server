@@ -16,6 +16,7 @@ export const fileNameSpliter = '__'
 
 export const tokenValidatedTime = 30 * 24 * 60 * 60
 
+export const ivLength = 16
 // 记录需要用户身份的接口
 export const apiNeededToAuth = [
   '/api/user/add',

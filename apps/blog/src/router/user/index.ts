@@ -13,7 +13,7 @@ import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import prisma, { user, article } from '../../models'
-import { decrypt, encrypt } from '../../utils/cryptor'
+import { decrypt, encrypt } from '../../utils/jwtCryptor'
 import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')

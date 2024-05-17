@@ -1,3 +1,4 @@
+import fs from 'fs'
 import { v4 } from 'uuid'
 import sharp from 'sharp'
 import cron from 'node-cron'
@@ -11,8 +12,10 @@ import { access, readFile, writeFile } from 'fs/promises'
 
 import router from '../instance'
 import { logger } from '../../logger'
+import imageEncrypt from '@/utils/cryptor'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { decrypt, encrypt } from '@/utils/jwtCryptor'
 import uploadFileToCos from '../../utils/uploadFileToCos'
 import { getAllFiles, getFileName } from '../../utils/file'
 import { apiPrefix, fileNameSpliter, imageCompressRatio } from '../../config'
@@ -85,8 +88,64 @@ router.post(
   commonApi('/upload_persistent'),
   koaBody(getKoaBodyConfig('files', 2000)),
   handleUpload('files')
-)
+),
+  // 上传文件到protected目录, 即加密后的数据
+  router.post(
+    commonApi('/upload_image_encrypted'),
+    koaBody({ multipart: true, formidable: { keepExtensions: true } }),
+    async (ctx) => {
+      const file = ctx.request.files?.file as Args
 
+      const encryptedData = imageEncrypt.img.encrypt(file.filepath)
+      const newFileName = compose(removeBlanks, hashAndKeepOriginalName)(file)
+
+      fs.writeFileSync(
+        join(__dirname, `../../../encryptedImageData/${newFileName}`),
+        encryptedData
+      )
+      response.success(ctx, {
+        url: join(
+          '/images',
+          `${newFileName}?token=${btoa(encrypt({ id: newFileName }))}`
+        )
+      })
+    }
+  )
+
+const parseFileIdFromToken = (token?: string) => {
+  try {
+    if (!token) return null
+    const decoded = decrypt<{ id: string }>(atob(token))
+    return decoded.id
+  } catch (error) {
+    return null
+  }
+}
+router.get('/images/:id', async (ctx) => {
+  const fileName = ctx.params.id
+  // 从token中解析出 fileId, 比较两者 是否一致
+  const { token } = ctx.request.query as Record<string, string | undefined>
+
+  const fileId = parseFileIdFromToken(token)
+  if (!fileId || fileId !== fileName) {
+    ctx.set('Content-Type', 'application/xml')
+    ctx.body = `<?xml version='1.0' encoding='utf-8' ?>
+<Error>
+	<Code>AccessDenied</Code>
+	<Message>You are denied by auth validation</Message>
+	<Resource>/images/${fileName}</Resource>
+</Error>
+`
+    return
+  }
+  const filePath = join(__dirname, `../../../encryptedImageData/${fileName}`)
+  const decryptedData = imageEncrypt.img.decrypt(filePath)
+
+  ctx.set('Content-Type', 'image/jpeg')
+  // 直接返回二进制数据
+  ctx.body = decryptedData
+  ctx.status = 200
+})
 // 上传任意文件到static文件下
 router.post(
   commonApi('/upload_file'),
