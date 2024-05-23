@@ -178,7 +178,7 @@ router.post(
 // 直接使用cos存储
 router.post(
   commonApi('/upload_image'),
-  koaBody(getKoaBodyConfig('temp', 5)),
+  koaBody(getKoaBodyConfig('origin', 5)),
   async (ctx) => {
     const file = ctx.request.files?.file as unknown as Args
     if (!file) throw new Error('空文件!')
@@ -187,8 +187,8 @@ router.post(
 
     const compressFilePath = join(
       __dirname,
-      '../../../static/temp/',
-      `compressed_${file.newFilename}`
+      '../../../static/',
+      file.newFilename
     )
     // 压缩图片
     await sharp(file.filepath)
