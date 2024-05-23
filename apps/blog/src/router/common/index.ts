@@ -190,12 +190,10 @@ router.post(
       '../../../static/',
       file.newFilename
     )
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const deg = (await sharp(file.filepath).metadata()).orientation
     // 压缩图片
     await sharp(file.filepath)
       .rotate()
-      .resize(400)
+      // .resize(400)
       .jpeg({ quality: imageCompressRatio * 100 })
       .toFile(compressFilePath)
     const url = await uploadFileToCos(
