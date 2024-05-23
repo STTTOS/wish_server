@@ -178,7 +178,7 @@ router.post(
 // 直接使用cos存储
 router.post(
   commonApi('/upload_image'),
-  koaBody(getKoaBodyConfig('origin', 5)),
+  koaBody(getKoaBodyConfig('origin', 10)),
   async (ctx) => {
     const file = ctx.request.files?.file as unknown as Args
     if (!file) throw new Error('空文件!')
