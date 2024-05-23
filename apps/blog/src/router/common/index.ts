@@ -180,31 +180,26 @@ router.post(
   commonApi('/upload_image'),
   koaBody(getKoaBodyConfig('temp', 5)),
   async (ctx) => {
-    const file = ctx.request.files?.file
+    const file = ctx.request.files?.file as unknown as Args
     if (!file) throw new Error('空文件!')
 
-    const files = Array.isArray(file) ? file : [file]
-    // 压缩文件
-    for (const item of files) {
-      await uploadFileToCos('images/origin', item.newFilename, item.filepath)
+    await uploadFileToCos('images/origin', file.newFilename, file.filepath)
 
-      const compressFilePath = join(
-        __dirname,
-        '../../../static/temp/',
-        `compressed_${item.newFilename}`
-      )
-      await sharp(item.filepath)
-        .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(compressFilePath)
-
-      await uploadFileToCos(
-        'images/compressed',
-        item.newFilename,
-        compressFilePath
-      )
-    }
-    const url = files.map(mapFileNameToURI()).join(',')
-    response.success(ctx, { url })
+    const compressFilePath = join(
+      __dirname,
+      '../../../static/temp/',
+      `compressed_${file.newFilename}`
+    )
+    // 压缩图片
+    await sharp(file.filepath)
+      .jpeg({ quality: imageCompressRatio * 100 })
+      .toFile(compressFilePath)
+    const url = await uploadFileToCos(
+      'images/compressed',
+      file.newFilename,
+      compressFilePath
+    )
+    response.success(ctx, { url: `https://${url}` })
   }
 )
 
