@@ -191,12 +191,13 @@ router.post(
       file.newFilename
     )
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const originWith = (await sharp(file.filepath).metadata()).width
     // 压缩图片
     await sharp(file.filepath)
       .rotate()
-      .resize(originWith && Math.floor(originWith * imageCompressRatio))
-      .jpeg({ quality: 80 })
+      // .resize(originWith && Math.floor(originWith * imageCompressRatio))
+      .jpeg({ quality: imageCompressRatio * 100 })
       .toFile(compressFilePath)
     const url = await uploadFileToCos(
       'images/compressed',
