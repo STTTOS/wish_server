@@ -191,12 +191,12 @@ router.post(
       file.newFilename
     )
 
-    const scaleByHalf = (await sharp(file.filepath).metadata()).width
+    const originWith = (await sharp(file.filepath).metadata()).width
     // 压缩图片
     await sharp(file.filepath)
       .rotate()
-      .resize(scaleByHalf && Math.floor(scaleByHalf * imageCompressRatio))
-      .jpeg({ quality: 60 })
+      .resize(originWith && Math.floor(originWith * imageCompressRatio))
+      .jpeg({ quality: 80 })
       .toFile(compressFilePath)
     const url = await uploadFileToCos(
       'images/compressed',
