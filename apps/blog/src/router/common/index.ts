@@ -159,7 +159,8 @@ router.get('/images/:id', async (ctx) => {
   ctx.body = decryptedData
   ctx.status = 200
 })
-// 上传任意文件到static文件下
+
+// 上传任意文件到cos
 router.post(
   commonApi('/upload_file'),
   koaBody(getKoaBodyConfig('temp', 2000)),
@@ -174,9 +175,10 @@ router.post(
 )
 
 // 上传图片
+// 直接使用cos存储
 router.post(
   commonApi('/upload_image'),
-  koaBody(getKoaBodyConfig('origin', 10)),
+  koaBody(getKoaBodyConfig('temp', 5)),
   async (ctx) => {
     const file = ctx.request.files?.file
     if (!file) throw new Error('空文件!')
@@ -184,9 +186,22 @@ router.post(
     const files = Array.isArray(file) ? file : [file]
     // 压缩文件
     for (const item of files) {
+      await uploadFileToCos('images/origin', item.newFilename, item.filepath)
+
+      const compressFilePath = join(
+        __dirname,
+        '../../../static/temp/',
+        `compressed_${item.newFilename}`
+      )
       await sharp(item.filepath)
         .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(join(__dirname, `../../../static/${item.newFilename}`))
+        .toFile(compressFilePath)
+
+      await uploadFileToCos(
+        'images/compressed',
+        item.newFilename,
+        compressFilePath
+      )
     }
     const url = files.map(mapFileNameToURI()).join(',')
     response.success(ctx, { url })
