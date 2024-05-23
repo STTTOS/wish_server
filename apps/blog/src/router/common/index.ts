@@ -195,7 +195,7 @@ router.post(
     // 压缩图片
     await sharp(file.filepath)
       .rotate()
-      .resize(scaleByHalf && scaleByHalf * imageCompressRatio)
+      .resize(scaleByHalf && Math.floor(scaleByHalf * imageCompressRatio))
       .jpeg({ quality: imageCompressRatio * 100 })
       .toFile(compressFilePath)
     const url = await uploadFileToCos(
