@@ -29,6 +29,9 @@ app.use(errorHandlerMiddleware)
 app.use(historyApiFallback({ index: '/public/index.html' }))
 
 // 访问 网站静态文件
+app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
+
+// 访问 网站静态文件
 app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
 
 // 注册静态资源前缀 /static
