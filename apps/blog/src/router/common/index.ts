@@ -1,7 +1,6 @@
 import fs from 'fs'
 import { v4 } from 'uuid'
 import sharp from 'sharp'
-import Cookie from 'cookie'
 import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
@@ -128,7 +127,7 @@ const parseFileIdFromToken = (token?: string) => {
 router.get('/images/:id', async (ctx) => {
   const fileName = ctx.params.id
   // 解析安全密码, 并且比较
-  const { secureKey } = Cookie.parse(ctx.header.cookie || '')
+  const { secureKey } = ctx.header
   // token
   const { token } = ctx.request.query as Record<string, string | undefined>
   const info = parseFileIdFromToken(token)
