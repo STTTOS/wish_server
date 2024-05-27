@@ -210,8 +210,7 @@ router.post(userApi('/recommend'), async (ctx) => {
   })
   const newList = list.map(({ articles, ...rest }) => ({
     ...omit(['password', 'secureKey'], rest),
-    totalViewCount: sumViewCounts(articles),
-    ...rest
+    totalViewCount: sumViewCounts(articles)
   }))
 
   response.success(ctx, withList(newList, newList.length))
