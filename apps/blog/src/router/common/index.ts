@@ -127,7 +127,7 @@ const parseFileIdFromToken = (token?: string) => {
 router.get('/images/:id', async (ctx) => {
   const fileName = ctx.params.id
   // 解析安全密码, 并且比较
-  const { secureKey } = ctx.header
+  const secureKey = ctx.get('Securekey')
   // token
   const { token } = ctx.request.query as Record<string, string | undefined>
   const info = parseFileIdFromToken(token)
