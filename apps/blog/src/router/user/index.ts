@@ -2,7 +2,6 @@ import type { Identity, PrismaError } from '../interface'
 import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
 import { v4 } from 'uuid'
-import dayjs from 'dayjs'
 import moment from 'moment'
 import Cookie from 'cookie'
 import { Context } from 'koa'
@@ -33,7 +32,7 @@ function setCookie(
   payload: Pick<User, 'id'> & { sessionId: string },
   keepLogin: boolean
 ) {
-  const token = encrypt(pick(['id'])(payload))
+  const token = encrypt(pick(['id', 'sessionId'])(payload))
   ctx.cookies.set('token', token, {
     httpOnly: true,
     domain: 'wishufree.com',
@@ -55,7 +54,7 @@ router.post(userApi('/signin'), async (ctx) => {
   })
 
   const sessionId = v4()
-  const time = dayjs().format(timeFormat)
+  const time = moment().format(timeFormat)
   // 验证登录
   if (u) {
     const target = await user.findFirst({ where: { username, password } })

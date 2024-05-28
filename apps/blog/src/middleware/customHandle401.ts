@@ -32,17 +32,24 @@ const customHandle401 = async (
     })
   ) {
     await next()
-  } else if (!user) {
+    return
+  }
+
+  if (!user) {
     response.success(ctx, null, '身份凭证无效, 请重新登陆', 401)
+    return
+  }
+
+  const data = loginUsers.get(user.id)
+  if (data && data.sessionId !== user?.sessionId) {
+    response.success(
+      ctx,
+      null,
+      `你的账号于${data.time}在其他设备登录, 请重新登陆`,
+      401
+    )
   } else {
-    const data = loginUsers.get(user.id)
-    if (data && data.sessionId !== user.sessionId)
-      response.success(
-        ctx,
-        null,
-        `你的账号于${data.time}在其他设备登录, 请重新登陆`,
-        401
-      )
+    await next()
   }
 }
 export default customHandle401
