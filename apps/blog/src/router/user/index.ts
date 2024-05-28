@@ -1,6 +1,8 @@
 import type { Identity, PrismaError } from '../interface'
 import type { UpdateUserReq, GetUserByPaginationReq } from './interface'
 
+import { v4 } from 'uuid'
+import dayjs from 'dayjs'
 import moment from 'moment'
 import Cookie from 'cookie'
 import { Context } from 'koa'
@@ -28,7 +30,7 @@ async function getUserInfo(id?: number) {
 }
 function setCookie(
   ctx: Context,
-  payload: Pick<User, 'id'>,
+  payload: Pick<User, 'id'> & { sessionId: string },
   keepLogin: boolean
 ) {
   const token = encrypt(pick(['id'])(payload))
@@ -40,6 +42,8 @@ function setCookie(
       : undefined
   })
 }
+
+export const loginUsers = new Map<number, { sessionId: string; time: string }>()
 // 登录注册 合并一起
 router.post(userApi('/signin'), async (ctx) => {
   const { username, password, keepLogin } = ctx.request.body
@@ -49,6 +53,9 @@ router.post(userApi('/signin'), async (ctx) => {
   const u = await user.findFirst({
     where: { username }
   })
+
+  const sessionId = v4()
+  const time = dayjs().format(timeFormat)
   // 验证登录
   if (u) {
     const target = await user.findFirst({ where: { username, password } })
@@ -56,7 +63,8 @@ router.post(userApi('/signin'), async (ctx) => {
       response.error(ctx, 1000, '用户信息不正确')
       return
     }
-    setCookie(ctx, target, keepLogin)
+    loginUsers.set(target.id!, { sessionId, time })
+    setCookie(ctx, { ...target, sessionId }, keepLogin)
     response.success(ctx, null, '登录成功')
     return
   }
@@ -69,12 +77,17 @@ router.post(userApi('/signin'), async (ctx) => {
       name: '用户昵称_' + Math.random()
     }
   })
-  setCookie(ctx, userInfo, keepLogin)
+
+  loginUsers.set(userInfo.id!, { sessionId, time })
+  setCookie(ctx, { ...userInfo, sessionId }, keepLogin)
   response.success(ctx, null, '注册成功')
 })
 
 router.post(userApi('/logout'), async (ctx) => {
   ctx.cookies.set('token', null, { domain: 'wishufree.com' })
+  const userId = ctx.state.user?.id
+  if (userId) loginUsers.delete(userId)
+
   response.success(ctx)
 })
 

@@ -2,6 +2,7 @@ import { toLower } from 'ramda'
 import { ParameterizedContext } from 'koa'
 
 import response from '../utils/response'
+import { loginUsers } from '@/router/user'
 import { DefaultState } from '../router/instance'
 
 // 如下的接口, 即使解析不到用户数据, 也不做401跳转
@@ -23,20 +24,25 @@ const customHandle401 = async (
 ) => {
   const user = ctx.state.user
   // 抽出来哪些接口不需要用户数据
-  if (!user) {
-    if (
-      paths.some((path) => {
-        const { url } = ctx.request
-        if (typeof path === 'string') return toLower(path) === toLower(url)
-        return path.test(url)
-      })
-    ) {
-      await next()
-    } else {
-      response.success(ctx, null, '身份凭证无效, 请重新登陆', 401)
-    }
-  } else {
+  if (
+    paths.some((path) => {
+      const { url } = ctx.request
+      if (typeof path === 'string') return toLower(path) === toLower(url)
+      return path.test(url)
+    })
+  ) {
     await next()
+  } else if (!user) {
+    response.success(ctx, null, '身份凭证无效, 请重新登陆', 401)
+  } else {
+    const data = loginUsers.get(user.id)
+    if (data && data.sessionId !== user.sessionId)
+      response.success(
+        ctx,
+        null,
+        `你的账号于${data.time}在其他设备登录, 请重新登陆`,
+        401
+      )
   }
 }
 export default customHandle401
