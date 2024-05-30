@@ -27,7 +27,10 @@ export const {
   tools,
   eBook,
   comment,
-  message
+  message,
+  timeline,
+  moment,
+  momentImages
 } = prisma
 
 article.findMany

@@ -40,6 +40,7 @@ model User {
   secureKey     String?
 
   articles Article[]
+  timeline Timeline[]
 
   TagsOnArticles TagsOnArticles[]
 
@@ -199,4 +200,42 @@ model Message {
   articleId  Int?
   content    String?
   isRead     Boolean  @default(false)
+}
+
+model Timeline {
+  id        Int      @id @default(autoincrement())
+  title     String
+  desc      String?
+  // 时间轴封面
+  cover     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  userId  Int?
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moments Moment[]
+}
+
+model Moment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime
+
+  cover   String?
+  // 支持Markdown
+  content String?
+  images  MomentImages[]
+
+  timeline   Timeline? @relation(fields: [timelineId], references: [id], onDelete: Cascade)
+  timelineId Int?
+}
+
+model MomentImages {
+  id   Int    @id @default(autoincrement())
+  src  String
+  sort Int
+
+  momentId Int
+  moment   Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@unique([momentId, sort])
 }

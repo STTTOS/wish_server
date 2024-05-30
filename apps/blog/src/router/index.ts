@@ -6,6 +6,7 @@ import './common'
 import './storage'
 import './mssages'
 import './article'
+import './timeline'
 import './comments'
 
 export { default as default } from './instance'
