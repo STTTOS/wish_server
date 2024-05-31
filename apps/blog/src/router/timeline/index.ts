@@ -31,6 +31,12 @@ router.post(timelineApi('/create'), async (ctx) => {
 
 router.post(timelineApi('/delete/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
+  const userId = ctx.state.user?.id
+  if (!(await isSameUser({ timelineId: id }, userId))) {
+    response.error(ctx, 403, '非法操作')
+    return
+  }
+
   await timeline.delete({
     where: { id }
   })
@@ -98,6 +104,10 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
+  if (!(await isSameUser({ timelineId }, userId))) {
+    response.error(ctx, 403, '非法操作')
+    return
+  }
 
   await moment.create({
     data: {
@@ -116,10 +126,41 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
   response.success(ctx)
 })
 
+async function isSameUser(
+  { momentId, timelineId }: { momentId?: number; timelineId?: number },
+  userId?: number
+) {
+  if (momentId) {
+    const target = await moment.findUnique({
+      where: {
+        id: momentId
+      },
+      include: {
+        timeline: {
+          select: {
+            userId: true
+          }
+        }
+      }
+    })
+    return userId === target?.timeline?.userId
+  }
+  const target = await timeline.findUnique({
+    where: {
+      id: timelineId
+    }
+  })
+  return userId === target?.userId
+}
 router.post(timelineApi('/moment/update/:id'), async (ctx) => {
   const momentId = Number(ctx.params.id)
   const data = ctx.request.body
+  const userId = ctx.state.user?.id
 
+  if (!(await isSameUser({ momentId }, userId))) {
+    response.error(ctx, 403, '非法操作')
+    return
+  }
   await moment.update({
     where: { id: momentId },
     data: {
@@ -139,9 +180,14 @@ router.post(timelineApi('/moment/update/:id'), async (ctx) => {
 
 router.post(timelineApi('/moment/delete/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
-
   if (!id) {
     response.error(ctx, 400, '参数错误')
+    return
+  }
+
+  const userId = ctx.state.user?.id
+  if (!(await isSameUser({ momentId: id }, userId))) {
+    response.error(ctx, 403, '非法操作')
     return
   }
 

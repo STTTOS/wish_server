@@ -17,7 +17,9 @@ const paths = [
   '/api/common/webViewCount',
   '/api/article/needPwd',
   '/api/user/veirfySecureKey',
-  /^\/api\/timeline\/.*/
+  /^\/api\/timeline\/(all|detail)/,
+  // 查询moments
+  /^\/api\/timeline\/moment\/\d*$/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
