@@ -1,4 +1,4 @@
-import { pick, isNil } from 'ramda'
+import { pick, isNil, equals } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
@@ -96,11 +96,20 @@ router.post(timelineApi('/detail/:timelineId'), async (ctx) => {
 router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
   const timelineId = Number(ctx.params.timelineId)
 
-  const { content, cover, createdAt, images }: Prisma.MomentCreateInput =
+  const {
+    content,
+    cover,
+    createdAt,
+    images
+  }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Omit<Prisma.MomentCreateInput, 'images'> & { images: any[] } =
     ctx.request.body
 
   const userId = ctx.state.user?.id
-  if ([userId, timelineId, content, createdAt, images].some(isNil)) {
+  if (
+    [userId, timelineId, createdAt].some(isNil) ||
+    [!content, images.length === 0].every(equals(true))
+  ) {
     response.error(ctx, 400, '参数错误')
     return
   }
@@ -116,8 +125,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
       createdAt,
       images: {
         createMany: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          data: images as any[]
+          data: images
         }
       },
       timelineId
