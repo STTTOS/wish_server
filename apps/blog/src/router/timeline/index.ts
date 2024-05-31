@@ -12,16 +12,27 @@ import response, { withList } from '@/utils/response'
 const timelineApi = combinePath(apiPrefix)('/timeline')
 
 router.post(timelineApi('/create'), async (ctx) => {
-  const { title, desc }: Prisma.TimelineCreateInput = ctx.request.body
-  if (!title || !desc) {
+  const { title, desc, cover }: Prisma.TimelineCreateInput = ctx.request.body
+  const userId = ctx.state.user?.id
+  if (!title || !desc || !userId) {
     response.error(ctx, 400, '参数错误')
     return
   }
-  await timeline.create({
+  const { id } = await timeline.create({
     data: {
       title,
-      desc
+      desc,
+      userId,
+      cover
     }
+  })
+  response.success(ctx, { id })
+})
+
+router.post(timelineApi('/delete/:id'), async (ctx) => {
+  const id = Number(ctx.params.id)
+  await timeline.delete({
+    where: { id }
   })
   response.success(ctx)
 })
@@ -82,8 +93,8 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
   const { content, cover, createdAt, images }: Prisma.MomentCreateInput =
     ctx.request.body
 
-  const userId = 1
-  if ([userId, timelineId, cover, content, createdAt, images].some(isNil)) {
+  const userId = ctx.state.user?.id
+  if ([userId, timelineId, content, createdAt, images].some(isNil)) {
     response.error(ctx, 400, '参数错误')
     return
   }
@@ -147,7 +158,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const { pageSize: take, current: _skip }: FindTimelineInput = ctx.request.body
 
   // 不允许一次性请求超过3条数据
-  const skip = Math.min(3, Number(_skip))
+  const skip = Math.min(100, Number(_skip))
   if ([timelineId, take, skip].some(isNil)) {
     response.error(ctx, 400, '参数错误')
     return
@@ -167,6 +178,9 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     },
     include: {
       images: true
+    },
+    orderBy: {
+      createdAt: 'desc'
     }
   })
   response.success(ctx, withList(list, total))
