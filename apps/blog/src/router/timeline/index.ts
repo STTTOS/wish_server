@@ -115,6 +115,10 @@ router.post(timelineApi('/detail/:timelineId'), async (ctx) => {
       }
     }
   })
+  if (!data) {
+    response.error(ctx, 404, '资源不存在')
+    return
+  }
   response.success(ctx, data)
 })
 
