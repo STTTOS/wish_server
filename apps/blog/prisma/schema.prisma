@@ -71,6 +71,7 @@ model Article {
   readingTime   Int              @default(0)
   // 关联用户表
   createdAt     DateTime         @default(now())
+  // 手动控制
   updatedAt     DateTime         @default(now())
   deletedAt     DateTime?
   // chore: 设置为可选 -> 删除用户的时候, 会把文章关联的authorId字段置空
@@ -209,7 +210,7 @@ model Timeline {
   // 时间轴封面
   cover     String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)

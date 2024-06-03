@@ -29,6 +29,31 @@ router.post(timelineApi('/create'), async (ctx) => {
   response.success(ctx, { id })
 })
 
+router.post(timelineApi('/update/:id'), async (ctx) => {
+  const id = Number(ctx.params.id)
+  const userId = ctx.state.user?.id
+  if (!(await isSameUser({ timelineId: id }, userId))) {
+    response.error(ctx, 403, '非法操作')
+    return
+  }
+
+  const { title, cover, desc } = ctx.request.body
+  if (!title) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  await timeline.update({
+    where: {
+      id
+    },
+    data: {
+      title,
+      cover,
+      desc
+    }
+  })
+  response.success(ctx)
+})
 router.post(timelineApi('/delete/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   const userId = ctx.state.user?.id
