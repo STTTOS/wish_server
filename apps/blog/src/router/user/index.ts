@@ -294,7 +294,17 @@ router.post(userApi('/card'), async (ctx) => {
 
 router.post(userApi('/veirfySecureKey'), async (ctx) => {
   const { secureKey, id } = ctx.request.body
-  if (!id) return response.success(ctx, { access: false })
+  // 如果未带入id, 则查询用户的securekey
+  if (!id) {
+    const data = await user.findUnique({
+      where: {
+        id: ctx.state.user?.id
+      }
+    })
+    const accessKey = data?.secureKey
+    response.success(ctx, { access: accessKey && accessKey === secureKey })
+    return
+  }
 
   const data = await article.findUnique({
     where: { id: Number(id) },
