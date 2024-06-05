@@ -223,7 +223,7 @@ model Moment {
 
   cover   String?
   // 支持Markdown
-  content String?
+  content String?        @db.LongText
   images  MomentImages[]
 
   timeline   Timeline? @relation(fields: [timelineId], references: [id], onDelete: Cascade)
