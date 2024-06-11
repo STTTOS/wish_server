@@ -89,12 +89,15 @@ router.post(tencentJSApi('/getSignature'), async (ctx) => {
     cache.lastGetTime = lastGetTime
     cache.expires = expires_in
 
-    const data = genSignature(ticket, ctx.header.referer!)
+    const data = genSignature(ticket, encodeURIComponent(ctx.header.referer!))
     response.success(ctx, data)
     return
   }
 
   logger.info('signature未失效, 使用缓存')
-  const data = genSignature(cache.ticket!, ctx.header.referer!)
+  const data = genSignature(
+    cache.ticket!,
+    encodeURIComponent(ctx.header.referer!)
+  )
   response.success(ctx, data)
 })
