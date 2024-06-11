@@ -25,7 +25,7 @@ async function getAccessToken() {
   )
   const data = (await res.json()) as AccessTokenRes
 
-  if (data.errcode !== 0) {
+  if (data.errcode && data.errcode !== 0) {
     throw new Error(data.errmsg)
   }
 
@@ -43,7 +43,7 @@ async function getTicket(accessToken: string) {
     ticket: string
   } & TencentJSApiRes
 
-  if (data.errcode !== 0) {
+  if (data.errcode && data.errcode !== 0) {
     throw new Error(data.errmsg)
   }
 
@@ -76,7 +76,7 @@ router.post(tencentJSApi('/getSignature'), async (ctx) => {
     !cache?.lastGetTime ||
     Math.abs(Date.now() - cache.lastGetTime) >= cache.expires * 1000
   ) {
-    logger.info('signature失效, 重新获取accessToken以及signature')
+    logger.info('新获取accessToken以及signature')
 
     const { access_token } = await getAccessToken()
     const lastGetTime = Date.now()
