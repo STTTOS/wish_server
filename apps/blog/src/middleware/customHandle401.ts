@@ -19,7 +19,8 @@ const paths = [
   '/api/user/veirfySecureKey',
   /^\/api\/timeline\/(all|detail)/,
   // 查询moments
-  /^\/api\/timeline\/moment\/\d*$/
+  /^\/api\/timeline\/moment\/\d*$/,
+  /^\/api\/jsSDK/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,

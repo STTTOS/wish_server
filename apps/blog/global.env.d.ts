@@ -5,5 +5,6 @@ declare namespace NodeJS {
     COS_SECRET_KEY: string
     COS_SECRET_ID: string
     IMAGE_SECRET_KEY: string
+    TENCENT_JS_API_SECRET: string
   }
 }
