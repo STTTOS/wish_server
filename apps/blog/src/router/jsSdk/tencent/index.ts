@@ -73,6 +73,7 @@ const cache: { ticket?: string; lastGetTime?: number; expires: number } = {
 }
 router.post(tencentJSApi('/getSignature'), async (ctx) => {
   // 判断accessToken是否有效
+  const { url } = ctx.request.body
   if (
     !cache?.lastGetTime ||
     Math.abs(Date.now() - cache.lastGetTime) >= cache.expires * 1000
@@ -89,15 +90,12 @@ router.post(tencentJSApi('/getSignature'), async (ctx) => {
     cache.lastGetTime = lastGetTime
     cache.expires = expires_in
 
-    const data = genSignature(ticket, encodeURIComponent(ctx.header.referer!))
+    const data = genSignature(ticket, url)
     response.success(ctx, data)
     return
   }
 
   logger.info('signature未失效, 使用缓存')
-  const data = genSignature(
-    cache.ticket!,
-    encodeURIComponent(ctx.header.referer!)
-  )
+  const data = genSignature(cache.ticket!, url)
   response.success(ctx, data)
 })
