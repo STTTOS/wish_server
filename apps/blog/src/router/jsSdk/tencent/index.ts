@@ -57,7 +57,8 @@ function genSignature(jsapi_ticket: string, url: string) {
 
   return {
     signature: SHA1(input).toString(),
-    timestamp
+    timestamp,
+    noncestr
   }
 }
 
@@ -78,8 +79,8 @@ router.post(tencentJSApi('/getSignature'), async (ctx) => {
   ) {
     logger.info('新获取accessToken以及signature')
 
-    const { access_token } = await getAccessToken()
     const lastGetTime = Date.now()
+    const { access_token } = await getAccessToken()
 
     // !attention  需要全局缓存`ticket`, 有效期以返回的`expires_in`为准, 频繁调用会导致接口失效
     const { ticket, expires_in } = await getTicket(access_token)
