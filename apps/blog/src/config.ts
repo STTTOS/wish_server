@@ -35,8 +35,6 @@ export const apiNeededToAuth = [
   '/api/ebook/update',
   '/api/ebook/delete',
 
-  '/api/comment/add',
-
   '/api/tools/add',
   '/api/tools/update',
   '/api/tools/delete',

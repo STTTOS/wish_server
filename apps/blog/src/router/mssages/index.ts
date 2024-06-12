@@ -1,4 +1,5 @@
 import moment from 'moment'
+import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import { message } from '../../models'
@@ -10,31 +11,46 @@ const messageApi = combinePath(apiPrefix)('/message')
 
 router.post(messageApi('/list'), async (ctx) => {
   const { current: skip, pageSize: take } = ctx.request.body
+  if (!take || !skip) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
 
+  const user = ctx.state.user
+
+  const where: Prisma.MessageWhereInput = {
+    receiverId: user!.id
+  }
   const list = await message.findMany({
+    where,
     take,
-    skip: (skip - 1) * take
+    skip: (skip - 1) * take,
+    orderBy: {
+      createdAt: 'desc'
+    },
+    include: {
+      sender: {
+        select: {
+          name: true,
+          avatar: true
+        }
+      }
+    }
   })
-  const total = await message.count()
-  response.success(ctx, withList(list, total))
+  const total = await message.count({ where })
+  response.success(
+    ctx,
+    withList(
+      list.map(({ createdAt, ...rest }) => {
+        return {
+          createdAt: moment(createdAt).format(timeFormat),
+          ...rest
+        }
+      }),
+      total
+    )
+  )
 })
-
-// router.post(messageApi('/add'), async (ctx) => {
-//   const { senderId, receiverId, articleId, type, content } = ctx.request.body
-
-//   if (!type || !content) throw new Error('参数不正确')
-
-//   await message.create({
-//     data: {
-//       type,
-//       content,
-//       senderId,
-//       receiverId,
-//       articleId
-//     }
-//   })
-//   response.success(ctx)
-// })
 
 router.post(messageApi('/read'), async (ctx) => {
   const { id } = ctx.request.body
@@ -57,6 +73,7 @@ router.post(messageApi('/read'), async (ctx) => {
   response.success(ctx)
 })
 
+// 获取全部未读消息
 router.post(messageApi('/unread'), async (ctx) => {
   const user = ctx.state.user
 
@@ -86,4 +103,28 @@ router.post(messageApi('/unread'), async (ctx) => {
       total
     )
   )
+})
+
+router.post(messageApi('/unreadCount'), async (ctx) => {
+  const user = ctx.state.user
+  const count = await message.count({
+    where: {
+      receiverId: user!.id,
+      isRead: false
+    }
+  })
+  response.success(ctx, { count })
+})
+
+router.post(messageApi('/readAll'), async (ctx) => {
+  const user = ctx.state.user
+  await message.updateMany({
+    where: {
+      receiverId: user!.id
+    },
+    data: {
+      isRead: true
+    }
+  })
+  response.success(ctx)
 })
