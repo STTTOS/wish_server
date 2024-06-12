@@ -84,7 +84,6 @@ model Article {
   private       Boolean          @default(false)
   tags          TagsOnArticles[]
   comments      Comment[]
-  message       Message[]
 
   @@unique([authorId, title])
 }
@@ -198,8 +197,6 @@ model Message {
   receiver   User? @relation("ReceivedMessages", fields: [receiverId], references: [id])
   receiverId Int?
 
-  article   Article? @relation(fields: [articleId], references: [id])
-  articleId Int?
   content   String?
   // JSON: { commentId: number; articleId: number; }
   extra     String?
