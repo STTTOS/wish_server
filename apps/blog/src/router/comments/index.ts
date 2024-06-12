@@ -42,7 +42,6 @@ router.post(commentApi('/add'), async (ctx) => {
   await message.create({
     data: {
       content,
-      articleId,
       senderId: authorId,
       receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
