@@ -2,6 +2,7 @@ import moment from 'moment'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
+import { logger } from '@/logger'
 import { message } from '../../models'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
@@ -41,9 +42,10 @@ router.post(messageApi('/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ createdAt, ...rest }) => {
+      list.map(({ createdAt, extra, ...rest }) => {
         return {
           createdAt: moment(createdAt).format(timeFormat),
+          extra: extra && JSON.parse(extra),
           ...rest
         }
       }),
@@ -128,3 +130,21 @@ router.post(messageApi('/readAll'), async (ctx) => {
   })
   response.success(ctx)
 })
+
+async function refreshData() {
+  const ms = await message.findMany()
+  for (const item of ms) {
+    await message.update({
+      where: {
+        id: item.id
+      },
+      data: {
+        extra: JSON.stringify({
+          articleId: item.articleId
+        })
+      }
+    })
+  }
+}
+logger.info('刷message表数据, 将`articleId` => extra中')
+refreshData().then(() => logger.info('message表数据刷完成'))

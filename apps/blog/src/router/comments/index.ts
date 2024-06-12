@@ -31,7 +31,7 @@ router.post(commentApi('/add'), async (ctx) => {
     })
   })()
   // 通过文章id查询对应user
-  await prisma.comment.create({
+  const { id } = await prisma.comment.create({
     data: {
       content,
       authorId,
@@ -41,11 +41,15 @@ router.post(commentApi('/add'), async (ctx) => {
   })
   await message.create({
     data: {
+      content,
       articleId,
       senderId: authorId,
       receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
-      content
+      extra: JSON.stringify({
+        articleId,
+        commentId: id
+      })
     }
   })
   response.success(ctx)
@@ -56,38 +60,6 @@ router.post(commentApi('/list'), async (ctx) => {
 
   if (!articleId) throw new Error('参数不正确')
 
-  // const post = await prisma.article.findUnique({
-  //   where: {
-  //     id: articleId
-  //   },
-  //   include: {
-  //     comments: {
-  //       where: {
-  //         parentCommentId: {
-  //           equals: null
-  //         }
-  //       },
-  //       include: {
-  //         replies: {
-  //           include: {
-  //             author: {
-  //               select: {
-  //                 avatar: true,
-  //                 username: true
-  //               }
-  //             }
-  //           }
-  //         },
-  //         author: {
-  //           select: {
-  //             avatar: true,
-  //             username: true
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  // })
   const comments = await prisma.comment.findMany({
     where: {
       articleId,
