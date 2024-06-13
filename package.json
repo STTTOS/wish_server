@@ -14,7 +14,7 @@
     "commit-msg": "commitlint -e -V"
   },
   "dependencies": {
-    "@koa/cors": "^3.4.3",
+    "@koa/cors": "^5.0.0",
     "@prisma/client": "^5.13.0",
     "cookie": "^0.5.0",
     "crypto-js": "^4.1.1",

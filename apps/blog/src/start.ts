@@ -56,7 +56,13 @@ app.use(loggerMiddleware)
 // 解析请求体
 app.use(koaBody())
 
-app.use(cors())
+app.use(
+  cors({
+    origin(ctx) {
+      return ctx.get('Origin') || '*'
+    }
+  })
+)
 
 //路由中间件
 app.use(router.routes())
