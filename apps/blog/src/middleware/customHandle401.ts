@@ -15,6 +15,7 @@ const paths = [
   '/api/tag/view/personal',
   '/api/comment/list',
   '/api/common/webViewCount',
+  '/api/common/compressImages',
   '/api/article/needPwd',
   '/api/user/veirfySecureKey',
   /^\/api\/timeline\/(all|detail)/,

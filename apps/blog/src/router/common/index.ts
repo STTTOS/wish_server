@@ -267,3 +267,29 @@ router.post(commonApi('/getWebViewCount'), async (ctx) => {
     response.success(ctx, { viewCount: 0 })
   }
 })
+
+// 图片压缩
+router.post(
+  commonApi('/compressImages'),
+  koaBody(getKoaBodyConfig('temp', 50)),
+  async (ctx) => {
+    const { ratio } = ctx.request.body
+    const file = ctx.request.files?.file as unknown as Args
+    if (!file) throw new Error('空文件!')
+
+    const compressFilePath = join(
+      __dirname,
+      '../../../static/temp',
+      `compressed_${file.newFilename}`
+    )
+
+    // 压缩图片
+    await sharp(file.filepath)
+      .rotate()
+      .jpeg({ quality: ratio })
+      .toFile(compressFilePath)
+    response.success(ctx, {
+      url: `/static/temp/compressed_${file.newFilename}`
+    })
+  }
+)
