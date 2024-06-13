@@ -287,8 +287,9 @@ router.post(
     // 压缩图片
     const compressedInfo = await sharp(file.filepath)
       .rotate()
-      .jpeg({ quality: Number(ratio) })
+      .jpeg({ quality: Number(ratio), mozjpeg: true })
       .toFile(compressFilePath)
+
     response.success(ctx, {
       url: `/static/temp/compressed_${file.newFilename}`,
       originSize: file.size,
