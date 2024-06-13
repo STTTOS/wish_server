@@ -1,6 +1,7 @@
 import Koa from 'koa'
 import { join } from 'path'
 import koaJwt from 'koa-jwt'
+import cors from '@koa/cors'
 import mount from 'koa-mount'
 import serve from 'koa-static'
 import koaBody from 'koa-body'
@@ -54,6 +55,8 @@ app.use(loggerMiddleware)
 
 // 解析请求体
 app.use(koaBody())
+
+app.use(cors())
 
 //路由中间件
 app.use(router.routes())

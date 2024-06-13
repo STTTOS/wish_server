@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@koa/cors':
-        specifier: ^3.3.0
+        specifier: ^3.4.3
         version: 3.4.3
       '@prisma/client':
         specifier: ^5.13.0
