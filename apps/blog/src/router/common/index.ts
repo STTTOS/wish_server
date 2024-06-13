@@ -27,6 +27,7 @@ interface Args {
   newFilename: string
   originalFilename: string | null
   filepath: string
+  size: number
 }
 
 const removeBlanks = (input: string) => input.replaceAll(/\s/g, '')
@@ -270,10 +271,10 @@ router.post(commonApi('/getWebViewCount'), async (ctx) => {
 
 // 图片压缩
 router.post(
-  commonApi('/compressImages'),
+  commonApi('/compressImage'),
   koaBody(getKoaBodyConfig('temp', 50)),
   async (ctx) => {
-    const { ratio } = ctx.request.body
+    const { ratio = 30 } = ctx.request.body
     const file = ctx.request.files?.file as unknown as Args
     if (!file) throw new Error('空文件!')
 
@@ -284,12 +285,15 @@ router.post(
     )
 
     // 压缩图片
-    await sharp(file.filepath)
+    const compressedInfo = await sharp(file.filepath)
       .rotate()
-      .jpeg({ quality: ratio })
+      .jpeg({ quality: Number(ratio) })
       .toFile(compressFilePath)
     response.success(ctx, {
-      url: `/static/temp/compressed_${file.newFilename}`
+      url: `/static/temp/compressed_${file.newFilename}`,
+      originSize: file.size,
+      filename: file.originalFilename,
+      compressedSize: compressedInfo.size
     })
   }
 )
