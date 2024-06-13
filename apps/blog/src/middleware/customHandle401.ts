@@ -10,6 +10,7 @@ const paths = [
   /^\/api\/user\/(logout|signin|recommend|all|card|info)/,
   /^\/api\/article\/(detail|similar|count|clientList|visibleUsers)/,
   /\/images\/.*/,
+  '/api/tools/all',
   '/api/tag/all',
   '/api/tag/view/platform',
   '/api/tag/view/personal',
