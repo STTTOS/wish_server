@@ -177,7 +177,7 @@ model Comment {
 
 enum MessageType {
   // 系统消息
-  // system
+  system
   // 评论回复
   reply
   // 点赞
@@ -197,10 +197,12 @@ model Message {
   receiver   User? @relation("ReceivedMessages", fields: [receiverId], references: [id])
   receiverId Int?
 
-  content   String?
+  content String?
   // JSON: { commentId: number; articleId: number; }
-  extra     String?
-  isRead    Boolean  @default(false)
+  extra   Json?
+  isRead  Boolean @default(false)
+  // 已读用户id[]
+  readBy  Json    @default("[]")
 }
 
 model Timeline {

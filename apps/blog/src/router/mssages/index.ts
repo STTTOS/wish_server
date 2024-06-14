@@ -19,7 +19,7 @@ router.post(messageApi('/list'), async (ctx) => {
   const user = ctx.state.user
 
   const where: Prisma.MessageWhereInput = {
-    receiverId: user!.id
+    OR: [{ receiverId: user!.id }, { type: 'system' }]
   }
   const list = await message.findMany({
     where,
@@ -41,11 +41,12 @@ router.post(messageApi('/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ createdAt, extra, ...rest }) => {
+      list.map(({ createdAt, extra, readBy, ...rest }) => {
         return {
-          createdAt: moment(createdAt).format(timeFormat),
-          extra: extra && JSON.parse(extra),
-          ...rest
+          ...rest,
+          extra,
+          isRead: (readBy as number[]).includes(ctx.state.user!.id),
+          createdAt: moment(createdAt).format(timeFormat)
         }
       }),
       total
@@ -62,15 +63,20 @@ router.post(messageApi('/read'), async (ctx) => {
     where: { id }
   })
   // 需要验证这条消息的归属是否为本人
-  if (data?.receiverId && data.receiverId === ctx.state.user?.id)
-    await message.update({
-      where: {
-        id
-      },
-      data: {
-        isRead: true
-      }
-    })
+  if (data?.receiverId && data.receiverId !== ctx.state.user!.id) {
+    response.error(ctx, 400, '非法操作')
+    return
+  }
+  await message.update({
+    where: {
+      id
+    },
+    data: {
+      readBy: Array.from(
+        new Set(((data?.readBy as number[]) || []).concat([ctx.state.user!.id]))
+      )
+    }
+  })
   response.success(ctx)
 })
 
@@ -78,11 +84,15 @@ router.post(messageApi('/read'), async (ctx) => {
 router.post(messageApi('/unread'), async (ctx) => {
   const user = ctx.state.user
 
+  const where: Prisma.MessageWhereInput = {
+    OR: [{ receiverId: user!.id }, { type: 'system' }],
+    readBy: { equals: [] }
+  }
   const total = await message.count({
-    where: { receiverId: user?.id, isRead: false }
+    where
   })
   const list = await message.findMany({
-    where: { receiverId: user?.id, isRead: false },
+    where,
     // 默认查询20条未读消息
     take: 20,
     include: {
@@ -110,8 +120,10 @@ router.post(messageApi('/unreadCount'), async (ctx) => {
   const user = ctx.state.user
   const count = await message.count({
     where: {
-      receiverId: user!.id,
-      isRead: false
+      OR: [{ receiverId: user!.id }, { type: 'system' }],
+      readBy: {
+        equals: []
+      }
     }
   })
   response.success(ctx, { count })
@@ -124,8 +136,22 @@ router.post(messageApi('/readAll'), async (ctx) => {
       receiverId: user!.id
     },
     data: {
-      isRead: true
+      readBy: [user!.id]
     }
   })
   response.success(ctx)
 })
+
+// 刷数据
+// message.findMany().then((list) => {
+//   list?.forEach(async (item) => {
+//     await message.update({
+//       where: {
+//         id: item.id
+//       },
+//       data: {
+//         readBy: [item.receiverId]
+//       }
+//     })
+//   })
+// })

@@ -45,10 +45,10 @@ router.post(commentApi('/add'), async (ctx) => {
       senderId: authorId,
       receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
-      extra: JSON.stringify({
+      extra: {
         articleId,
         commentId: id
-      })
+      }
     }
   })
   response.success(ctx)
