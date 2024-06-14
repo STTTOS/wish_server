@@ -120,10 +120,18 @@ router.post(messageApi('/unreadCount'), async (ctx) => {
   const user = ctx.state.user
   const count = await message.count({
     where: {
-      OR: [{ receiverId: user!.id }, { type: 'system' }],
-      readBy: {
-        equals: []
-      }
+      OR: [
+        {
+          AND: [{ type: 'system' }, { readBy: { not: { includes: user!.id } } }]
+        },
+        {
+          AND: [
+            { type: { not: 'system' } },
+            { receiverId: user!.id },
+            { readBy: { equals: [] } }
+          ]
+        }
+      ]
     }
   })
   response.success(ctx, { count })
