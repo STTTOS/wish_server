@@ -201,7 +201,7 @@ model Message {
   // JSON: { commentId: number; articleId: number; }
   extra   Json?
   // 已读用户id[]
-  readBy  Json    @default("[]")
+  readBy  Json    @default("[]") @db.Json
 }
 
 model Timeline {

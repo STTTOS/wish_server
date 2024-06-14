@@ -122,7 +122,18 @@ router.post(messageApi('/unreadCount'), async (ctx) => {
     where: {
       OR: [
         {
-          AND: [{ type: 'system' }, { readBy: { not: { includes: user!.id } } }]
+          AND: [
+            { type: 'system' },
+            // 整乐了, 这条件想了半小时, 忘了有`NOT`, 害
+            {
+              NOT: {
+                readBy: {
+                  // eslint-disable-next-line camelcase
+                  array_contains: [user!.id]
+                }
+              }
+            }
+          ]
         },
         {
           AND: [
