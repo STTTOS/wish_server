@@ -8,7 +8,7 @@ import Router from 'koa-router'
 import { compose } from 'ramda'
 import { ParameterizedContext } from 'koa'
 import { join, extname, basename } from 'path'
-import { access, readFile, writeFile } from 'fs/promises'
+import { stat, access, readFile, writeFile } from 'fs/promises'
 
 import { user } from '@/models'
 import router from '../instance'
@@ -152,8 +152,16 @@ router.get('/images/:id', async (ctx) => {
     return
   }
   const filePath = join(__dirname, `../../../encryptedImageData/${fileName}`)
+
   const decryptedData = imageEncrypt.img.decrypt(filePath)
 
+  const stats = await stat(filePath)
+
+  // 设置 Last-Modified 响应头
+  ctx.set('Last-Modified', stats.mtime.toUTCString())
+  // 缓存时间为 1 天 (单位为秒)
+  // const maxAge = 86400
+  // ctx.set('Cache-Control', `public, max-age=${maxAge}`)
   ctx.set('Content-Type', 'image/jpeg')
   // 直接返回二进制数据
   ctx.body = decryptedData
