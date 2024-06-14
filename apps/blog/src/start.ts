@@ -29,6 +29,13 @@ app.use(errorHandlerMiddleware)
 // 404  重定向到 /public/index.html
 app.use(historyApiFallback({ index: '/public/index.html' }))
 
+app.use(
+  cors({
+    origin(ctx) {
+      return ctx.get('Origin') || '*'
+    }
+  })
+)
 // 访问 网站静态文件
 app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
 
@@ -55,14 +62,6 @@ app.use(loggerMiddleware)
 
 // 解析请求体
 app.use(koaBody())
-
-app.use(
-  cors({
-    origin(ctx) {
-      return ctx.get('Origin') || '*'
-    }
-  })
-)
 
 //路由中间件
 app.use(router.routes())
