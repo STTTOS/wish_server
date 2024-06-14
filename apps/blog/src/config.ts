@@ -45,5 +45,8 @@ export const apiNeededToAuth = [
   '/api/common//upload_temp_file',
   '/api/common/deploy_blog_frontend',
 
-  '/api/storage/persistent/delete'
+  '/api/storage/persistent/delete',
+
+  // 系统消息推送
+  '/api/system/sendNotify'
 ]
