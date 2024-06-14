@@ -149,17 +149,3 @@ router.post(messageApi('/readAll'), async (ctx) => {
   })
   response.success(ctx)
 })
-
-// 刷数据
-message.findMany().then((list) => {
-  list?.forEach(async (item) => {
-    await message.update({
-      where: {
-        id: item.id
-      },
-      data: {
-        readBy: item.receiverId ? [item.receiverId] : []
-      }
-    })
-  })
-})

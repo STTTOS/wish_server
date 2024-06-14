@@ -200,7 +200,6 @@ model Message {
   content String?
   // JSON: { commentId: number; articleId: number; }
   extra   Json?
-  isRead  Boolean @default(false)
   // 已读用户id[]
   readBy  Json    @default("[]")
 }
