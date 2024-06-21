@@ -3,8 +3,11 @@ import jwt from 'jsonwebtoken'
 import { tokenValidatedTime } from '../config'
 
 const { SECRET_KEY } = process.env
-export function decrypt<T = { id: number }>(token: string) {
-  const data = jwt.verify(token, SECRET_KEY!) as T
+export function decrypt<T = { id: number }>(
+  token: string,
+  options?: jwt.VerifyOptions
+) {
+  const data = jwt.verify(token, SECRET_KEY!, options) as T
   return data
 }
 

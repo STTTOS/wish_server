@@ -109,7 +109,7 @@ router.post(
         url: join(
           '/images',
           `${newFileName}?token=${btoa(
-            encrypt({ fileId: newFileName, userId: ctx.state.user!.id })
+            encrypt({ fileId: newFileName, userId: ctx.state.user!.id }, true)
           )}`
         )
       })
@@ -119,7 +119,9 @@ router.post(
 const parseFileIdFromToken = (token?: string) => {
   try {
     if (!token) return null
-    const decoded = decrypt<{ fileId: string; userId: number }>(atob(token))
+    const decoded = decrypt<{ fileId: string; userId: number }>(atob(token), {
+      ignoreExpiration: true
+    })
     return decoded
   } catch (error) {
     return null
@@ -132,6 +134,7 @@ router.get('/images/:id', async (ctx) => {
   // token
   const { token } = ctx.request.query as Record<string, string | undefined>
   const info = parseFileIdFromToken(token)
+
   const target = await user.findUnique({ where: { id: info?.userId } })
 
   if (
