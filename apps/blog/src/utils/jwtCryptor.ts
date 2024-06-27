@@ -12,8 +12,7 @@ export function decrypt<T = { id: number }>(
 }
 
 export function encrypt(payload: Record<string, unknown>, longTerm = false) {
-  const token = jwt.sign(payload, SECRET_KEY!, {
-    expiresIn: longTerm ? undefined : tokenValidatedTime
-  })
+  const options = longTerm ? {} : { expiresIn: tokenValidatedTime }
+  const token = jwt.sign(payload, SECRET_KEY!, options)
   return token
 }
