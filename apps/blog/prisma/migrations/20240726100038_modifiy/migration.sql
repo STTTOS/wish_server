@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `EBook` MODIFY `eBookUrl` VARCHAR(500) NOT NULL;
