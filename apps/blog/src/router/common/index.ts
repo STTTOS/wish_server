@@ -82,13 +82,13 @@ const handleUpload =
 // 上传文件到临时目录
 router.post(
   commonApi('/upload_temp_file'),
-  koaBody(getKoaBodyConfig('temp', 3000)),
+  koaBody(getKoaBodyConfig('temp', 30)),
   handleUpload('temp')
 )
 // 上传文件到files目录
 router.post(
   commonApi('/upload_persistent'),
-  koaBody(getKoaBodyConfig('files', 2000)),
+  koaBody(getKoaBodyConfig('files', 20)),
   handleUpload('files')
 ),
   // 上传文件到protected目录, 即加密后的数据
@@ -174,7 +174,7 @@ router.get('/images/:id', async (ctx) => {
 // 上传任意文件到cos
 router.post(
   commonApi('/upload_file'),
-  koaBody(getKoaBodyConfig('temp', 2000)),
+  koaBody(getKoaBodyConfig('temp', 20)),
   async (ctx) => {
     const file = ctx.request.files?.file as Args
 
