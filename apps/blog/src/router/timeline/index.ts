@@ -14,7 +14,7 @@ const timelineApi = combinePath(apiPrefix)('/timeline')
 router.post(timelineApi('/create'), async (ctx) => {
   const { title, desc, cover }: Prisma.TimelineCreateInput = ctx.request.body
   const userId = ctx.state.user?.id
-  if (!title || !desc || !userId) {
+  if (!title || !userId) {
     response.error(ctx, 400, '参数错误')
     return
   }
