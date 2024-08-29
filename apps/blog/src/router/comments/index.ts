@@ -2,6 +2,7 @@ import moment from 'moment'
 import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
+import { logger } from '@/logger'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
@@ -12,10 +13,12 @@ const commentApi = combinePath(apiPrefix)('/comment')
 
 router.post(commentApi('/add'), async (ctx) => {
   const {
-    content,
+    rootId,
     articleId,
+    content,
     parentCommentId = null
-  }: Comment = ctx.request.body
+  }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Omit<Comment, 'content'> & { content: Record<string, any> } = ctx.request.body
 
   const authorId = ctx.state.user!.id
 
@@ -33,15 +36,17 @@ router.post(commentApi('/add'), async (ctx) => {
   // 通过文章id查询对应user
   const { id } = await prisma.comment.create({
     data: {
-      content,
+      rootId,
       authorId,
       articleId,
-      parentCommentId
+      body: content,
+      parentCommentId,
+      content: ''
     }
   })
   await message.create({
     data: {
-      content,
+      content: content.message,
       senderId: authorId,
       receiverId: receiver?.author?.id,
       type: parentCommentId ? 'reply' : 'comment',
@@ -62,7 +67,7 @@ router.post(commentApi('/list'), async (ctx) => {
   const comments = await prisma.comment.findMany({
     where: {
       articleId,
-      parentCommentId: {
+      rootId: {
         equals: null
       }
     },
@@ -78,13 +83,24 @@ router.post(commentApi('/list'), async (ctx) => {
           isContributor: true
         }
       },
-      replies: {
+      children: {
         include: {
+          parentComment: {
+            include: {
+              author: {
+                select: {
+                  name: true,
+                  id: true
+                }
+              }
+            }
+          },
           author: {
             select: {
               avatar: true,
               username: true,
-              name: true
+              name: true,
+              isContributor: true
             }
           }
         }
@@ -100,7 +116,7 @@ router.post(commentApi('/list'), async (ctx) => {
 })
 
 router.post(commentApi('/delete'), async (ctx) => {
-  const { id, hasChildren } = ctx.request.body
+  const { id } = ctx.request.body
   const target = await comment.findUnique({ where: { id } })
 
   const user = ctx.state.user
@@ -114,27 +130,61 @@ router.post(commentApi('/delete'), async (ctx) => {
     return
   }
 
-  // 如果有子评论, 跟着一起删除
-  if (hasChildren) {
-    const childrenIds = await comment.findMany({
-      where: { parentCommentId: id }
-    })
-    await comment.deleteMany({
-      where: { id: { in: childrenIds.map((item) => item.id).concat(id) } }
-    })
-  } else {
-    await comment.delete({ where: { id } })
-  }
+  const childrenIds = await comment.findMany({
+    where: {
+      OR: [{ parentCommentId: id }, { rootId: id }]
+    }
+  })
+  await comment.deleteMany({
+    where: { id: { in: [id].concat(childrenIds.map((item) => item.id)) } }
+  })
   response.success(ctx)
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatComments(list: any[]): any[] {
-  return list?.map(({ createdAt, author, ...rest }) => ({
-    ...rest,
-    createdAt: moment(createdAt).format(timeFormat),
-    name: author.name,
-    avatar: author.avatar,
-    replies: formatComments(rest.replies)
-  }))
+  return list?.map(({ createdAt, author, body, parentComment, ...rest }) => {
+    return {
+      ...rest,
+      content: body,
+      createdAt: moment(createdAt).format(timeFormat),
+      name: author.name,
+      avatar: author.avatar,
+      isContributor: author.isContributor,
+      children: formatComments(rest.children),
+      parentUser: parentComment?.author
+    }
+  })
 }
+
+// 处理历史数据, 将parentCommentId => rootId
+comment.findMany().then((res) => {
+  res.forEach(async (item) => {
+    await comment.update({
+      where: { id: item.id },
+      data: {
+        rootId: item.parentCommentId
+      }
+    })
+    logger.log(
+      `映射parentId=>rootId: ${item.id}=${item.content} update successfully`
+    )
+  })
+})
+
+// 处理历史数据, 将content映射到body
+comment.findMany().then((res) => {
+  res.forEach(async (item) => {
+    await comment.update({
+      where: { id: item.id },
+      data: {
+        body: {
+          message: item.content
+        }
+      }
+    })
+    logger.log(
+      `映射content => body: ${item.id}=${item.content} update successfully`
+    )
+  })
+})

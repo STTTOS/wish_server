@@ -25,7 +25,7 @@ model User {
   // 是否是贡献者
   isContributor Boolean? @default(false)
   // 昵称
-  name          String?
+  name          String?  @unique
   // 头像
   avatar        String?
   // 自定义背景
@@ -129,7 +129,7 @@ model EBook {
   category  EBookCategory? @default(other)
   words     Int?
   // 电子书资源链接
-  eBookUrl  String @db.VarChar(500)
+  eBookUrl  String         @db.VarChar(500)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
@@ -160,19 +160,24 @@ model Comment {
   id        Int      @id @default(autoincrement())
   content   String   @db.VarChar(1000)
   createdAt DateTime @default(now())
+  body      Json?    @default("{}")
 
   // 关联用户
   author   User @relation(fields: [authorId], references: [id])
   authorId Int
-  // targetAuthorId Int?
 
   // 关联文章
   article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
   articleId Int
 
   parentCommentId Int?
-  parentComment   Comment?  @relation("replies", fields: [parentCommentId], references: [id])
-  replies         Comment[] @relation("replies")
+  parentComment   Comment? @relation("replies", fields: [parentCommentId], references: [id])
+
+  rootId Int?
+  root   Comment? @relation("children", fields: [rootId], references: [id])
+
+  replies  Comment[] @relation("replies")
+  children Comment[] @relation("children")
 }
 
 enum MessageType {
