@@ -2,7 +2,6 @@ import moment from 'moment'
 import { Comment } from '@prisma/blog-client'
 
 import router from '../instance'
-import { logger } from '@/logger'
 import response from '../../utils/response'
 import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
@@ -39,7 +38,6 @@ router.post(commentApi('/add'), async (ctx) => {
       rootId,
       authorId,
       articleId,
-      body: content,
       parentCommentId
     }
   })
@@ -142,10 +140,9 @@ router.post(commentApi('/delete'), async (ctx) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatComments(list: any[]): any[] {
-  return list?.map(({ createdAt, author, body, parentComment, ...rest }) => {
+  return list?.map(({ createdAt, author, parentComment, ...rest }) => {
     return {
       ...rest,
-      content: body,
       createdAt: moment(createdAt).format(timeFormat),
       name: author.name,
       avatar: author.avatar,
@@ -155,19 +152,3 @@ function formatComments(list: any[]): any[] {
     }
   })
 }
-
-// 处理历史数据, 将content映射到body
-comment.findMany().then((res) => {
-  res.forEach(async (item) => {
-    await comment.update({
-      where: { id: item.id },
-      data: {
-        /* eslint-disable  @typescript-eslint/no-explicit-any */
-        content: item.body as any
-      }
-    })
-    logger.log(
-      `body => content: ${item.id}=${item.content} update successfully`
-    )
-  })
-})

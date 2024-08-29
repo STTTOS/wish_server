@@ -160,7 +160,6 @@ model Comment {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
   content      Json?    @default("{}")
-  body      Json?    @default("{}")
 
   // 关联用户
   author   User @relation(fields: [authorId], references: [id])
