@@ -158,8 +158,8 @@ enum EBookCategory {
 // 新增评论功能
 model Comment {
   id        Int      @id @default(autoincrement())
-  content   String   @db.VarChar(1000)
   createdAt DateTime @default(now())
+  content      Json?    @default("{}")
   body      Json?    @default("{}")
 
   // 关联用户

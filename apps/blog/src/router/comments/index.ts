@@ -18,7 +18,7 @@ router.post(commentApi('/add'), async (ctx) => {
     content,
     parentCommentId = null
   }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Omit<Comment, 'content'> & { content: Record<string, any> } = ctx.request.body
+  Comment & { content: Record<string, any> } = ctx.request.body
 
   const authorId = ctx.state.user!.id
 
@@ -40,8 +40,7 @@ router.post(commentApi('/add'), async (ctx) => {
       authorId,
       articleId,
       body: content,
-      parentCommentId,
-      content: ''
+      parentCommentId
     }
   })
   await message.create({
@@ -157,34 +156,18 @@ function formatComments(list: any[]): any[] {
   })
 }
 
-// 处理历史数据, 将parentCommentId => rootId
-comment.findMany().then((res) => {
-  res.forEach(async (item) => {
-    await comment.update({
-      where: { id: item.id },
-      data: {
-        rootId: item.parentCommentId
-      }
-    })
-    logger.log(
-      `映射parentId=>rootId: ${item.id}=${item.content} update successfully`
-    )
-  })
-})
-
 // 处理历史数据, 将content映射到body
 comment.findMany().then((res) => {
   res.forEach(async (item) => {
     await comment.update({
       where: { id: item.id },
       data: {
-        body: {
-          message: item.content
-        }
+        /* eslint-disable  @typescript-eslint/no-explicit-any */
+        content: item.body as any
       }
     })
     logger.log(
-      `映射content => body: ${item.id}=${item.content} update successfully`
+      `body => content: ${item.id}=${item.content} update successfully`
     )
   })
 })
