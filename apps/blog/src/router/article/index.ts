@@ -88,10 +88,17 @@ router.post(articleApi('/physicalDelete'), async (ctx) => {
   const { id }: Partial<Identity> = ctx.request.body
   if (!id) throw new Error('参数不正确')
 
-  const thisOne = await article.findUnique({ where: { id } })
+  const thisOne = await article.findUnique({
+    where: { id, deletedAt: { not: null } }
+  })
   const { user: { id: userId } = {} } = ctx.state
   logger.info(`thisOne: ${JSON.stringify(thisOne)}; userId: ${userId}`)
-  if (thisOne?.authorId !== userId) {
+
+  if (!thisOne) {
+    throw new Error('资源不存在')
+  }
+
+  if (thisOne.authorId !== userId) {
     response.success(ctx, null, '无操作权限', 403)
     return
   }
