@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/blog-client'
 import { omit, prop, isNil, complement } from 'ramda'
 
 import router from '../instance'
+import { logger } from '@/logger'
 import cryptor from '@/utils/cryptor'
 import prisma, { user } from '@/models'
 import { tag, article } from '../../models'
@@ -89,6 +90,7 @@ router.post(articleApi('/physicalDelete'), async (ctx) => {
 
   const thisOne = await article.findUnique({ where: { id } })
   const { user: { id: userId } = {} } = ctx.state
+  logger.info(`thisOne: ${JSON.stringify(thisOne)}; userId: ${userId}`)
   if (thisOne?.authorId !== userId) {
     response.success(ctx, null, '无操作权限', 403)
     return
