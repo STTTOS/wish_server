@@ -1,12 +1,13 @@
+import Moment from 'moment'
 import { pick, isNil, equals } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
-import { apiPrefix } from '../../config'
 import { moment, timeline } from '@/models'
 import { FindTimelineInput } from './interface'
 import { WithPaginationReq } from '../interface'
 import combinePath from '../../utils/combinePath'
+import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '@/utils/response'
 
 const timelineApi = combinePath(apiPrefix)('/timeline')
@@ -71,7 +72,6 @@ router.post(timelineApi('/delete/:id'), async (ctx) => {
 // 分页查询时间轴
 router.post(timelineApi('/list'), async (ctx) => {
   const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
-  // const wherer: Prisma.TimelineWhereInput=  {}
   const total = await timeline.count()
   const list = await timeline.findMany({
     take,
@@ -86,7 +86,16 @@ router.post(timelineApi('/list'), async (ctx) => {
       }
     }
   })
-  response.success(ctx, withList(list, total))
+  response.success(
+    ctx,
+    withList(
+      list.map((item) => ({
+        ...item,
+        createdAt: Moment(item.createdAt).format(timeFormat)
+      })),
+      total
+    )
+  )
 })
 // 查询用户所有的时间轴
 router.post(timelineApi('/all/:userId'), async (ctx) => {
