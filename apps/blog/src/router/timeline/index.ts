@@ -243,51 +243,6 @@ router.post(timelineApi('/moment/delete/:id'), async (ctx) => {
   response.success(ctx, null, '删除成功')
 })
 
-// 分页查询指定 timeline下的的 moments
-router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { momentId: _momentId }: any = ctx.params
-  const { timelineId: _timelineId } = ctx.request.body
-
-  // 此接口需要做登录拦截
-  const userId = ctx.state.user!.id
-  if (!_momentId || !_timelineId) {
-    response.error(ctx, 400, '参数错误')
-    return
-  }
-  const [momentId, timelineId] = [_momentId, _timelineId].map(Number)
-  const data = await moment.findUnique({
-    where: { id: momentId },
-    include: {
-      timeline: {
-        include: {
-          user: true
-        }
-      }
-    }
-  })
-  await momentLike.create({
-    data: {
-      userId,
-      momentId
-    }
-  })
-
-  await message.create({
-    data: {
-      content: '点赞了你的时刻',
-      type: 'like',
-      receiverId: data?.timeline?.userId,
-      senderId: userId,
-      extra: {
-        momentId,
-        timelineId
-      }
-    }
-  })
-  response.success(ctx)
-})
-
 // 点赞指定Moment
 router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -304,6 +259,7 @@ router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
   const data = await moment.findUnique({
     where: { id: momentId },
     include: {
+      likes: true,
       timeline: {
         include: {
           user: true
@@ -311,6 +267,12 @@ router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
       }
     }
   })
+
+  if (data?.likes.map((item) => item.userId).includes(userId)) {
+    response.error(ctx, 10001, '不可重复点赞')
+    return
+  }
+
   await momentLike.create({
     data: {
       userId,
