@@ -4,10 +4,10 @@ import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
 import { FindTimelineInput } from './interface'
-import { WithPaginationReq } from '../interface'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '@/utils/response'
+import { PrismaError, WithPaginationReq } from '../interface'
 import { moment, message, timeline, momentLike } from '@/models'
 
 const timelineApi = combinePath(apiPrefix)('/timeline')
@@ -267,18 +267,19 @@ router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
       }
     }
   })
-
-  if (data?.likes.map((item) => item.userId).includes(userId)) {
-    response.error(ctx, 10001, '不可重复点赞')
-    return
-  }
-
-  await momentLike.create({
-    data: {
-      userId,
-      momentId
+  try {
+    await momentLike.create({
+      data: {
+        userId,
+        momentId
+      }
+    })
+  } catch (error) {
+    if ((error as PrismaError).code === 'P2002') {
+      response.error(ctx, 10001, '不可重复点赞')
+      return
     }
-  })
+  }
 
   if (userId !== data?.timeline?.userId)
     await message.create({
