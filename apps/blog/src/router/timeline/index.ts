@@ -71,17 +71,14 @@ router.post(timelineApi('/delete/:id'), async (ctx) => {
 
 // 分页查询时间轴
 router.post(timelineApi('/list'), async (ctx) => {
-  const {
-    pageSize: take,
-    current: skip,
-    order
-  }: WithPaginationReq = ctx.request.body
+  const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
   const total = await timeline.count()
   const list = await timeline.findMany({
     take,
-    orderBy: {
-      createdAt: order === 'ascend' ? 'asc' : 'desc'
-    },
+    orderBy: [
+      // 默认取最新修改的
+      { updatedAt: 'desc' }
+    ],
     skip: (skip! - 1) * take!,
     include: {
       user: {
@@ -98,7 +95,8 @@ router.post(timelineApi('/list'), async (ctx) => {
     withList(
       list.map((item) => ({
         ...item,
-        createdAt: Moment(item.createdAt).format(timeFormat)
+        createdAt: Moment(item.createdAt).format(timeFormat),
+        updatedAt: Moment(item.updatedAt).format(timeFormat)
       })),
       total
     )
@@ -163,6 +161,12 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
     return
   }
 
+  await timeline.update({
+    where: { id: timelineId },
+    data: {
+      updatedAt: new Date()
+    }
+  })
   await moment.create({
     data: {
       content,
@@ -179,6 +183,10 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
   response.success(ctx)
 })
 
+/**
+ * @description 是否为本人操作
+ * @returns
+ */
 async function isSameUser(
   { momentId, timelineId }: { momentId?: number; timelineId?: number },
   userId?: number
@@ -205,15 +213,28 @@ async function isSameUser(
   })
   return userId === target?.userId
 }
+
 router.post(timelineApi('/moment/update/:id'), async (ctx) => {
   const momentId = Number(ctx.params.id)
-  const data = ctx.request.body
+  const data: { timelineId: number; images: { sort: number; src: string }[] } =
+    ctx.request.body
   const userId = ctx.state.user?.id
-
+  const { timelineId } = data
+  if (!momentId || !timelineId) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
   if (!(await isSameUser({ momentId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
+
+  await timeline.update({
+    where: { id: data.timelineId },
+    data: {
+      updatedAt: new Date()
+    }
+  })
   await moment.update({
     where: { id: momentId },
     data: {

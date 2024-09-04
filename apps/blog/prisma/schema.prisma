@@ -217,7 +217,8 @@ model Timeline {
   // 时间轴封面
   cover     String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // 改为手动控制， 以最新的moment createdAt或者update为准
+  updatedAt DateTime @default(now())
 
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
