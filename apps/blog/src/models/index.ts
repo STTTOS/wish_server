@@ -30,7 +30,8 @@ export const {
   message,
   timeline,
   moment,
-  momentImages
+  momentImages,
+  momentLike
 } = prisma
 
 article.findMany

@@ -49,6 +49,8 @@ model User {
   comments         Comment[]
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+
+  momentLikes MomentLike[]
 }
 
 // 文章
@@ -159,7 +161,7 @@ enum EBookCategory {
 model Comment {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-  content      Json?    @default("{}")
+  content   Json?    @default("{}")
 
   // 关联用户
   author   User @relation(fields: [authorId], references: [id])
@@ -230,6 +232,7 @@ model Moment {
   // 支持Markdown
   content String?        @db.LongText
   images  MomentImages[]
+  likes   MomentLike[]
 
   timeline   Timeline? @relation(fields: [timelineId], references: [id], onDelete: Cascade)
   timelineId Int?
@@ -244,4 +247,16 @@ model MomentImages {
   moment   Moment @relation(fields: [momentId], references: [id], onDelete: Cascade)
 
   @@unique([momentId, sort])
+}
+
+// 记录moment的点赞用户
+model MomentLike {
+  id Int @id @default(autoincrement())
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+
+  moment    Moment   @relation(fields: [momentId], references: [id])
+  momentId  Int
+  createdAt DateTime @default(now())
 }

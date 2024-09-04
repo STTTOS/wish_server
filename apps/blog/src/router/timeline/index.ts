@@ -3,12 +3,12 @@ import { pick, isNil, equals } from 'ramda'
 import { Prisma } from '@prisma/blog-client'
 
 import router from '../instance'
-import { moment, timeline } from '@/models'
 import { FindTimelineInput } from './interface'
 import { WithPaginationReq } from '../interface'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '@/utils/response'
+import { moment, message, timeline, momentLike } from '@/models'
 
 const timelineApi = combinePath(apiPrefix)('/timeline')
 
@@ -244,6 +244,97 @@ router.post(timelineApi('/moment/delete/:id'), async (ctx) => {
 })
 
 // 分页查询指定 timeline下的的 moments
+router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { momentId: _momentId }: any = ctx.params
+  const { timelineId: _timelineId } = ctx.request.body
+
+  // 此接口需要做登录拦截
+  const userId = ctx.state.user!.id
+  if (!_momentId || !_timelineId) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const [momentId, timelineId] = [_momentId, _timelineId].map(Number)
+  const data = await moment.findUnique({
+    where: { id: momentId },
+    include: {
+      timeline: {
+        include: {
+          user: true
+        }
+      }
+    }
+  })
+  await momentLike.create({
+    data: {
+      userId,
+      momentId
+    }
+  })
+
+  await message.create({
+    data: {
+      content: '点赞了你的时刻',
+      type: 'like',
+      receiverId: data?.timeline?.userId,
+      senderId: userId,
+      extra: {
+        momentId,
+        timelineId
+      }
+    }
+  })
+  response.success(ctx)
+})
+
+// 点赞指定Moment
+router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { momentId: _momentId }: any = ctx.params
+  const { timelineId: _timelineId } = ctx.request.body
+
+  // 此接口需要做登录拦截
+  const userId = ctx.state.user!.id
+  if (!_momentId || !_timelineId) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const [momentId, timelineId] = [_momentId, _timelineId].map(Number)
+  const data = await moment.findUnique({
+    where: { id: momentId },
+    include: {
+      timeline: {
+        include: {
+          user: true
+        }
+      }
+    }
+  })
+  await momentLike.create({
+    data: {
+      userId,
+      momentId
+    }
+  })
+
+  if (userId !== data?.timeline?.userId)
+    await message.create({
+      data: {
+        content: '点赞了你的时刻',
+        type: 'like',
+        receiverId: data?.timeline?.userId,
+        senderId: userId,
+        extra: {
+          momentId,
+          timelineId
+        }
+      }
+    })
+  response.success(ctx)
+})
+
+// 分页查询指定 timeline下的的 moments
 router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { timelineId }: any = ctx.params
@@ -269,11 +360,30 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       timeline: where
     },
     include: {
-      images: true
+      images: true,
+      likes: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              avatar: true
+            }
+          }
+        }
+      }
     },
     orderBy: {
       createdAt: 'desc'
     }
   })
-  response.success(ctx, withList(list, total))
+  response.success(
+    ctx,
+    withList(
+      list.map(({ likes, ...props }) => ({
+        ...props,
+        likes: likes.map((item) => item.user)
+      })),
+      total
+    )
+  )
 })
