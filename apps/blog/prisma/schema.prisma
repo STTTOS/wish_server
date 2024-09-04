@@ -259,4 +259,6 @@ model MomentLike {
   moment    Moment   @relation(fields: [momentId], references: [id])
   momentId  Int
   createdAt DateTime @default(now())
+
+  @@unique([userId, momentId]) // 联合唯一键
 }
