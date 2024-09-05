@@ -25,12 +25,18 @@ router.post(commentApi('/add'), async (ctx) => {
     if (parentCommentId)
       return prisma.comment.findUnique({
         where: { id: parentCommentId },
-        include: { author: { select: { id: true } } }
+        include: { author: { select: { id: true, name: true } } }
       })
     return prisma.article.findUnique({
       where: { id: articleId },
-      include: { author: { select: { id: true } } }
+      include: { author: { select: { id: true, name: true } } }
     })
+  })()
+  const result = (() => {
+    // rootId不等于parentCommentId, 即代表回复的子评论, 需要加上目标用户名称
+    if (rootId && parentCommentId && rootId !== parentCommentId)
+      return `回复 @${receiver?.author?.name} : ${content.message}`
+    return content.message
   })()
   // 通过文章id查询对应user
   const { id } = await prisma.comment.create({
@@ -38,7 +44,10 @@ router.post(commentApi('/add'), async (ctx) => {
       rootId,
       authorId,
       articleId,
-      content,
+      content: {
+        ...(content as object),
+        message: result
+      },
       parentCommentId
     }
   })
