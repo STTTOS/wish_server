@@ -135,7 +135,10 @@ router.post(userApi('/add'), async (ctx) => {
   } catch (error) {
     const { code } = error as PrismaError
 
-    if (code === 'P2002') throw new Error('账户已存在')
+    if (code === 'P2002') {
+      response.error(ctx, 10000, '账户名/昵称重复')
+      return
+    }
     throw new Error('系统异常')
   }
 })
@@ -166,6 +169,12 @@ router.post(userApi('/update'), async (ctx) => {
     })
     response.success(ctx, null)
   } catch (error) {
+    const { code } = error as PrismaError
+    if (code === 'P2002') {
+      response.error(ctx, 10000, '账户名/昵称重复')
+      return
+    }
+
     response.success(ctx, null, '用户不存在')
   }
 })
