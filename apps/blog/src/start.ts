@@ -49,6 +49,8 @@ app.use(
   koaJwt({
     secret: process.env.SECRET_KEY!,
     cookie: 'token',
+    // 继续移交给下一个中间件
+    // 由`customHandle401`决定如何处理无登录态
     passthrough: true
   })
 )

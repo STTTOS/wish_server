@@ -15,7 +15,12 @@ import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import prisma, { user, article } from '../../models'
 import { decrypt, encrypt } from '../../utils/jwtCryptor'
-import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
+import {
+  apiPrefix,
+  timeFormat,
+  tokenValidatedTime,
+  timeFormatWithoutSeconds
+} from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')
 
@@ -73,7 +78,9 @@ router.post(userApi('/signin'), async (ctx) => {
     data: {
       username,
       password,
-      name: '用户昵称_' + Math.random()
+      name:
+        `用户_${sessionId.slice(0, 6)}_` +
+        moment().format(timeFormatWithoutSeconds)
     }
   })
 
