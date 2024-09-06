@@ -180,12 +180,12 @@ router.post(userApi('/update'), async (ctx) => {
 })
 
 router.post(userApi('/list'), async (ctx) => {
-  const { name, email, time, current, pageSize }: GetUserByPaginationReq =
+  const { name, email, time, current, pageSize, role }: GetUserByPaginationReq =
     ctx.request.body
 
   if (!current || !pageSize) throw new Error('分页参数不正确')
 
-  const where: Prisma.UserWhereInput = {}
+  const where: Prisma.UserWhereInput = { role }
   if (name) {
     where.name = {
       contains: name

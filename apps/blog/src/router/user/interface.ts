@@ -4,6 +4,7 @@ export interface GetUserReq {
   name?: string
   email?: string
   time?: TimeRange
+  role?: 'admin' | 'user'
 }
 export type GetUserByPaginationReq = GetUserReq & WithPaginationReq
 
