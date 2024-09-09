@@ -82,13 +82,13 @@ const handleUpload =
 // 上传文件到临时目录
 router.post(
   commonApi('/upload_temp_file'),
-  koaBody(getKoaBodyConfig('temp', 30)),
+  koaBody(getKoaBodyConfig('temp', 300)),
   handleUpload('temp')
 )
 // 上传文件到files目录
 router.post(
   commonApi('/upload_persistent'),
-  koaBody(getKoaBodyConfig('files', 20)),
+  koaBody(getKoaBodyConfig('files', 200)),
   handleUpload('files')
 ),
   // 上传文件到protected目录, 即加密后的数据
