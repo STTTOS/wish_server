@@ -15,12 +15,7 @@ import { withList } from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import prisma, { user, article } from '../../models'
 import { decrypt, encrypt } from '../../utils/jwtCryptor'
-import {
-  apiPrefix,
-  timeFormat,
-  tokenValidatedTime,
-  timeFormatWithoutSeconds
-} from '../../config'
+import { apiPrefix, timeFormat, tokenValidatedTime } from '../../config'
 
 const userApi = combinePath(apiPrefix)('/user')
 
@@ -78,9 +73,7 @@ router.post(userApi('/signin'), async (ctx) => {
     data: {
       username,
       password,
-      name:
-        `用户_${sessionId.slice(0, 6)}_` +
-        moment().format(timeFormatWithoutSeconds)
+      name: `用户_${sessionId.slice(0, 6)}_` + moment().format('yyyy-MM-DD')
     }
   })
 
@@ -161,6 +154,10 @@ router.post(userApi('/update'), async (ctx) => {
 
   if (!id) throw new Error('id 不能为空')
   if (!name) throw new Error('昵称不能为空')
+
+  const userId = ctx.state.user?.id
+
+  if (id !== userId) throw new Error('非法操作')
 
   try {
     await user.update({
