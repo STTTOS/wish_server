@@ -361,6 +361,11 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
             }
           }
         }
+      },
+      timeline: {
+        select: {
+          userId: true
+        }
       }
     },
     orderBy: {
@@ -370,9 +375,10 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ likes, ...props }) => ({
+      list.map(({ likes, timeline, ...props }) => ({
         ...props,
-        likes: likes.map((item) => item.user)
+        likes: likes.map((item) => item.user),
+        userId: timeline?.userId
       })),
       total
     )
