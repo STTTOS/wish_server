@@ -19,9 +19,17 @@ import combinePath from '../../utils/combinePath'
 import { decrypt, encrypt } from '@/utils/jwtCryptor'
 import uploadFileToCos from '../../utils/uploadFileToCos'
 import { getAllFiles, getFileName } from '../../utils/file'
-import { apiPrefix, fileNameSpliter, imageCompressRatio } from '../../config'
+import {
+  apiPrefix,
+  cosDomain,
+  fileNameSpliter,
+  imageCompressRatio
+} from '../../config'
 
 const commonApi = combinePath(apiPrefix)('/common')
+
+const covertCosToSafeUrl = (url: string) =>
+  `https://${cosDomain}/images/compressed/${basename(url)}`
 
 interface Args {
   newFilename: string
@@ -181,7 +189,7 @@ router.post(
     if (!file) throw new Error('空文件!')
 
     const url = await uploadFileToCos('videos', file.newFilename, file.filepath)
-    response.success(ctx, { url: `https://${url}` })
+    response.success(ctx, { url: covertCosToSafeUrl(url) })
   }
 )
 
@@ -193,8 +201,6 @@ router.post(
   async (ctx) => {
     const file = ctx.request.files?.file as unknown as Args
     if (!file) throw new Error('空文件!')
-
-    await uploadFileToCos('images/origin', file.newFilename, file.filepath)
 
     const compressFilePath = join(
       __dirname,
@@ -210,12 +216,15 @@ router.post(
       // .resize(originWith && Math.floor(originWith * imageCompressRatio))
       .jpeg({ quality: imageCompressRatio * 100 })
       .toFile(compressFilePath)
+
+    // 将图片 上传到cos
+    await uploadFileToCos('images/origin', file.newFilename, file.filepath)
     const url = await uploadFileToCos(
       'images/compressed',
       file.newFilename,
       compressFilePath
     )
-    response.success(ctx, { url: `https://${url}` })
+    response.success(ctx, { url: covertCosToSafeUrl(url) })
   }
 )
 

@@ -51,3 +51,5 @@ export const apiNeededToAuth = [
   // 系统消息推送
   '/api/system/sendNotify'
 ]
+
+export const cosDomain = 'cos.wishufree.com'
