@@ -241,7 +241,7 @@ model Moment {
 
 model MomentImages {
   id   Int    @id @default(autoincrement())
-  src  String
+  src  String @db.Text
   sort Int
 
   momentId Int
