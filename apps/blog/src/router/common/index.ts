@@ -188,8 +188,10 @@ router.post(
 
     if (!file) throw new Error('空文件!')
 
-    const url = await uploadFileToCos('videos', file.newFilename, file.filepath)
-    response.success(ctx, { url: covertCosToSafeUrl(url) })
+    const url = await uploadFileToCos('files', file.newFilename, file.filepath)
+    response.success(ctx, {
+      url: `https://${cosDomain}/files/${basename(url)}`
+    })
   }
 )
 
