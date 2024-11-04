@@ -342,8 +342,8 @@ router.post(timelineApi('/moment/share/:id'), async (ctx) => {
   }
   response.success(ctx, {
     ...detail,
-    createdAt: Moment(detail.createdAt).format(timeFormat),
-    updatedAt: Moment(detail.updatedAt).format(timeFormat)
+    createdAt: Moment(detail.createdAt).format(timeFormat)
+    // updatedAt: Moment(detail.updatedAt).format(timeFormat)
   })
 })
 
