@@ -325,6 +325,28 @@ router.post(timelineApi('/moment/like/:momentId'), async (ctx) => {
   response.success(ctx)
 })
 
+router.post(timelineApi('/moment/share/:id'), async (ctx) => {
+  const _id = ctx.params.id
+  if (!_id) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const detail = await moment.findUnique({
+    where: {
+      id: Number(_id)
+    }
+  })
+  if (!detail) {
+    response.error(ctx, 404, '资源不存在')
+    return
+  }
+  response.success(ctx, {
+    ...detail,
+    createdAt: Moment(detail.createdAt).format(timeFormat),
+    updatedAt: Moment(detail.updatedAt).format(timeFormat)
+  })
+})
+
 // 分页查询指定 timeline下的的 moments
 router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

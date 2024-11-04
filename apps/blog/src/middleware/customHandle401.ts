@@ -21,7 +21,9 @@ const paths = [
   '/api/user/veirfySecureKey',
   /^\/api\/timeline\/(all|detail)/,
   // 查询moments
-  /^\/api\/timeline\/moment\/\d*$/
+  /^\/api\/timeline\/moment\/\d*$/,
+  // Moment分享 查询详情
+  /^\/api\/timeline\/moment\/share\/\d*$/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
