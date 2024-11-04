@@ -334,6 +334,9 @@ router.post(timelineApi('/moment/share/:id'), async (ctx) => {
   const detail = await moment.findUnique({
     where: {
       id: Number(_id)
+    },
+    include: {
+      images: true
     }
   })
   if (!detail) {
