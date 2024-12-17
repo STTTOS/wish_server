@@ -424,21 +424,24 @@ router.post(timelineApi('/currentUser/all'), async (ctx) => {
 
 // 将moment迁移到指定的timeline下
 router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
-  const timelineId = ctx.params.id as unknown as number
+  const timelineId = Number(ctx.params.id)
 
   const {
     content,
     cover,
     createdAt,
-    images
+    images,
+    momentId
   }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Prisma.MomentCreateInput & { images: any[] } = ctx.request.body
+  Prisma.MomentCreateInput & { images: any[]; momentId: number } =
+    ctx.request.body
   const userId = ctx.state.user?.id
   if (
     !content ||
     !userId ||
     !createdAt ||
     !timelineId ||
+    !momentId ||
     [!content, images.length === 0].every(equals(true))
   ) {
     response.error(ctx, 400, '参数错误')
@@ -460,6 +463,11 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
         }
       },
       timelineId
+    }
+  })
+  await moment.delete({
+    where: {
+      id: Number(momentId)
     }
   })
 
