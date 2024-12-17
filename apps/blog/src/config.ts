@@ -21,7 +21,7 @@ export const ivLength = 16
 // 记录需要用户身份的接口
 export const apiNeededToAuth = [
   '/api/user/add',
-  // '/api/user/update',
+  '/api/user/update',
   '/api/user/delete',
 
   // '/api/article/add',

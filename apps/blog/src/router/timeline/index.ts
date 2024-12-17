@@ -409,3 +409,59 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     )
   )
 })
+
+// 获取当前用户所有的时间轴
+router.post(timelineApi('/currentUser/all'), async (ctx) => {
+  const user = ctx.state.user!
+
+  const timelines = await timeline.findMany({
+    where: {
+      userId: user.id
+    }
+  })
+  response.success(ctx, timelines.map(pick(['id', 'title'])))
+})
+
+// 将moment迁移到指定的timeline下
+router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
+  const timelineId = ctx.params.id as unknown as number
+
+  const {
+    content,
+    cover,
+    createdAt,
+    images
+  }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Prisma.MomentCreateInput & { images: any[] } = ctx.request.body
+  const userId = ctx.state.user?.id
+  if (
+    !content ||
+    !userId ||
+    !createdAt ||
+    !timelineId ||
+    [!content, images.length === 0].every(equals(true))
+  ) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  if (!(await isSameUser({ timelineId }, userId))) {
+    response.error(ctx, 403, '非法操作')
+    return
+  }
+
+  const { id } = await moment.create({
+    data: {
+      content,
+      cover,
+      createdAt,
+      images: {
+        createMany: {
+          data: images
+        }
+      },
+      timelineId
+    }
+  })
+
+  response.success(ctx, { id })
+})
