@@ -447,6 +447,17 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
+
+  const target = await timeline.findUnique({
+    where: {
+      id: timelineId
+    }
+  })
+  if (!target) {
+    response.error(ctx, 10002, '时间轴不存在')
+    return
+  }
+
   if (!(await isSameUser({ timelineId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
