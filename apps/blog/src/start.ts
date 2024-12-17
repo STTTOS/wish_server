@@ -60,10 +60,10 @@ app.use(customHandle401)
 // 权限校验中间件, 非管理员403跳转
 app.use(requireAuthMiddleware)
 
-app.use(loggerMiddleware)
-
 // 解析请求体
 app.use(koaBody())
+
+app.use(loggerMiddleware)
 
 //路由中间件
 app.use(router.routes())
