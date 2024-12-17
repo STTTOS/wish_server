@@ -476,7 +476,7 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
       createdAt,
       images: {
         createMany: {
-          data: images
+          data: images?.map(({ sort, src }) => ({ sort, src }))
         }
       },
       timelineId
