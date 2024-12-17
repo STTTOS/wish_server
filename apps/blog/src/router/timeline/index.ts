@@ -463,6 +463,12 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
     return
   }
 
+  await timeline.update({
+    where: { id: timelineId },
+    data: {
+      updatedAt: new Date()
+    }
+  })
   const { id } = await moment.create({
     data: {
       content,

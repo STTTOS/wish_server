@@ -257,7 +257,7 @@ model MomentLike {
   user   User @relation(fields: [userId], references: [id])
   userId Int
 
-  moment    Moment   @relation(fields: [momentId], references: [id])
+  moment    Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
   momentId  Int
   createdAt DateTime @default(now())
 
