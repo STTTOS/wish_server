@@ -6,7 +6,11 @@ const loggerMiddleware = async (ctx: Context, next: () => Promise<void>) => {
   const { url } = ctx.request
   const ip = ctx.headers['x-real-ip'] || ctx.request.ip
 
-  logger.info(`ip: ${ip}, request for ${url}`)
+  logger.info(
+    `ip: ${ip}, request for ${url}, body: ${JSON.stringify(
+      ctx.request.body || {}
+    )}`
+  )
   await next()
 }
 export default loggerMiddleware
