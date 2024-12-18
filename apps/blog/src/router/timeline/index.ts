@@ -167,7 +167,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
       updatedAt: new Date()
     }
   })
-  await moment.create({
+  const { id } = await moment.create({
     data: {
       content,
       cover,
@@ -180,7 +180,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
       timelineId
     }
   })
-  response.success(ctx)
+  response.success(ctx, { id })
 })
 
 /**
@@ -249,7 +249,7 @@ router.post(timelineApi('/moment/update/:id'), async (ctx) => {
       }
     }
   })
-  response.success(ctx)
+  response.success(ctx, { id: Number(momentId) })
 })
 
 router.post(timelineApi('/moment/delete/:id'), async (ctx) => {
