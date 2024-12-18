@@ -458,7 +458,7 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
     return
   }
 
-  if (!(await isSameUser({ timelineId }, userId))) {
+  if (!(await isSameUser({ momentId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
