@@ -354,7 +354,11 @@ router.post(timelineApi('/moment/share/:id'), async (ctx) => {
 router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { timelineId }: any = ctx.params
-  const { pageSize: take, current: _skip }: FindTimelineInput = ctx.request.body
+  const {
+    pageSize: take,
+    current: _skip,
+    keyword
+  }: FindTimelineInput & { keyword?: string } = ctx.request.body
 
   // 不允许一次性请求超过3条数据
   const skip = Math.min(100, Number(_skip))
@@ -363,18 +367,23 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     return
   }
 
-  const where: Prisma.TimelineWhereInput = {
+  const timelineWhere: Prisma.TimelineWhereInput = {
     id: Number(timelineId)
   }
+
+  const where: Prisma.MomentWhereInput = {
+    AND: [
+      { timeline: timelineWhere },
+      { content: keyword ? { contains: keyword } : undefined }
+    ]
+  }
   const total = await moment.count({
-    where: { timeline: where }
+    where
   })
   const list = await moment.findMany({
     take,
     skip: (skip! - 1) * take!,
-    where: {
-      timeline: where
-    },
+    where,
     include: {
       images: true,
       likes: {
