@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { v4 } from 'uuid'
 import sharp from 'sharp'
+import dayjs from 'dayjs'
 import cron from 'node-cron'
 import { constants } from 'fs'
 import koaBody from 'koa-body'
@@ -191,7 +192,16 @@ router.post(
 
     if (!file) throw new Error('空文件!')
 
+    const startTime = dayjs()
     const url = await uploadFileToCos('files', file.newFilename, file.filepath)
+    const endTime = dayjs()
+    logger.info(
+      `上传${file.originalFilename}(${file.size});耗时: ${endTime.diff(
+        startTime,
+        'second'
+      )}s`
+    )
+
     response.success(ctx, {
       url: `https://${cosDomain}/files/${basename(url)}`
     })
