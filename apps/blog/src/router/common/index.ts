@@ -185,7 +185,7 @@ router.get('/images/:id', async (ctx) => {
 // 上传任意文件到cos
 router.post(
   commonApi('/upload_file'),
-  koaBody(getKoaBodyConfig('temp', 20)),
+  koaBody(getKoaBodyConfig('temp', 200)),
   async (ctx) => {
     const file = ctx.request.files?.file as Args
 
