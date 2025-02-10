@@ -9,5 +9,6 @@ import './mssages'
 import './article'
 import './timeline'
 import './comments'
+import './generalComments'
 
 export { default as default } from './instance'

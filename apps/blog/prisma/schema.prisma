@@ -46,7 +46,10 @@ model User {
 
   eBooks EBook[]
 
-  comments         Comment[]
+  comments        Comment[]
+  generalComments GeneralComment[]
+  replayToUser    GeneralComment[] @relation("replayToUser")
+
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
 
@@ -181,6 +184,38 @@ model Comment {
   children Comment[] @relation("children")
 }
 
+enum GeneralCommentType {
+  // 文章
+  article
+  // 时间轴
+  moment
+}
+
+// 文章，moment, 或许未来其他模块的 通用评论关系表
+model GeneralComment {
+  id       Int                @id @default(autoincrement())
+  type     GeneralCommentType
+  // 记录对应模块的id
+  moduleId Int
+  content  String
+
+  // 关联用户
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+
+  // 实现层级结构
+  parentCommentId Int?
+  parentComment   GeneralComment?  @relation("replies", fields: [parentCommentId], references: [id])
+  replies         GeneralComment[] @relation("replies")
+
+  // 用户子评论之间的相互回复
+  replyToUserId Int?
+  replyToUser   User?    @relation("replayToUser", fields: [replyToUserId], references: [id]) // 目标用户外键约束
+  createdAt     DateTime @default(now())
+
+  @@index([type, moduleId])
+}
+
 enum MessageType {
   // 系统消息
   system
@@ -190,6 +225,10 @@ enum MessageType {
   like
   // 文章评论
   comment
+  // 时间轴评论
+  moment
+  // 时间轴评论回复
+  momentReply
 }
 
 // 新增消息中心
