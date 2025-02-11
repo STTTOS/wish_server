@@ -119,7 +119,8 @@ router.post(generalCommentApi('/all/:id'), async (ctx) => {
       user: {
         select: {
           id: true,
-          name: true
+          name: true,
+          avatar: true
         }
       },
       replyToUser: {
