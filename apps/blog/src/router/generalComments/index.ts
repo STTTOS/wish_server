@@ -1,4 +1,4 @@
-import dayjs from 'dayjs'
+import moment from 'moment'
 import { Prisma } from '@prisma/blog-client'
 import { isNil, anyPass, isEmpty } from 'ramda'
 
@@ -7,7 +7,7 @@ import { Identity } from '../interface'
 import response from '@/utils/response'
 import combinePath from '@/utils/combinePath'
 import { apiPrefix, timeFormat } from '@/config'
-import { moment, message, generalComment } from '@/models'
+import { message, generalComment, moment as momentModel } from '@/models'
 
 const generalCommentApi = combinePath(apiPrefix)('/generalComment')
 
@@ -36,7 +36,7 @@ router.post(generalCommentApi('/add'), async (ctx) => {
     }
   })
   const user = ctx.state.user
-  const momentDetail = await moment.findUnique({
+  const momentDetail = await momentModel.findUnique({
     where: {
       id: moduleId
     },
@@ -133,7 +133,7 @@ router.post(generalCommentApi('/all/:id'), async (ctx) => {
   const result = list.map((item) => {
     return {
       ...item,
-      createdAt: dayjs(item.createdAt).format(timeFormat)
+      createdAt: moment(item.createdAt).format(timeFormat)
     }
   })
   response.success(ctx, result)
