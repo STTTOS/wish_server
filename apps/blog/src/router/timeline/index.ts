@@ -71,7 +71,11 @@ router.post(timelineApi('/delete/:id'), async (ctx) => {
 
 // 分页查询时间轴
 router.post(timelineApi('/list'), async (ctx) => {
-  const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
+  const {
+    pageSize: take,
+    current: skip,
+    title
+  }: WithPaginationReq & Prisma.TimelineWhereInput = ctx.request.body
   const total = await timeline.count()
   const list = await timeline.findMany({
     take,
@@ -79,6 +83,9 @@ router.post(timelineApi('/list'), async (ctx) => {
       // 默认取最新修改的
       { updatedAt: 'desc' }
     ],
+    where: {
+      title
+    },
     skip: (skip! - 1) * take!,
     include: {
       user: {
