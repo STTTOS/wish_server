@@ -75,7 +75,7 @@ router.post(timelineApi('/list'), async (ctx) => {
     pageSize: take,
     current: skip,
     title
-  }: WithPaginationReq & Prisma.TimelineWhereInput = ctx.request.body
+  }: WithPaginationReq & Prisma.TimelineCreateInput = ctx.request.body
   const total = await timeline.count()
   const list = await timeline.findMany({
     take,
@@ -84,7 +84,9 @@ router.post(timelineApi('/list'), async (ctx) => {
       { updatedAt: 'desc' }
     ],
     where: {
-      title
+      title: {
+        contains: title
+      }
     },
     skip: (skip! - 1) * take!,
     include: {
