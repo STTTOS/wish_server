@@ -139,3 +139,16 @@ router.post(generalCommentApi('/all/:id'), async (ctx) => {
   })
   response.success(ctx, result)
 })
+
+router.post(generalCommentApi('/delete/:id'), async (ctx) => {
+  const id = Number(ctx.params.id)
+
+  if (!id) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  await generalComment.delete({
+    where: { id }
+  })
+  response.success(ctx)
+})
