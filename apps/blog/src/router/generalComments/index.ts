@@ -147,8 +147,18 @@ router.post(generalCommentApi('/delete/:id'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  await generalComment.delete({
-    where: { id }
-  })
-  response.success(ctx)
+  try {
+    await generalComment.delete({
+      where: { id }
+    })
+    response.success(ctx)
+  } catch (error: unknown) {
+    const { code } = error as { code: string }
+
+    const errMsg = (() => {
+      if (code === 'P2025') return '评论不存在'
+      return '系统异常'
+    })()
+    response.error(ctx, 500, errMsg)
+  }
 })
