@@ -147,6 +147,16 @@ router.post(generalCommentApi('/delete/:id'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
+  const detail = await generalComment.findUnique({
+    where: {
+      id
+    }
+  })
+  const user = ctx.state.user
+
+  if (user?.id !== detail?.userId) {
+    response.error(ctx, 403, '非法操作')
+  }
   try {
     await generalComment.delete({
       where: { id }

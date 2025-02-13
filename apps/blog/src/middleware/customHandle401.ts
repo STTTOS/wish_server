@@ -23,7 +23,8 @@ const paths = [
   // 查询moments
   /^\/api\/timeline\/moment\/\d*$/,
   // Moment分享 查询详情
-  /^\/api\/timeline\/moment\/share\/\d*$/
+  /^\/api\/timeline\/moment\/share\/\d*$/,
+  /^\/api\/generalComment\/all/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
