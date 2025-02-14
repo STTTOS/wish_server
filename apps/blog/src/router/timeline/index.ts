@@ -557,7 +557,9 @@ router.post(timelineApi('/moments'), async (ctx) => {
   })
   const list = rows.map((item) => ({
     ...item,
-    createdAt: Moment(item.createdAt).format(timeFormat)
+    createdAt: Moment(item.createdAt).format(timeFormat),
+    likes: item.likes?.map((item) => item.user),
+    userId: item.timeline?.user?.id
   }))
   response.success(ctx, withList(list, total))
 })
