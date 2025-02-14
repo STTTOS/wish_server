@@ -520,7 +520,7 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
 })
 
 // 获取所有的moments, 按照创建时间倒序
-router.post(timelineApi('moments'), async (ctx) => {
+router.post(timelineApi('/moments'), async (ctx) => {
   const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
 
   const total = await moment.count()
