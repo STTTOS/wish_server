@@ -518,3 +518,22 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
 
   response.success(ctx, { id })
 })
+
+// 获取所有的moments, 按照创建时间倒序
+router.post(timelineApi('moments'), async (ctx) => {
+  const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
+
+  const total = await moment.count()
+  const rows = await moment.findMany({
+    take,
+    skip: (skip! - 1) * take!,
+    orderBy: {
+      createdAt: 'desc'
+    }
+  })
+  const list = rows.map((item) => ({
+    ...item,
+    createdAt: Moment(item.createdAt).format(timeFormat)
+  }))
+  response.success(ctx, withList(list, total))
+})
