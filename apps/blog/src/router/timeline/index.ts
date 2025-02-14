@@ -563,3 +563,16 @@ router.post(timelineApi('/moments'), async (ctx) => {
   }))
   response.success(ctx, withList(list, total))
 })
+
+router.post(timelineApi('/moments/unReadCount'), async (ctx) => {
+  const { startDate } = ctx.request.body
+
+  const count = await moment.count({
+    where: {
+      createdAt: {
+        gte: startDate
+      }
+    }
+  })
+  response.success(ctx, count)
+})
