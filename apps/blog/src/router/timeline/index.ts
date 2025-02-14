@@ -529,6 +529,24 @@ router.post(timelineApi('/moments'), async (ctx) => {
     skip: (skip! - 1) * take!,
     orderBy: {
       createdAt: 'desc'
+    },
+    include: {
+      images: true,
+      likes: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              avatar: true
+            }
+          }
+        }
+      },
+      timeline: {
+        select: {
+          userId: true
+        }
+      }
     }
   })
   const list = rows.map((item) => ({
