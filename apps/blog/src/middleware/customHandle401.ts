@@ -24,6 +24,7 @@ const paths = [
   /^\/api\/timeline\/moment\/\d*$/,
   // Moment分享 查询详情
   /^\/api\/timeline\/moment\/share\/\d*$/,
+  /^\/api\/timeline\/moments/,
   /^\/api\/generalComment\/all/
 ]
 const customHandle401 = async (
