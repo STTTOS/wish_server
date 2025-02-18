@@ -36,6 +36,15 @@ app.use(
     }
   })
 )
+// 访问网站静态文件
+app.use(async (ctx, next) => {
+  if (ctx.path === '/public/index.html' || ctx.path === '/index.html') {
+    // 不缓存 index.html
+    ctx.set('Cache-Control', 'max-age=0')
+  }
+  await next()
+})
+
 // 访问 网站静态文件
 app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
 
