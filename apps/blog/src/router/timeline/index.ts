@@ -381,7 +381,10 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     current: _skip,
     keyword,
     order
-  }: FindTimelineInput & { keyword?: string } = ctx.request.body
+  }: Omit<FindTimelineInput, 'order'> & {
+    keyword?: string
+    order?: 'desc' | 'asc'
+  } = ctx.request.body
 
   // 不允许一次性请求超过3条数据
   const skip = Math.min(100, Number(_skip))
@@ -426,7 +429,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       }
     },
     orderBy: {
-      createdAt: order === 'ascend' ? 'asc' : 'desc'
+      createdAt: order
     }
   })
   response.success(
