@@ -45,7 +45,8 @@ router.post(generalCommentApi('/add'), async (ctx) => {
     }
   })
   // 回复的评论
-  const isSelfReply = momentDetail?.timeline?.userId !== user?.id
+  const isSelfReply = momentDetail?.timeline?.userId === user?.id
+
   if (momentDetail && !isSelfReply) {
     message.create({
       data: {
