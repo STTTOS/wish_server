@@ -249,6 +249,10 @@ model Message {
   readBy  Json    @default("[]") @db.Json
 }
 
+enum Order {
+  desc
+  asc
+}
 model Timeline {
   id        Int      @id @default(autoincrement())
   title     String
@@ -262,6 +266,7 @@ model Timeline {
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   moments Moment[]
+  order Order? @default(desc)
 }
 
 model Moment {

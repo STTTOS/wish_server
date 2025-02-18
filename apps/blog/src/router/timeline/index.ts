@@ -13,7 +13,8 @@ import { moment, message, timeline, momentLike } from '@/models'
 const timelineApi = combinePath(apiPrefix)('/timeline')
 
 router.post(timelineApi('/create'), async (ctx) => {
-  const { title, desc, cover }: Prisma.TimelineCreateInput = ctx.request.body
+  const { title, desc, cover, order }: Prisma.TimelineCreateInput =
+    ctx.request.body
   const userId = ctx.state.user?.id
   if (!title || !userId) {
     response.error(ctx, 400, '参数错误')
@@ -24,7 +25,8 @@ router.post(timelineApi('/create'), async (ctx) => {
       title,
       desc,
       userId,
-      cover
+      cover,
+      order
     }
   })
   response.success(ctx, { id })
@@ -38,7 +40,7 @@ router.post(timelineApi('/update/:id'), async (ctx) => {
     return
   }
 
-  const { title, cover, desc } = ctx.request.body
+  const { title, cover, desc, order } = ctx.request.body
   if (!title) {
     response.error(ctx, 400, '参数错误')
     return
@@ -50,7 +52,8 @@ router.post(timelineApi('/update/:id'), async (ctx) => {
     data: {
       title,
       cover,
-      desc
+      desc,
+      order
     }
   })
   response.success(ctx)
@@ -376,7 +379,8 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const {
     pageSize: take,
     current: _skip,
-    keyword
+    keyword,
+    order
   }: FindTimelineInput & { keyword?: string } = ctx.request.body
 
   // 不允许一次性请求超过3条数据
@@ -422,7 +426,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       }
     },
     orderBy: {
-      createdAt: 'desc'
+      createdAt: order === 'ascend' ? 'asc' : 'desc'
     }
   })
   response.success(
