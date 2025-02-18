@@ -37,7 +37,7 @@ app.use(
   })
 )
 // 访问 网站静态文件
-app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
+app.use(mount('/', serve(join(__dirname, '../public'))))
 
 // 访问 网站静态文件
 app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
