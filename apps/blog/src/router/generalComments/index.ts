@@ -48,7 +48,7 @@ router.post(generalCommentApi('/add'), async (ctx) => {
   const isSelfReply = momentDetail?.timeline?.userId === user?.id
 
   if (momentDetail && !isSelfReply) {
-    message.create({
+    await message.create({
       data: {
         senderId: user?.id,
         // 如果replyUserId存在， 则是回复的对应的评论
