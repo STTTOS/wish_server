@@ -400,8 +400,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const {
     pageSize: take,
     current: _skip,
-    keyword,
-    order
+    keyword
   }: Omit<FindTimelineInput, 'order'> & {
     keyword?: string
     order?: 'desc' | 'asc'
@@ -419,7 +418,6 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const timelineWhere: Prisma.TimelineWhereInput = {
     id: Number(timelineId)
   }
-
   const where: Prisma.MomentWhereInput = {
     AND: [
       { timeline: timelineWhere },
@@ -439,6 +437,18 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const total = await moment.count({
     where
   })
+  const order =
+    (
+      await timeline.findUnique({
+        where: {
+          id: Number(timelineId)
+        },
+        select: {
+          order: true
+        }
+      })
+    )?.order || 'desc'
+
   const list = await moment.findMany({
     take,
     skip: (skip! - 1) * take!,

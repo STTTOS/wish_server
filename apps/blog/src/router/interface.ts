@@ -1,7 +1,7 @@
 export interface WithPaginationReq {
   current?: number
   pageSize?: number
-  order?: 'descend' | 'ascend'
+  // order?: 'descend' | 'ascend'
 }
 
 export interface BizError {
