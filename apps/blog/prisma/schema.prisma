@@ -253,6 +253,7 @@ enum Order {
   desc
   asc
 }
+
 model Timeline {
   id        Int      @id @default(autoincrement())
   title     String
@@ -266,18 +267,19 @@ model Timeline {
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   moments Moment[]
-  order Order? @default(desc)
+  order   Order?   @default(desc)
 }
 
 model Moment {
   id        Int      @id @default(autoincrement())
   createdAt DateTime
 
-  cover   String?
+  cover     String?
   // 支持Markdown
-  content String?        @db.LongText
-  images  MomentImages[]
-  likes   MomentLike[]
+  content   String?        @db.LongText
+  images    MomentImages[]
+  likes     MomentLike[]
+  isPrivate Boolean        @default(false)
 
   timeline   Timeline? @relation(fields: [timelineId], references: [id], onDelete: Cascade)
   timelineId Int?

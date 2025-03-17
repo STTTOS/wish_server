@@ -83,6 +83,7 @@ router.post(timelineApi('/list'), async (ctx) => {
     Pick<Prisma.TimelineCreateInput, 'title'> & {
       createdAt: null | [string, string]
     } = ctx.request.body
+
   const total = await timeline.count()
   const list = await timeline.findMany({
     take,
@@ -165,7 +166,8 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
     content,
     cover,
     createdAt,
-    images
+    images,
+    isPrivate
   }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Omit<Prisma.MomentCreateInput, 'images'> & { images: any[] } =
     ctx.request.body
@@ -194,6 +196,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
       content,
       cover,
       createdAt,
+      isPrivate,
       images: {
         createMany: {
           data: images
@@ -238,8 +241,12 @@ async function isSameUser(
 
 router.post(timelineApi('/moment/update/:id'), async (ctx) => {
   const momentId = Number(ctx.params.id)
-  const data: { timelineId: number; images: { sort: number; src: string }[] } =
-    ctx.request.body
+  const data: {
+    timelineId: number
+    images: { sort: number; src: string }[]
+    isPrivate?: boolean
+  } = ctx.request.body
+
   const userId = ctx.state.user?.id
   const { timelineId } = data
   if (!momentId || !timelineId) {
@@ -386,6 +393,8 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     order?: 'desc' | 'asc'
   } = ctx.request.body
 
+  const user = ctx.state.user
+
   // 不允许一次性请求超过3条数据
   const skip = Math.min(100, Number(_skip))
   if ([timelineId, take, skip].some(isNil)) {
@@ -400,7 +409,17 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
   const where: Prisma.MomentWhereInput = {
     AND: [
       { timeline: timelineWhere },
-      { content: keyword ? { contains: keyword } : undefined }
+      { content: keyword ? { contains: keyword } : undefined },
+      {
+        OR: [
+          {
+            timeline: {
+              userId: user?.id
+            }
+          },
+          { isPrivate: false }
+        ]
+      }
     ]
   }
   const total = await moment.count({
@@ -530,12 +549,23 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
 router.post(timelineApi('/moments'), async (ctx) => {
   const { pageSize: take, current: skip }: WithPaginationReq = ctx.request.body
 
+  const user = ctx.state.user
   const total = await moment.count()
   const rows = await moment.findMany({
     take,
     skip: (skip! - 1) * take!,
     orderBy: {
       createdAt: 'desc'
+    },
+    where: {
+      OR: [
+        {
+          timeline: {
+            userId: user?.id
+          }
+        },
+        { isPrivate: false }
+      ]
     },
     include: {
       images: true,
