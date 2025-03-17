@@ -143,7 +143,7 @@ router.post(timelineApi('/detail/:timelineId'), async (ctx) => {
     where: {
       id: Number(timelineId)
     },
-    select: {
+    include: {
       user: {
         select: {
           username: true,
@@ -151,8 +151,7 @@ router.post(timelineApi('/detail/:timelineId'), async (ctx) => {
           id: true,
           avatar: true
         }
-      },
-      coUserIds: true
+      }
     }
   })
   if (!data) {
