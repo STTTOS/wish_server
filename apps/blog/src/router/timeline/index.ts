@@ -152,6 +152,9 @@ router.post(timelineApi('/detail/:timelineId'), async (ctx) => {
           avatar: true
         }
       }
+    },
+    select: {
+      coUserIds: true
     }
   })
   if (!data) {
@@ -457,8 +460,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       },
       timeline: {
         select: {
-          userId: true,
-          coUserIds: true
+          userId: true
         }
       }
     },
