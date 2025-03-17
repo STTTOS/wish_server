@@ -457,7 +457,8 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       },
       timeline: {
         select: {
-          userId: true
+          userId: true,
+          coUserIds: true
         }
       }
     },
