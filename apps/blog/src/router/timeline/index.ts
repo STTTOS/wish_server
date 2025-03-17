@@ -246,7 +246,6 @@ router.post(timelineApi('/moment/update/:id'), async (ctx) => {
     images: { sort: number; src: string }[]
     isPrivate?: boolean
   } = ctx.request.body
-  delete data.isPrivate
 
   const userId = ctx.state.user?.id
   const { timelineId } = data
