@@ -604,11 +604,20 @@ router.post(timelineApi('/moments'), async (ctx) => {
 router.post(timelineApi('/moments/unReadCount'), async (ctx) => {
   const { startDate } = ctx.request.body
 
+  const user = ctx.state.user
   const count = await moment.count({
     where: {
       createdAt: {
         gte: startDate
-      }
+      },
+      OR: [
+        {
+          timeline: {
+            userId: user?.id
+          }
+        },
+        { isPrivate: false }
+      ]
     }
   })
   response.success(ctx, count)
