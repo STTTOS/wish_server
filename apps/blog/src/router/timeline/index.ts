@@ -13,10 +13,10 @@ import { moment, message, timeline, momentLike } from '@/models'
 const timelineApi = combinePath(apiPrefix)('/timeline')
 
 router.post(timelineApi('/create'), async (ctx) => {
-  const { title, desc, cover, order }: Prisma.TimelineCreateInput =
+  const { title, desc, cover, order, coUserIds }: Prisma.TimelineCreateInput =
     ctx.request.body
   const userId = ctx.state.user?.id
-  if (!title || !userId) {
+  if (!title || !userId || (coUserIds && !Array.isArray(coUserIds))) {
     response.error(ctx, 400, '参数错误')
     return
   }
@@ -26,7 +26,8 @@ router.post(timelineApi('/create'), async (ctx) => {
       desc,
       userId,
       cover,
-      order
+      order,
+      coUserIds
     }
   })
   response.success(ctx, { id })
@@ -35,13 +36,13 @@ router.post(timelineApi('/create'), async (ctx) => {
 router.post(timelineApi('/update/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   const userId = ctx.state.user?.id
-  if (!(await isSameUser({ timelineId: id }, userId))) {
+  if (!(await canEdit({ timelineId: id }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
 
-  const { title, cover, desc, order } = ctx.request.body
-  if (!title) {
+  const { title, cover, desc, order, coUserIds } = ctx.request.body
+  if (!title || (coUserIds && !Array.isArray(coUserIds))) {
     response.error(ctx, 400, '参数错误')
     return
   }
@@ -53,7 +54,8 @@ router.post(timelineApi('/update/:id'), async (ctx) => {
       title,
       cover,
       desc,
-      order
+      order,
+      coUserIds
     }
   })
   response.success(ctx)
@@ -61,7 +63,7 @@ router.post(timelineApi('/update/:id'), async (ctx) => {
 router.post(timelineApi('/delete/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   const userId = ctx.state.user?.id
-  if (!(await isSameUser({ timelineId: id }, userId))) {
+  if (!(await canEdit({ timelineId: id }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
@@ -173,6 +175,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
     ctx.request.body
 
   const userId = ctx.state.user?.id
+
   if (
     [userId, timelineId, createdAt].some(isNil) ||
     [!content, images.length === 0].every(equals(true))
@@ -180,7 +183,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  if (!(await isSameUser({ timelineId }, userId))) {
+  if (!(await canEdit({ timelineId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
@@ -208,11 +211,15 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
   response.success(ctx, { id })
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const parseCoUserIds = (input: any) => {
+  return Array.isArray(input) ? input : []
+}
 /**
  * @description 是否为本人操作
  * @returns
  */
-async function isSameUser(
+async function canEdit(
   { momentId, timelineId }: { momentId?: number; timelineId?: number },
   userId?: number
 ) {
@@ -224,19 +231,26 @@ async function isSameUser(
       include: {
         timeline: {
           select: {
-            userId: true
+            userId: true,
+            coUserIds: true
           }
         }
       }
     })
-    return userId === target?.timeline?.userId
+    return (
+      userId === target?.timeline?.userId ||
+      parseCoUserIds(target?.timeline?.coUserIds).includes(userId)
+    )
   }
   const target = await timeline.findUnique({
     where: {
       id: timelineId
     }
   })
-  return userId === target?.userId
+  return (
+    userId === target?.userId ||
+    parseCoUserIds(target?.coUserIds).includes(userId)
+  )
 }
 
 router.post(timelineApi('/moment/update/:id'), async (ctx) => {
@@ -253,7 +267,7 @@ router.post(timelineApi('/moment/update/:id'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  if (!(await isSameUser({ momentId }, userId))) {
+  if (!(await canEdit({ momentId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
@@ -289,7 +303,7 @@ router.post(timelineApi('/moment/delete/:id'), async (ctx) => {
   }
 
   const userId = ctx.state.user?.id
-  if (!(await isSameUser({ momentId: id }, userId))) {
+  if (!(await canEdit({ momentId: id }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }
@@ -512,7 +526,7 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
     return
   }
 
-  if (!(await isSameUser({ momentId }, userId))) {
+  if (!(await canEdit({ momentId }, userId))) {
     response.error(ctx, 403, '非法操作')
     return
   }

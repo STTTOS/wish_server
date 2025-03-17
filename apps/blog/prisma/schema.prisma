@@ -263,12 +263,15 @@ model Timeline {
   createdAt DateTime @default(now())
   // 改为手动控制， 以最新的moment createdAt或者update为准
   updatedAt DateTime @default(now())
+  // 可以编辑的用户
+  coUserIds Json     @default("[]")
 
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   moments Moment[]
   order   Order?   @default(desc)
 }
+
 
 model Moment {
   id        Int      @id @default(autoincrement())
