@@ -200,6 +200,7 @@ router.post(timelineApi('/moment/add/:timelineId'), async (ctx) => {
       cover,
       createdAt,
       isPrivate,
+      ownerId: userId,
       images: {
         createMany: {
           data: images
@@ -469,6 +470,12 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
         select: {
           userId: true
         }
+      },
+      owner: {
+        select: {
+          avatar: true,
+          id: true
+        }
       }
     },
     orderBy: {
@@ -601,6 +608,12 @@ router.post(timelineApi('/moments'), async (ctx) => {
               avatar: true
             }
           }
+        }
+      },
+      owner: {
+        select: {
+          avatar: true,
+          id: true
         }
       },
       timeline: {

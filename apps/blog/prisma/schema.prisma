@@ -47,6 +47,7 @@ model User {
   eBooks EBook[]
 
   comments        Comment[]
+  moments         Moment[]
   generalComments GeneralComment[]
   replayToUser    GeneralComment[] @relation("replayToUser")
 
@@ -269,9 +270,9 @@ model Timeline {
   userId  Int?
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   moments Moment[]
+  
   order   Order?   @default(desc)
 }
-
 
 model Moment {
   id        Int      @id @default(autoincrement())
@@ -283,6 +284,9 @@ model Moment {
   images    MomentImages[]
   likes     MomentLike[]
   isPrivate Boolean        @default(false)
+
+  ownerId   Int?
+  owner     User?          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   timeline   Timeline? @relation(fields: [timelineId], references: [id], onDelete: Cascade)
   timelineId Int?
