@@ -44,15 +44,15 @@ router.post(generalCommentApi('/add'), async (ctx) => {
       timeline: true
     }
   })
-  // 回复的评论
-  const isSelfReply = momentDetail?.timeline?.userId === user?.id
+  // 回复自己的评论
+  const isSelfReply = momentDetail?.ownerId === user?.id
 
   if (momentDetail && !isSelfReply) {
     await message.create({
       data: {
         senderId: user?.id,
         // 如果replyUserId存在， 则是回复的对应的评论
-        receiverId: replyToUserId || momentDetail.timeline?.userId,
+        receiverId: replyToUserId || momentDetail.ownerId,
         content,
         type: replyToUserId ? 'momentReply' : 'moment',
         extra: {
