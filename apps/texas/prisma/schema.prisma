@@ -21,10 +21,8 @@ model User {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @default(now())
   records    Record[]
-  // matches   Match[]
+  matches    Match[]
   deletedAt  DateTime?
-  Match      Match?       @relation(fields: [matchId], references: [id])
-  matchId    Int?
   win        Win[]
   playerHand PlayerHand[]
 }
