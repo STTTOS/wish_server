@@ -9,7 +9,7 @@ const loginUsers = new Map<number, { sessionId: string; time: string }>()
 const paths = [
   /^\/api\/room\/players\/all/,
   /^\/api\/room\/join/,
-  /^\/api\/room\/create/
+  /^\/api\/room\/allPlayers/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,

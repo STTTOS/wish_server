@@ -105,3 +105,8 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
   })
   response.success(ctx, players)
 })
+
+// 获取所有房间
+router.post(roomApi('/all'), async (ctx) => {
+  response.success(ctx, Array.from(rooms.keys()))
+})
