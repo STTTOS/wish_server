@@ -1,0 +1,140 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/texas-client"
+}
+
+model User {
+  id       Int     @id @default(autoincrement())
+  balance  Float
+  // 用户的头像
+  avatar   String
+  // 用户通过weChat注册的话会关联weChatId
+  weChatId String?
+  // 游戏昵称
+  name     String?
+
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now())
+  records    Record[]
+  // matches   Match[]
+  deletedAt  DateTime?
+  Match      Match?       @relation(fields: [matchId], references: [id])
+  matchId    Int?
+  win        Win[]
+  playerHand PlayerHand[]
+}
+
+enum Action {
+  check
+  fold
+  bet
+  raise
+  allIn
+}
+
+enum Stage {
+  preFlop
+  flop
+  turn
+  river
+}
+
+enum PresentationType {
+  //皇家同花顺
+  z
+  //同花顺
+  y
+  //四条
+  x
+  //葫芦
+  w
+  //同花
+  v
+  //顺子
+  u
+  //三条
+  t
+  //两对
+  s
+  //一对
+  r
+  //高牌
+  q
+}
+
+// 记录玩家手牌
+model PlayerHand {
+  id       Int  @id @default(autoincrement())
+  // 对应的对局 ID
+  matchId  Int
+  // 对应的玩家 ID
+  playerId Int
+  // string[]
+  hand     Json
+
+  match  Match @relation(fields: [matchId], references: [id])
+  player User  @relation(fields: [playerId], references: [id])
+}
+
+// 对局信息
+model Match {
+  id             Int              @id @default(autoincrement())
+  // 对局开始的时间
+  startedAt      DateTime         @default(now())
+  // 对局结束的时间
+  endedAt        DateTime
+  playersCount   Int
+  // 总的下注额度
+  totalBetAmount Float
+  playerId       Int
+  // 记录游戏在哪个阶段结束的
+  endStage       Stage            @default(preFlop)
+  // 公共牌
+  commonPokes    Json
+  // 存储计算后的最大牌力
+  maximumType    PresentationType
+  // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
+  maximumPokes   Json
+
+  // 各阶段开始的时间
+  stageStartTimes Json
+  // 各阶段结束的时间
+  stageEndTimes   Json
+  players         User[]
+  winners         Win[]
+  records         Record[]
+  playerHands     PlayerHand[]
+}
+
+// 用户的行为记录表
+model Record {
+  id     Int    @id @default(autoincrement())
+  // 用户的行为
+  action Action
+  // 下注金额, 过牌等行为默认为0
+  amount Float  @default(0)
+  // 记录用户在哪个阶段发生的行为
+  stage  Stage
+
+  playerId  Int
+  player    User     @relation(fields: [playerId], references: [id])
+  createdAt DateTime @default(now())
+
+  match   Match? @relation(fields: [matchId], references: [id])
+  matchId Int?
+}
+
+// 记录游戏胜利的玩家
+model Win {
+  id       Int @id @default(autoincrement())
+  matchId  Int // 对应的对局 ID
+  playerId Int // 对应的玩家 ID
+
+  match Match @relation(fields: [matchId], references: [id])
+  user  User  @relation(fields: [playerId], references: [id])
+}

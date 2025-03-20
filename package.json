@@ -33,6 +33,7 @@
     "node-cron": "^3.0.3",
     "ramda": "^0.28.0",
     "sharp": "^0.33.3",
+    "texas-poker-core": "^1.0.15",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

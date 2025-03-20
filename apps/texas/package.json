@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "private": true,
-  "description": "财务后台服务",
-  "name": "@wishufree/finance-server",
+  "description": "德州后台服务",
+  "name": "@wishufree/texas-server",
   "scripts": {
     "build": "tsc",
     "dev": "npm run db:sync && nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",

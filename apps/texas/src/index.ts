@@ -3,15 +3,14 @@ import type { BizError } from './router/interface'
 import Koa from 'koa'
 import { join } from 'path'
 import cors from '@koa/cors'
-import mount from 'koa-mount'
-import serve from 'koa-static'
+import koaJwt from 'koa-jwt'
 import koaBody from 'koa-body'
-import { historyApiFallback } from 'koa2-connect-history-api-fallback'
 
 import router from './router'
+import { port } from './config'
 import { logger } from './logger'
 import response from './utils/response'
-import { port, cacheTime as maxAge } from './config'
+import customHandle401 from './middleware/customHandle401'
 
 const app = new Koa()
 //统一错误处理
@@ -21,6 +20,8 @@ app.use(async (ctx, next) => {
   } catch (err) {
     const { status = 500, message = '系统异常' } = err as BizError
 
+    // eslint-disable-next-line no-console
+    console.log(err)
     logger.error(message)
     response.error(ctx, status, message)
   }
@@ -34,15 +35,17 @@ app.use(async (ctx, next) => {
 // 请求跨域
 app.use(cors())
 
-// 配合history模式
-// 放在静态资源服务中间件前面加载
-// 404  重定向到 /public/index.html
-app.use(historyApiFallback({ index: '/index.html' }))
-
-// 访问 网站静态文件
-app.use(serve(join(__dirname, '../public'), { maxAge }))
-// 注册静态资源前缀 /static
-app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
+app.use(
+  koaJwt({
+    secret: process.env.SECRET_KEY!,
+    cookie: 'token',
+    // 继续移交给下一个中间件
+    // 由`customHandle401`决定如何处理无登录态
+    passthrough: true
+  })
+)
+// Custom 401 handling
+app.use(customHandle401)
 
 // 解析请求体
 app.use(
