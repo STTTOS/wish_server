@@ -90,8 +90,9 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
 })
 
 // 获取房间下所有玩家信息
-router.post(roomApi('/players/all'), async (ctx) => {
-  const { roomId }: { roomId: string } = ctx.request.body
+router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+  // const { roomId }: { roomId: string } = ctx.request.body
   if (!roomId) {
     response.error(ctx, 400, '参数异常')
     return
