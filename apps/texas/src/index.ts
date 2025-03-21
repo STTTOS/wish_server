@@ -18,12 +18,11 @@ app.use(async (ctx, next) => {
   try {
     await next()
   } catch (err) {
-    const { status = 500, message = '系统异常' } = err as BizError
+    const { status = 500 } = err as BizError
 
     // eslint-disable-next-line no-console
-    console.log(err)
-    logger.error(message)
-    response.error(ctx, status, message)
+    logger.error(err)
+    response.error(ctx, status, '系统异常')
   }
 })
 

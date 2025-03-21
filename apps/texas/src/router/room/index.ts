@@ -18,15 +18,14 @@ router.post(roomApi('/create'), async (ctx) => {
   const {
     lowestBetAmount,
     maximumCountOfPlayers,
-    allowPlayersToWatch,
-    userId
+    allowPlayersToWatch
   }: {
     lowestBetAmount: number
     maximumCountOfPlayers: number
     allowPlayersToWatch: boolean
     userId: number
   } = ctx.request.body
-  // const user = ctx.state.user!
+  const userId = ctx.state.user!.id
 
   if (
     [lowestBetAmount, maximumCountOfPlayers, allowPlayersToWatch, userId].some(
@@ -44,6 +43,14 @@ router.post(roomApi('/create'), async (ctx) => {
     response.error(ctx, 400, '玩家不能超过10个')
     return
   }
+  if (
+    Array.from(rooms.values())
+      .map((item) => item.ownerId)
+      .includes(userId)
+  ) {
+    response.error(ctx, 400, '不可重复创建房间')
+    return
+  }
 
   const roomId = uuidv4()
   const texas = initialGame({
@@ -51,7 +58,7 @@ router.post(roomApi('/create'), async (ctx) => {
     maximumCountOfPlayers,
     allowPlayersToWatch
   })
-  rooms.set(roomId, texas)
+  rooms.set(roomId, { texas, ownerId: userId })
 
   const userInfo = await user.findUnique({
     where: {
@@ -71,13 +78,19 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   // const {} = ctx.request.body
 
-  const texas = rooms.get(roomId)
+  const texas = rooms.get(roomId)?.texas
   if (!texas) {
-    response.error(ctx, 500, '游戏进程异常')
+    response.error(ctx, 500, '房间不存在')
     return
   }
+  // TODO: 以后这个方法根据登录人
   // const player = ctx.state.user!
   const { userId } = ctx.request.body
+
+  if (texas.room.has(userId)) {
+    response.error(ctx, 400, '你已在房间中, 不可重复加入')
+    return
+  }
   const userInfo = await user.findUnique({
     where: {
       id: userId
@@ -100,7 +113,7 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     response.error(ctx, 400, '参数异常')
     return
   }
-  const players = rooms.get(roomId)?.dealer.map((player) => {
+  const players = rooms.get(roomId)?.texas.dealer.map((player) => {
     return {
       ...player.getUserInfo(),
       role: player.getRole()
@@ -111,5 +124,13 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
 
 // 获取所有房间
 router.post(roomApi('/all'), async (ctx) => {
-  response.success(ctx, Array.from(rooms.keys()))
+  response.success(
+    ctx,
+    Array.from(rooms.entries()).map(([roomId, { ownerId }]) => {
+      return {
+        roomId,
+        ownerId
+      }
+    })
+  )
 })

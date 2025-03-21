@@ -16,7 +16,7 @@ model User {
   // 用户通过weChat注册的话会关联weChatId
   weChatId String?
   // 游戏昵称
-  name     String?
+  name     String
 
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @default(now())

@@ -40,7 +40,7 @@ router.post(toolsApi('/bet'), async (ctx) => {
       playerId: user.id
     }
   })
-  const texas = rooms.get(roomId)
+  const texas = rooms.get(roomId)?.texas
   // TODO: 特殊的错误码, 并告知客户端中止游戏, 并回滚
   if (!texas) throw new Error('游戏异常')
 
