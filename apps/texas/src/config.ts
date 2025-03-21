@@ -14,3 +14,5 @@ export const cacheTime = 30 * 24 * 60 * 60
 export const secretKey = process.env.SECRET_KEY!
 
 export const apiNeededToAuth = []
+
+export const tokenValidatedTime = 30 * 24 * 60 * 60

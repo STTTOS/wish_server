@@ -11,6 +11,9 @@ import combinePath from '../../utils/combinePath'
 
 const roomApi = combinePath(apiPrefix)('/room')
 
+/**
+ * 创建房间
+ */
 router.post(roomApi('/create'), async (ctx) => {
   const {
     lowestBetAmount,
