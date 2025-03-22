@@ -20,10 +20,10 @@ router.post(roomApi('/create'), async (ctx) => {
     maximumCountOfPlayers,
     allowPlayersToWatch
   }: {
+    userId: number
     lowestBetAmount: number
     maximumCountOfPlayers: number
     allowPlayersToWatch: boolean
-    userId: number
   } = ctx.request.body
   const userId = ctx.state.user!.id
 
@@ -45,10 +45,19 @@ router.post(roomApi('/create'), async (ctx) => {
   }
   if (
     Array.from(rooms.values())
-      .map((item) => item.ownerId)
+      .map((texas) => texas.room.owner?.getUserInfo().id)
       .includes(userId)
   ) {
-    response.error(ctx, 400, '不可重复创建房间')
+    response.error(ctx, 2000, '不可重复创建房间')
+    return
+  }
+  const userInfo = await user.findUnique({
+    where: {
+      id: userId
+    }
+  })
+  if (!userInfo) {
+    response.error(ctx, 2000, '游戏数据异常')
     return
   }
 
@@ -56,21 +65,10 @@ router.post(roomApi('/create'), async (ctx) => {
   const texas = initialGame({
     lowestBetAmount,
     maximumCountOfPlayers,
-    allowPlayersToWatch
+    allowPlayersToWatch,
+    user: userInfo
   })
-  rooms.set(roomId, { texas, ownerId: userId })
-
-  const userInfo = await user.findUnique({
-    where: {
-      id: userId
-    }
-  })
-  if (!userInfo) {
-    response.error(ctx, 500, '游戏数据异常')
-    return
-  }
-  const player = texas.createPlayer(userInfo)
-  texas.room.addPlayer(player)
+  rooms.set(roomId, texas)
   response.success(ctx, { roomId }, '房间创建成功')
 })
 
@@ -78,31 +76,56 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   // const {} = ctx.request.body
 
-  const texas = rooms.get(roomId)?.texas
+  const texas = rooms.get(roomId)
   if (!texas) {
-    response.error(ctx, 500, '房间不存在')
+    response.error(ctx, 2000, '房间不存在')
     return
   }
   // TODO: 以后这个方法根据登录人
   // const player = ctx.state.user!
   const { userId } = ctx.request.body
 
-  if (texas.room.has(userId)) {
-    response.error(ctx, 400, '你已在房间中, 不可重复加入')
-    return
-  }
   const userInfo = await user.findUnique({
-    where: {
-      id: userId
-    }
+    where: { id: userId }
   })
   if (!userInfo) {
-    response.error(ctx, 500, '服务器数据异常')
+    response.error(ctx, 2000, '用户不存在')
     return
   }
-  texas.room.addPlayer(texas.createPlayer(userInfo))
-  // 此处需要使用w推送消息
-  response.success(ctx)
+  try {
+    if (texas.room.has(userId)) {
+      response.error(ctx, 2000, '用户已经在房间中, 不可重复加入')
+      return
+    }
+    texas.room.join(texas.createPlayer(userInfo))
+    response.success(ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    response.error(ctx, 2000, error.message)
+  }
+})
+
+router.post(roomApi('/seat/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+
+  const { userId }: { userId: number } = ctx.request.body
+  if (!userId) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const texas = rooms.get(roomId)
+
+  if (!texas) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  try {
+    texas?.room.seatById(userId)
+    response.success(ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    response.error(ctx, 2000, error.message)
+  }
 })
 
 // 获取房间下所有玩家信息
@@ -113,24 +136,26 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     response.error(ctx, 400, '参数异常')
     return
   }
-  const players = rooms.get(roomId)?.texas.dealer.map((player) => {
-    return {
-      ...player.getUserInfo(),
-      role: player.getRole()
-    }
+  const texas = rooms.get(roomId)
+
+  const [playersOnSeat, playersHang] = (['on-set', 'hang'] as const).map(
+    (status) =>
+      texas?.room
+        .getPlayersBySeatStatus(status)
+        .map((player) => player.getUserInfo())
+  )
+  response.success(ctx, {
+    playersOnSeat,
+    playersHang
   })
-  response.success(ctx, players)
 })
 
 // 获取所有房间
 router.post(roomApi('/all'), async (ctx) => {
   response.success(
     ctx,
-    Array.from(rooms.entries()).map(([roomId, { ownerId }]) => {
-      return {
-        roomId,
-        ownerId
-      }
+    Array.from(rooms.values()).map((texas) => {
+      return texas.room.getBaseInfo()
     })
   )
 })

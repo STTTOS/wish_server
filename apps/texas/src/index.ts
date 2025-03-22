@@ -11,6 +11,7 @@ import { port } from './config'
 import { logger } from './logger'
 import response from './utils/response'
 import customHandle401 from './middleware/customHandle401'
+import loggerMiddleware from './middleware/loggerMiddleware'
 
 const app = new Koa()
 //统一错误处理
@@ -59,7 +60,7 @@ app.use(
     }
   })
 )
-
+app.use(loggerMiddleware)
 //路由中间件
 app.use(router.routes())
 
