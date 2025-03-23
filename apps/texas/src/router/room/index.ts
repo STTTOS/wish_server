@@ -149,6 +149,20 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     playersHang
   })
 })
+router.post(roomApi('delete/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+  if (!roomId) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  if (!rooms.has(roomId)) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+
+  rooms.delete(roomId)
+  response.success(ctx, null, '删除成功')
+})
 
 // 获取所有房间
 router.post(roomApi('/all'), async (ctx) => {
