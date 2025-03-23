@@ -154,8 +154,11 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
 router.post(roomApi('/all'), async (ctx) => {
   response.success(
     ctx,
-    Array.from(rooms.values()).map((texas) => {
-      return texas.room.getBaseInfo()
+    Array.from(rooms.entries()).map(([id, texas]) => {
+      return {
+        id,
+        ...texas.room.getBaseInfo()
+      }
     })
   )
 })
