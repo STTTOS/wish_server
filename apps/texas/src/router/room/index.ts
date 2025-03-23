@@ -155,8 +155,16 @@ router.post(roomApi('delete/:roomId'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  if (!rooms.has(roomId)) {
+
+  const texas = rooms.get(roomId)
+  if (!texas) {
     response.error(ctx, 2000, '房间不存在')
+    return
+  }
+
+  const ownerId = texas?.room.owner.getUserInfo().id
+  if (ownerId !== ctx.state.user!.id) {
+    response.error(ctx, 401, '非法操作')
     return
   }
 
