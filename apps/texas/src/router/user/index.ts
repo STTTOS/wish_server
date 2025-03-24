@@ -54,7 +54,7 @@ router.post(userApi('/sign'), async (ctx) => {
   }
 })
 
-router.post(userApi('/userInfo'), async (ctx) => {
+router.post(userApi('/info'), async (ctx) => {
   const userId = ctx.state.user!.id
 
   const userInfo = await user.findUnique({
