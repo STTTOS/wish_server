@@ -104,6 +104,31 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     response.error(ctx, 2000, error.message)
   }
 })
+router.post(roomApi('/quit/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+  const texas = rooms.get(roomId)
+  if (!texas) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  if (texas.room.status === 'on') {
+    response.error(ctx, 2000, '游戏正在进行中, 不可退出')
+    return
+  }
+  try {
+    const userId = ctx.state.user!.id
+    const ownerId = texas.room.removeById(userId)
+    if (ownerId) response.success(ctx, { ownerId })
+    // 最后一位玩家离开房间
+    else {
+      rooms.delete(roomId)
+      response.success(ctx)
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    response.error(ctx, 2000, error.message)
+  }
+})
 
 router.post(roomApi('/seat/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
