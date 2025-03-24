@@ -62,7 +62,7 @@ router.post(userApi('/info'), async (ctx) => {
       id: userId
     }
   })
-  if (userInfo) {
+  if (!userInfo) {
     response.error(ctx, 2000, '用户不存在')
   } else {
     response.success(ctx, userInfo)
