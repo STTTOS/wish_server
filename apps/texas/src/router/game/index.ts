@@ -22,26 +22,27 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     texas.start()
 
     const { commonPokes } = texas.dealer.getDeck().getPokes()
-    const handPokes = texas.dealer.map((player) => {
+    const positions = texas.dealer.map((player) => {
       return {
         userId: player.getUserInfo().id,
-        pokes: player.getHandPokes()
+        pokes: player.getHandPokes(),
+        role: player.getRole()
       }
     })
-    const activePlayer = texas.controller.activePlayer
+    // const activePlayer = texas.controller.activePlayer
     const matchBaseInfo = {
-      handPokes,
+      positions,
       commonPokes,
       totalPool: 0,
-      stage: texas.controller.stage,
-      activeUser: {
-        id: activePlayer?.getUserInfo().id,
-        allowedActions: activePlayer?.getAllowedActions(),
-        betAmount: {
-          min: 0,
-          max: 0
-        }
-      }
+      stage: texas.controller.stage
+      // activeUser: {
+      //   id: activePlayer?.getUserInfo().id,
+      //   allowedActions: activePlayer?.getAllowedActions(),
+      //   betAmount: {
+      //     min: 0,
+      //     max: 0
+      //   }
+      // }
     }
     response.success(ctx, matchBaseInfo)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
