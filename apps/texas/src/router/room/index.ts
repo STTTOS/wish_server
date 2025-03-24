@@ -149,6 +149,7 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     playersHang
   })
 })
+
 router.post(roomApi('/delete/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   if (!roomId) {

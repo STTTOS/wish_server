@@ -53,3 +53,22 @@ router.post(userApi('/sign'), async (ctx) => {
     )
   }
 })
+
+router.post(userApi('/loginCheck'), async (ctx) => {
+  const userId = ctx.state.user?.id
+
+  if (!userId) {
+    response.error(ctx, 401, '用户未登录')
+  } else {
+    const userInfo = await user.findUnique({
+      where: {
+        id: userId
+      }
+    })
+    if (userInfo) {
+      response.error(ctx, 2000, '用户不存在')
+    } else {
+      response.success(ctx, userInfo)
+    }
+  }
+})
