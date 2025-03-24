@@ -149,7 +149,7 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     playersHang
   })
 })
-router.post(roomApi('delete/:roomId'), async (ctx) => {
+router.post(roomApi('/delete/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   if (!roomId) {
     response.error(ctx, 400, '参数错误')
