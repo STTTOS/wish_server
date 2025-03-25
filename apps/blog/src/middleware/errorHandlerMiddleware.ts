@@ -1,19 +1,21 @@
 import { Context } from 'koa'
 
 import { logger } from '../logger'
-import response from '../utils/response'
 
-const errorHandlerMiddleware = async (
-  ctx: Context,
-  next: () => Promise<void>
-) => {
-  try {
-    await next()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    logger.error(err.stack || err.message)
-    ctx.status = 500
-    response.error(ctx, err.status || 500, '遭了, 服务器内部出问题了')
-  }
+const loggerMiddleware = async (ctx: Context, next: () => Promise<void>) => {
+  const { url } = ctx.request
+  const ip = ctx.headers['x-real-ip'] || ctx.request.ip
+
+  // 记录开始时间
+  const start = Date.now()
+  await next()
+
+  // 计算响应时间
+  const ms = Date.now() - start
+  logger.info(
+    `ip: ${ip}, request for ${url}, body: ${JSON.stringify(
+      ctx.request.body || {}
+    )}; 耗时${ms}ms`
+  )
 }
-export default errorHandlerMiddleware
+export default loggerMiddleware
