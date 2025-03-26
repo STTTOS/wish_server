@@ -104,6 +104,7 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     response.error(ctx, 2000, error.message)
   }
 })
+
 router.post(roomApi('/quit/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   const texas = rooms.get(roomId)
