@@ -42,7 +42,7 @@ router.post(userApi('/sign'), async (ctx) => {
         name,
         balance: 20_000,
         avatar:
-          'www.wishufree.com/static/files/download__2ea40fda-d3d0-4504-809c-996b2cb13ec0.jpeg'
+          'https://www.wishufree.com/static/files/download__2ea40fda-d3d0-4504-809c-996b2cb13ec0.jpeg'
       }
     })
     loginUsers.set(target.id!, { sessionId, time })
