@@ -34,7 +34,8 @@
     "ramda": "^0.28.0",
     "sharp": "^0.33.3",
     "texas-poker-core": "^1.1.9",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "ws": "^8.18.1"
   },
   "devDependencies": {
     "@commitlint/config-conventional": "^19.1.0",
@@ -50,6 +51,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/ramda": "^0.28.23",
     "@types/uuid": "^9.0.8",
+    "@types/ws": "^8.18.0",
     "commitlint": "^19.2.1",
     "cos-nodejs-sdk-v5": "^2.13.4",
     "husky": "^9.0.10",

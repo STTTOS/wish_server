@@ -1,5 +1,7 @@
 import { $Enums } from '@prisma/texas-client'
+import { ActionType } from 'texas-poker-core'
 
+import { clients } from '../..'
 import router from '../instance'
 import { record } from '../../models'
 import { apiPrefix } from '../../config'
@@ -9,28 +11,31 @@ import combinePath from '../../utils/combinePath'
 
 const toolsApi = combinePath(apiPrefix)('/action')
 
-router.post(toolsApi('/bet'), async (ctx) => {
+router.post(toolsApi('/take'), async (ctx) => {
   const {
-    amount,
-    stage,
+    amount = 0,
     matchId,
-    roomId
+    roomId,
+    actionType
   }: {
     matchId: number
     action: $Enums.Action
-    stage: $Enums.Stage
     amount?: number
     roomId: string
+    actionType: ActionType
   } = ctx.request.body
-  const user = ctx.state.user!
-  if (!amount || amount <= 0) {
-    response.error(ctx, 400, '下注金额不可为0')
-    return
-  }
-  if (!matchId || !roomId) {
+  if (!matchId || !roomId || !actionType) {
     response.error(ctx, 400, '参数异常')
     return
   }
+  const user = ctx.state.user!
+  const texas = rooms.get(roomId)
+
+  if (!texas) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  const stage = texas.controller.stage
   await record.create({
     data: {
       action: 'bet',
@@ -40,13 +45,29 @@ router.post(toolsApi('/bet'), async (ctx) => {
       playerId: user.id
     }
   })
-  const texas = rooms.get(roomId)
-  // TODO: 特殊的错误码, 并告知客户端中止游戏, 并回滚
-  if (!texas) throw new Error('游戏异常')
 
   const player = texas.dealer.find(
     (player) => player.getUserInfo().id === user.id
   )!
-  player.bet(amount)
-  response.success(ctx, null, '用户行为')
+  try {
+    player[actionType](amount)
+    clients.forEach((client) => {
+      const wsRes = {
+        type: 'player-take-action',
+        data: {
+          userId: user.id,
+          actionType,
+          amount,
+          pool: texas.pool.totalAmount,
+          currentStageBetAmount: player.getCurrentStageTotalAmount(),
+          balance: player.getBalance()
+        }
+      }
+      client.send(JSON.stringify(wsRes))
+    })
+    response.success(ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    response.error(ctx, 2000, error.message)
+  }
 })

@@ -36,7 +36,7 @@ enum Action {
 }
 
 enum Stage {
-  preFlop
+  pre_flop
   flop
   turn
   river
@@ -91,7 +91,7 @@ model Match {
   totalBetAmount Float
   playerId       Int
   // 记录游戏在哪个阶段结束的
-  endStage       Stage            @default(preFlop)
+  endStage       Stage            @default(pre_flop)
   // 公共牌
   commonPokes    Json
   // 存储计算后的最大牌力

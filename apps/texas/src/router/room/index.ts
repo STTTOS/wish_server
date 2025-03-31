@@ -2,6 +2,7 @@ import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { initialGame } from 'texas-poker-core'
 
+import { clients } from '../..'
 import router from '../instance'
 import { user } from '../../models'
 import { apiPrefix } from '../../config'
@@ -97,7 +98,23 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
       response.error(ctx, 2000, '用户已经在房间中, 不可重复加入')
       return
     }
-    texas.room.join(texas.createPlayer(userInfo))
+    const player = texas.createPlayer(userInfo)
+    texas.room.join(player)
+    clients.forEach((ws, id) => {
+      if (id !== userId && ws.readyState === WebSocket.OPEN) {
+        const wsRes = {
+          type: 'player-join',
+          data: {
+            ...player.getUserInfo(),
+            role: player.getRole(),
+            seatStatus: texas.room.getPlayerSeatStatus(player),
+            selfRoleChangedTo: texas.room.getPlayerById(id)?.player.getRole()
+          }
+        }
+        ws.send(JSON.stringify(wsRes))
+        return
+      }
+    })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
