@@ -1,3 +1,4 @@
+import WebSocket from 'ws'
 import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { initialGame } from 'texas-poker-core'
