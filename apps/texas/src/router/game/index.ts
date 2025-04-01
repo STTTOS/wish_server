@@ -4,6 +4,7 @@ import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { match, matchStageTimeRecord } from '../../models'
 
 const toolsApi = combinePath(apiPrefix)('/game')
 
@@ -23,7 +24,12 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   }
   try {
     texas.start()
-
+    // 需要创建对局信息
+    const matchInfo = await match.create({
+      data: {
+        playersCount: texas.dealer.count
+      }
+    })
     // 轮到玩家行动时, 会触发回调
     texas.onPreAction(({ userId, restrict, allowedActions }) => {
       const wsRes = {
@@ -52,7 +58,23 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     })
 
-    texas.onNextStage(({ stage, commonPokes }) => {
+    texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
+      // 更新上一个阶段的结束时间
+      await matchStageTimeRecord.update({
+        where: {
+          id: matchInfo.id,
+          stage: lastStage
+        },
+        data: {
+          endAt: new Date()
+        }
+      })
+      await matchStageTimeRecord.create({
+        data: {
+          stage,
+          matchId: matchInfo.id
+        }
+      })
       clients.forEach((client) => {
         const wsRes = {
           type: 'stage-change',
@@ -65,7 +87,21 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     })
 
-    texas.onGameEnd(({ commonPokes }) => {
+    texas.onGameEnd(async ({ commonPokes, currentStage }) => {
+      // 这里也需要更新matchStageTimeRecord表
+      // 首先需要当前在哪个阶段
+      // 然后需要设置当前阶段的结束时间
+      // 如果是all-in直接推进到游戏结束
+      // 那么游戏则视为只进行到当前所处的阶段
+      await matchStageTimeRecord.update({
+        where: {
+          id: matchInfo.id,
+          stage: currentStage
+        },
+        data: {
+          endAt: new Date()
+        }
+      })
       const wsRes = {
         type: 'game-end',
         data: {
@@ -93,7 +129,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             .find((player) => player.getUserInfo().id === userId)
             ?.getHandPokes(),
           stage: texas.controller.stage,
-          pool: texas.pool.totalAmount
+          pool: texas.pool.totalAmount,
+          matchId: matchInfo.id
         }
       }
       ws.send(JSON.stringify(wsRes))

@@ -81,32 +81,41 @@ model PlayerHand {
 
 // 对局信息
 model Match {
-  id             Int              @id @default(autoincrement())
+  id             Int               @id @default(autoincrement())
   // 对局开始的时间
-  startedAt      DateTime         @default(now())
+  startedAt      DateTime          @default(now())
   // 对局结束的时间
-  endedAt        DateTime
+  endedAt        DateTime?
   playersCount   Int
   // 总的下注额度
-  totalBetAmount Float
-  playerId       Int
+  totalBetAmount Float?
   // 记录游戏在哪个阶段结束的
-  endStage       Stage            @default(pre_flop)
+  endStage       Stage?
   // 公共牌
-  commonPokes    Json
+  commonPokes    Json?
   // 存储计算后的最大牌力
-  maximumType    PresentationType
+  maximumType    PresentationType?
   // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
-  maximumPokes   Json
+  maximumPokes   Json?
 
-  // 各阶段开始的时间
-  stageStartTimes Json
-  // 各阶段结束的时间
-  stageEndTimes   Json
-  players         User[]
-  winners         Win[]
-  records         Record[]
-  playerHands     PlayerHand[]
+  players              User[]
+  winners              Win[]
+  records              Record[]
+  playerHands          PlayerHand[]
+  // 记录这场对局各个阶段开始, 结束的时间
+  matchStageTimeRecord MatchStageTimeRecord[]
+}
+
+model MatchStageTimeRecord {
+  id      Int      @id @default(autoincrement())
+  stage   Stage    
+  startAt DateTime @default(now())
+  endAt   DateTime?
+
+  matchId Int
+  match   Match @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, stage])
 }
 
 // 用户的行为记录表

@@ -53,12 +53,12 @@ router.post(toolsApi('/take'), async (ctx) => {
       const wsRes = {
         type: 'player-take-action',
         data: {
-          userId: user.id,
-          actionType,
           amount,
+          actionType,
+          userId: user.id,
           pool: texas.pool.totalAmount,
-          currentStageBetAmount: player.getCurrentStageTotalAmount(),
-          balance: player.getBalance()
+          balance: player.getBalance(),
+          currentStageBetAmount: player.getCurrentStageTotalAmount()
         }
       }
       client.send(JSON.stringify(wsRes))
