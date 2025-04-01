@@ -82,6 +82,7 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在')
     return
   }
+
   // TODO: 以后这个方法根据登录人
   // const player = ctx.state.user!
   const { userId } = ctx.request.body
@@ -98,6 +99,17 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
       response.error(ctx, 2000, '用户已经在房间中, 不可重复加入')
       return
     }
+
+    // 如果当前人正在别的房间里, 则不可再加入新的房间
+    if (
+      Array.from(rooms.entries())
+        .filter(([id]) => id !== roomId)
+        .some(([, texas]) => texas.room.has(userId))
+    ) {
+      response.error(ctx, 2000, '你已经在别的房间中, 请先退出再加入')
+      return
+    }
+
     const player = texas.createPlayer(userInfo)
     texas.room.join(player)
     clients.forEach((ws, id) => {
@@ -107,8 +119,7 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
           data: {
             ...player.getUserInfo(),
             role: player.getRole(),
-            seatStatus: texas.room.getPlayerSeatStatus(player),
-            selfRoleChangedTo: texas.room.getPlayerById(id)?.player.getRole()
+            seatStatus: texas.room.getPlayerSeatStatus(player)
           }
         }
         ws.send(JSON.stringify(wsRes))
@@ -142,6 +153,25 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
       rooms.delete(roomId)
       response.success(ctx)
     }
+
+    // 离开房间需要
+    clients.delete(userId)
+    clients.forEach((client) => {
+      const wsRes = {
+        type: 'player-leave',
+        data: {
+          userId,
+          // TODO: 当前玩家之后的角色才会改变
+          roleChangesList: texas.dealer.map((player) => {
+            return {
+              userId: player.getUserInfo().id,
+              role: player.getRole()
+            }
+          })
+        }
+      }
+      client.send(JSON.stringify(wsRes))
+    })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     response.error(ctx, 2000, error.message)
@@ -151,11 +181,7 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
 router.post(roomApi('/seat/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
 
-  const { userId }: { userId: number } = ctx.request.body
-  if (!userId) {
-    response.error(ctx, 400, '参数错误')
-    return
-  }
+  const userId = ctx.state.user!.id
   const texas = rooms.get(roomId)
 
   if (!texas) {
@@ -164,6 +190,61 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
   }
   try {
     texas?.room.seatById(userId)
+    const player = texas.room.getPlayerById(userId)!
+
+    clients.forEach((client, id) => {
+      // 向其他玩家推送
+      if (id === userId) return
+
+      const wsRes = {
+        type: 'player-on-seat',
+        data: {
+          userId: player.getUserInfo().id,
+          role: player.getRole()
+        }
+      }
+      client.send(JSON.stringify(wsRes))
+    })
+    response.success(ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    response.error(ctx, 2000, error.message)
+  }
+})
+
+// 从坐席到观战席
+router.post(roomApi('/watch/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+
+  const userId = ctx.state.user!.id
+  const texas = rooms.get(roomId)
+
+  if (!texas) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  try {
+    texas?.room.watchById(userId)
+    const player = texas.room.getPlayerById(userId)!
+
+    clients.forEach((client, id) => {
+      // 向其他玩家推送
+      if (id === userId) return
+
+      const wsRes = {
+        type: 'player-on-watch',
+        data: {
+          userId: player.getUserInfo().id,
+          roleChangesList: texas.dealer.map((player) => {
+            return {
+              userId: player.getUserInfo().id,
+              role: player.getRole()
+            }
+          })
+        }
+      }
+      client.send(JSON.stringify(wsRes))
+    })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -227,4 +308,9 @@ router.post(roomApi('/all'), async (ctx) => {
       }
     })
   )
+})
+
+router.post(roomApi('/clear'), async (ctx) => {
+  rooms.clear()
+  response.success(ctx)
 })

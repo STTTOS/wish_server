@@ -57,6 +57,7 @@ wss.on('connection', async (ws, req) => {
   // 处理错误
   ws.on('error', (error) => {
     // 连接出现异常, 则无法正常加入房间
+    clients.delete(userId)
     logger.error('WebSocket 错误:', error)
   })
 })

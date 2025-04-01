@@ -16,8 +16,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     return
   }
   const userId = ctx.state.user!.id
-  const target = texas.room.getPlayerById(userId)
-  if (target?.player.getRole() !== 'button') {
+  const player = texas.room.getPlayerById(userId)!
+  if (player.getRole() !== 'button') {
     response.error(ctx, 2000, '不是庄家, 无法发牌')
     return
   }
