@@ -312,5 +312,12 @@ router.post(roomApi('/all'), async (ctx) => {
 
 router.post(roomApi('/clear'), async (ctx) => {
   rooms.clear()
+  rooms.forEach((texas) => {
+    try {
+      texas.end()
+    } catch (error) {
+      // nothing to do
+    }
+  })
   response.success(ctx)
 })
