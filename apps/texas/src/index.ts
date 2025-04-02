@@ -21,27 +21,36 @@ export const app = new Koa()
 const server = http.createServer(app.callback())
 const io = new Server(server, {
   cors: { origin: 'https://texas.wishufree.com' }
+  // cors: { origin: '*' }
 })
 
 export const clients = new Map<number, Socket>()
 
+// 使用 middleware 验证连接参数
+io.use((socket, next) => {
+  const queryParams = socket.handshake.query
+  const [userId, roomId] = [
+    Number(queryParams.userId),
+    queryParams.roomId as string
+  ]
+  // 验证参数
+  if (!userId || !roomId) {
+    // 传递错误，拒绝连接
+    logger.error(`ws连接url:${socket.handshake.url}(参数异常), 拒绝连接`)
+    return next(new Error('无效的连接参数, 拒绝连接'))
+  }
+
+  // 允许连接
+  next()
+})
 // 只有当玩家加入房间时, 才开启ws连接
 // 退出房间时, 需要关闭连接
 io.on('connection', (socket) => {
   logger.info('新的客户端连接, url', socket.handshake.url)
 
   const queryParams = socket.handshake.query
-  const [userId, roomId] = [
-    Number(queryParams.userId),
-    queryParams.roomId as string
-  ]
-  if (!userId || !roomId) {
-    // 如果连接无法建立, 则需要告知客户端连接出现异常
-    // 提示客户端参数异常, 无法加入房间
-    logger.error('参数错误导致连接关闭')
-    socket.disconnect()
-    return
-  }
+  const [userId] = [Number(queryParams.userId), queryParams.roomId as string]
+
   // 将用户ID与连接关联
   clients.set(userId, socket)
   socket.send({ type: 'initial connect', data: null })
