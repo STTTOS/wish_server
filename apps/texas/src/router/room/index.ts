@@ -257,9 +257,12 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
 
   const [playersOnSeat, playersHang] = (['on-set', 'hang'] as const).map(
     (status) =>
-      texas?.room
-        .getPlayersBySeatStatus(status)
-        .map((player) => player.getUserInfo())
+      texas?.room.getPlayersBySeatStatus(status).map((player) => {
+        return {
+          ...player.getUserInfo(),
+          role: player.getRole()
+        }
+      })
   )
   response.success(ctx, {
     playersOnSeat,

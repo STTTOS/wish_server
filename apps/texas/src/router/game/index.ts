@@ -23,13 +23,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     return
   }
   try {
-    texas.start()
-    // 需要创建对局信息
-    const matchInfo = await match.create({
-      data: {
-        playersCount: texas.dealer.count
-      }
-    })
     // 轮到玩家行动时, 会触发回调
     texas.onPreAction(({ userId, restrict, allowedActions }) => {
       // TODO: 如果client不存在, 则表示掉线
@@ -53,6 +46,13 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             }
           })
       })
+    })
+    texas.start()
+    // 需要创建对局信息
+    const matchInfo = await match.create({
+      data: {
+        playersCount: texas.dealer.count
+      }
     })
 
     texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
