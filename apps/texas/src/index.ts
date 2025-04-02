@@ -19,7 +19,9 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 export const app = new Koa()
 
 const server = http.createServer(app.callback())
-const io = new Server(server, { cors: { origin: '*' } })
+const io = new Server(server, {
+  cors: { origin: 'https://texas.wishufree.com' }
+})
 
 export const clients = new Map<number, Socket>()
 
