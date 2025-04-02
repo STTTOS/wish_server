@@ -1,13 +1,13 @@
 import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
-import { initialGame } from 'texas-poker-core'
+import { Player, initialGame } from 'texas-poker-core'
 
 import { clients } from '../..'
 import router from '../instance'
 import { user } from '../../models'
 import { apiPrefix } from '../../config'
-import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
+import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
 
 const roomApi = combinePath(apiPrefix)('/room')
@@ -112,19 +112,11 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
 
     const player = texas.createPlayer(userInfo)
     texas.room.join(player)
-    clients.forEach((ws, id) => {
-      if (id !== userId) {
-        ws.send({
-          type: 'player-join',
-          data: {
-            ...player.getUserInfo(),
-            role: player.getRole(),
-            seatStatus: texas.room.getPlayerSeatStatus(player)
-          }
-        })
-        return
-      }
-    })
+    if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
+      broadCastPlayerOnSeat(player, userId)
+    } else {
+      broadCastPlayerOnWatch(player, texas, userId)
+    }
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -176,6 +168,20 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
   }
 })
 
+function broadCastPlayerOnSeat(player: Player, selfId: number) {
+  clients.forEach((ws, id) => {
+    // 向其他玩家推送
+    if (id === selfId) return
+
+    ws.send({
+      type: 'player-on-seat',
+      data: {
+        userId: player.getUserInfo().id,
+        role: player.getRole()
+      }
+    })
+  })
+}
 router.post(roomApi('/seat/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
 
@@ -189,26 +195,32 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
   try {
     texas?.room.seatById(userId)
     const player = texas.room.getPlayerById(userId)!
-
-    clients.forEach((ws, id) => {
-      // 向其他玩家推送
-      if (id === userId) return
-
-      ws.send({
-        type: 'player-on-seat',
-        data: {
-          userId: player.getUserInfo().id,
-          role: player.getRole()
-        }
-      })
-    })
+    broadCastPlayerOnSeat(player, userId)
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     response.error(ctx, 2000, error.message)
   }
 })
+function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
+  clients.forEach((ws, id) => {
+    // 向其他玩家推送
+    if (id === selfId) return
 
+    ws.send({
+      type: 'player-on-watch',
+      data: {
+        userId: player.getUserInfo().id,
+        roleChangesList: texas.dealer.map((player) => {
+          return {
+            userId: player.getUserInfo().id,
+            role: player.getRole()
+          }
+        })
+      }
+    })
+  })
+}
 // 从坐席到观战席
 router.post(roomApi('/watch/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
@@ -223,24 +235,7 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
   try {
     texas?.room.watchById(userId)
     const player = texas.room.getPlayerById(userId)!
-
-    clients.forEach((ws, id) => {
-      // 向其他玩家推送
-      if (id === userId) return
-
-      ws.send({
-        type: 'player-on-watch',
-        data: {
-          userId: player.getUserInfo().id,
-          roleChangesList: texas.dealer.map((player) => {
-            return {
-              userId: player.getUserInfo().id,
-              role: player.getRole()
-            }
-          })
-        }
-      })
-    })
+    broadCastPlayerOnWatch(player, texas, userId)
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {

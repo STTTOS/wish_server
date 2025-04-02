@@ -1,8 +1,8 @@
 import { clients } from '../..'
 import router from '../instance'
 import { apiPrefix } from '../../config'
-import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
+import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
 import { match, matchStageTimeRecord } from '../../models'
 
@@ -83,37 +83,47 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     })
 
-    texas.onGameEnd(async ({ commonPokes, currentStage }) => {
-      // 这里也需要更新matchStageTimeRecord表
-      // 首先需要当前在哪个阶段
-      // 然后需要设置当前阶段的结束时间
-      // 如果是all-in直接推进到游戏结束
-      // 那么游戏则视为只进行到当前所处的阶段
-      await matchStageTimeRecord.update({
-        where: {
-          id: matchInfo.id,
-          stage: currentStage
-        },
-        data: {
-          endAt: new Date()
-        }
-      })
-      clients.forEach((ws) => {
-        ws.send({
-          type: 'game-end',
+    texas.onGameEnd(
+      async ({ restCommonPokes, currentStage, showHandPokes }) => {
+        // 这里也需要更新matchStageTimeRecord表
+        // 首先需要当前在哪个阶段
+        // 然后需要设置当前阶段的结束时间
+        // 如果是all-in直接推进到游戏结束
+        // 那么游戏则视为只进行到当前所处的阶段
+        await matchStageTimeRecord.update({
+          where: {
+            id: matchInfo.id,
+            stage: currentStage
+          },
           data: {
-            commonPokes
-            // settleList: Array.from(texas.pool.bills).map( ([userId, amount]) => {
-            //   return {
-            //     userId,
-            //     amount,
-            //     balance: texas.room.getPlayerById(userId)?.player.getUserInfo().balance
-            //   }
-            // })
+            endAt: new Date()
           }
         })
-      })
-    })
+        clients.forEach((ws) => {
+          ws.send({
+            type: 'game-end',
+            data: {
+              restCommonPokes,
+              showHandPokes,
+              settleList: Array.from(texas.pool.bills).map(
+                ([userId, amount]) => {
+                  return {
+                    userId,
+                    amount,
+                    balance: texas.room.getPlayerById(userId)?.getUserInfo()
+                      .balance
+                  }
+                }
+              )
+            }
+          })
+        })
+        // 游戏结束后轮换角色
+        texas.dealer.changeButtonToNextPlayer()
+        texas.dealer.setOthers()
+        broadCastRoles(texas)
+      }
+    )
 
     // 推送各个玩家的手牌信息
     clients.forEach((ws, userId) => {
@@ -125,7 +135,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             ?.getHandPokes(),
           stage: texas.controller.stage,
           pool: texas.pool.totalAmount,
-          matchId: matchInfo.id
+          matchId: matchInfo.id,
+          defaultBets: texas.getDefaultBet()
         }
       })
     })
@@ -136,6 +147,19 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   }
 })
 
+export function broadCastRoles(texas: Texas) {
+  clients.forEach((ws) => {
+    ws.send({
+      type: 'set-role',
+      data: texas.dealer.map((player) => {
+        return {
+          userId: player.getUserInfo().id,
+          role: player.getRole()
+        }
+      })
+    })
+  })
+}
 // 房主开始游戏
 // 确认各个玩家的角色
 // 游戏一经开始, 不允许中途退出
@@ -157,17 +181,8 @@ router.post(toolsApi('/ready/:roomId'), async (ctx) => {
   try {
     texas.ready()
     response.success(ctx)
-    clients.forEach((ws) => {
-      ws.send({
-        type: 'game-ready',
-        data: texas.dealer.map((player) => {
-          return {
-            userId: player.getUserInfo().id,
-            role: player.getRole()
-          }
-        })
-      })
-    })
+    broadCastRoles(texas)
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     response.error(ctx, 2000, error.message)

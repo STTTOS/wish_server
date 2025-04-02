@@ -19,7 +19,6 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 export const app = new Koa()
 
 const server = http.createServer(app.callback())
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const io = new Server(server, { cors: { origin: '*' } })
 
 export const clients = new Map<number, Socket>()
