@@ -1,4 +1,3 @@
-import WebSocket from 'ws'
 import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { initialGame } from 'texas-poker-core'
@@ -114,16 +113,15 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     const player = texas.createPlayer(userInfo)
     texas.room.join(player)
     clients.forEach((ws, id) => {
-      if (id !== userId && ws.readyState === WebSocket.OPEN) {
-        const wsRes = {
+      if (id !== userId) {
+        ws.send({
           type: 'player-join',
           data: {
             ...player.getUserInfo(),
             role: player.getRole(),
             seatStatus: texas.room.getPlayerSeatStatus(player)
           }
-        }
-        ws.send(JSON.stringify(wsRes))
+        })
         return
       }
     })
@@ -157,8 +155,8 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
 
     // 离开房间需要
     clients.delete(userId)
-    clients.forEach((client) => {
-      const wsRes = {
+    clients.forEach((ws) => {
+      ws.send({
         type: 'player-leave',
         data: {
           userId,
@@ -170,8 +168,7 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
             }
           })
         }
-      }
-      client.send(JSON.stringify(wsRes))
+      })
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
@@ -193,18 +190,17 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
     texas?.room.seatById(userId)
     const player = texas.room.getPlayerById(userId)!
 
-    clients.forEach((client, id) => {
+    clients.forEach((ws, id) => {
       // 向其他玩家推送
       if (id === userId) return
 
-      const wsRes = {
+      ws.send({
         type: 'player-on-seat',
         data: {
           userId: player.getUserInfo().id,
           role: player.getRole()
         }
-      }
-      client.send(JSON.stringify(wsRes))
+      })
     })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -228,11 +224,11 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
     texas?.room.watchById(userId)
     const player = texas.room.getPlayerById(userId)!
 
-    clients.forEach((client, id) => {
+    clients.forEach((ws, id) => {
       // 向其他玩家推送
       if (id === userId) return
 
-      const wsRes = {
+      ws.send({
         type: 'player-on-watch',
         data: {
           userId: player.getUserInfo().id,
@@ -243,8 +239,7 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
             }
           })
         }
-      }
-      client.send(JSON.stringify(wsRes))
+      })
     })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

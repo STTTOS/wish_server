@@ -3,12 +3,11 @@ import type { BizError } from './router/interface'
 
 import Koa from 'koa'
 import http from 'http'
-import WebSocket from 'ws'
 import { join } from 'path'
 import cors from '@koa/cors'
 import koaJwt from 'koa-jwt'
-import qs from 'querystring'
 import koaBody from 'koa-body'
+import { Server, Socket } from 'socket.io'
 
 import router from './router'
 import { port } from './config'
@@ -20,44 +19,47 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 export const app = new Koa()
 
 const server = http.createServer(app.callback())
-export const wss = new WebSocket.Server({ server, path: '/ws' })
-// WebSocket 连接事件
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const io = new Server(server, { cors: { origin: '*' } })
 
-export const clients = new Map<number, WebSocket>()
+export const clients = new Map<number, Socket>()
 
 // 只有当玩家加入房间时, 才开启ws连接
 // 退出房间时, 需要关闭连接
-wss.on('connection', async (ws, req) => {
-  logger.info('新的客户端连接')
+io.on('connection', (socket) => {
+  const queryParams = socket.handshake.query
+  logger.info('新的客户端连接, 查询参数', JSON.stringify(queryParams))
 
-  // 从查询参数中获取用户ID
-  const params = qs.parse(req.url?.split('?')[1] || '')
-  const [userId, roomId] = [Number(params.userId), params.roomId as string]
+  const [userId, roomId] = [
+    Number(queryParams.userId),
+    queryParams.roomId as string
+  ]
   if (!userId || !roomId) {
     // 如果连接无法建立, 则需要告知客户端连接出现异常
     // 提示客户端参数异常, 无法加入房间
     logger.error('参数错误导致连接关闭')
-    ws.close(1007, '参数错误,连接关闭')
+    socket.disconnect()
     return
   }
   // 将用户ID与连接关联
-  clients.set(userId, ws)
-  ws.send(JSON.stringify({ type: 'initial connect', data: null }))
+  clients.set(userId, socket)
+  socket.send({ type: 'initial connect', data: null })
   // 向客户端发送欢迎消息
   // ws.readyState === WebSocket.OPEN
 
   // 处理连接关闭
-  ws.on('close', () => {
+  socket.on('disconnect', (reason) => {
     // 玩家离开房间, 玩家离线等
     // 需要向其他客户端推送消息
     clients.delete(userId)
-    logger.info('客户端断开连接')
+    logger.info('客户端断开连接, id:', socket.id, '原因', reason)
   })
 
   // 处理错误
-  ws.on('error', (error) => {
+  socket.on('error', (error) => {
     // 连接出现异常, 则无法正常加入房间
     clients.delete(userId)
+    console.error('连接错误:', error)
     logger.error('WebSocket 错误:', error)
   })
 })

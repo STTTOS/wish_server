@@ -32,29 +32,26 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     })
     // 轮到玩家行动时, 会触发回调
     texas.onPreAction(({ userId, restrict, allowedActions }) => {
-      const wsRes = {
+      // TODO: 如果client不存在, 则表示掉线
+      // 掉线后需要向其他玩家推送当前玩家的状态信息
+      // 同时需要将Player的状态置为offline
+      clients.get(userId)?.send({
         type: 'pre-action',
         data: {
           restrict,
           allowedActions,
           userId
         }
-      }
-      // TODO: 如果client不存在, 则表示掉线
-      // 掉线后需要向其他玩家推送当前玩家的状态信息
-      // 同时需要将Player的状态置为offline
-      clients.get(userId)?.send(JSON.stringify(wsRes))
+      })
       // 向其他玩家推送当前正在行动的玩家
-      clients.forEach((client, id) => {
+      clients.forEach((ws, id) => {
         if (id !== userId)
-          client.send(
-            JSON.stringify({
-              type: 'player-active',
-              data: {
-                userId: id
-              }
-            })
-          )
+          ws.send({
+            type: 'player-active',
+            data: {
+              userId: id
+            }
+          })
       })
     })
 
@@ -75,15 +72,14 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           matchId: matchInfo.id
         }
       })
-      clients.forEach((client) => {
-        const wsRes = {
+      clients.forEach((ws) => {
+        ws.send({
           type: 'stage-change',
           data: {
             stage,
             commonPokes
           }
-        }
-        client.send(JSON.stringify(wsRes))
+        })
       })
     })
 
@@ -102,27 +98,26 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           endAt: new Date()
         }
       })
-      const wsRes = {
-        type: 'game-end',
-        data: {
-          commonPokes
-          // settleList: Array.from(texas.pool.bills).map( ([userId, amount]) => {
-          //   return {
-          //     userId,
-          //     amount,
-          //     balance: texas.room.getPlayerById(userId)?.player.getUserInfo().balance
-          //   }
-          // })
-        }
-      }
-      clients.forEach((client) => {
-        client.send(JSON.stringify(wsRes))
+      clients.forEach((ws) => {
+        ws.send({
+          type: 'game-end',
+          data: {
+            commonPokes
+            // settleList: Array.from(texas.pool.bills).map( ([userId, amount]) => {
+            //   return {
+            //     userId,
+            //     amount,
+            //     balance: texas.room.getPlayerById(userId)?.player.getUserInfo().balance
+            //   }
+            // })
+          }
+        })
       })
     })
 
     // 推送各个玩家的手牌信息
     clients.forEach((ws, userId) => {
-      const wsRes = {
+      ws.send({
         type: 'game-start',
         data: {
           handPokes: texas.dealer
@@ -132,8 +127,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           pool: texas.pool.totalAmount,
           matchId: matchInfo.id
         }
-      }
-      ws.send(JSON.stringify(wsRes))
+      })
     })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,17 +157,16 @@ router.post(toolsApi('/ready/:roomId'), async (ctx) => {
   try {
     texas.ready()
     response.success(ctx)
-    const wsRes = {
-      type: 'game-ready',
-      data: texas.dealer.map((player) => {
-        return {
-          userId: player.getUserInfo().id,
-          role: player.getRole()
-        }
-      })
-    }
     clients.forEach((ws) => {
-      ws.send(JSON.stringify(wsRes))
+      ws.send({
+        type: 'game-ready',
+        data: texas.dealer.map((player) => {
+          return {
+            userId: player.getUserInfo().id,
+            role: player.getRole()
+          }
+        })
+      })
     })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
