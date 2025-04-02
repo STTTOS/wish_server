@@ -26,9 +26,9 @@ export const clients = new Map<number, Socket>()
 // 只有当玩家加入房间时, 才开启ws连接
 // 退出房间时, 需要关闭连接
 io.on('connection', (socket) => {
-  const queryParams = socket.handshake.query
-  logger.info('新的客户端连接, 查询参数', JSON.stringify(queryParams))
+  logger.info('新的客户端连接, url', socket.handshake.url)
 
+  const queryParams = socket.handshake.query
   const [userId, roomId] = [
     Number(queryParams.userId),
     queryParams.roomId as string
