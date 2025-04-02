@@ -176,8 +176,10 @@ function broadCastPlayerOnSeat(player: Player, selfId: number) {
     ws.send({
       type: 'player-on-seat',
       data: {
-        userId: player.getUserInfo().id,
-        role: player.getRole()
+        ...player.getUserInfo(),
+        role: player.getRole(),
+        balance: player.getBalance(),
+        userId: player.getUserInfo().id
       }
     })
   })
