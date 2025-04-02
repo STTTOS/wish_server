@@ -4,7 +4,7 @@ import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
-import { match, matchStageTimeRecord } from '../../models'
+import { win, match, playerHand, matchStageTimeRecord } from '../../models'
 
 const toolsApi = combinePath(apiPrefix)('/game')
 
@@ -99,6 +99,33 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             endAt: new Date()
           }
         })
+        await match.update({
+          where: {
+            id: matchInfo.id
+          },
+          data: {
+            endedAt: new Date(),
+            endStage: texas.controller.endAt,
+            totalBetAmount: texas.pool.totalAmount,
+            // 最大牌型组合
+            maximumPokes: texas.dealer.getMaxPokes(),
+            // 最大牌力
+            maximumType: texas.dealer.getMaxPresentation(),
+            // 底牌
+            commonPokes: texas.dealer.getDeck().getPokes().commonPokes
+          }
+        })
+        const winners = texas.dealer.getWinners()
+        // 记录赢家信息
+        await win.createMany({
+          data: winners.map((winner) => {
+            return {
+              matchId: matchInfo.id,
+              playerId: winner.getUserInfo().id
+            }
+          })
+        })
+
         clients.forEach((ws) => {
           ws.send({
             type: 'game-end',
@@ -125,6 +152,16 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       }
     )
 
+    const playerHands = texas.dealer.map((player) => {
+      return {
+        hand: player.getHandPokes(),
+        playerId: player.getUserInfo().id,
+        matchId: matchInfo.id
+      }
+    })
+    await playerHand.createMany({
+      data: playerHands
+    })
     // 推送各个玩家的手牌信息
     clients.forEach((ws, userId) => {
       ws.send({
