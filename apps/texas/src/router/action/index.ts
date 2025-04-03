@@ -53,7 +53,7 @@ router.post(toolsApi('/take'), async (ctx) => {
 
     logger.info('向客户端推送player-take-actions事件')
     clients.forEach((client) => {
-      const wsRes = {
+      client.send({
         type: 'player-take-action',
         data: {
           amount,
@@ -63,8 +63,7 @@ router.post(toolsApi('/take'), async (ctx) => {
           balance: player.getBalance(),
           currentStageBetAmount: player.getCurrentStageTotalAmount()
         }
-      }
-      client.send(JSON.stringify(wsRes))
+      })
     })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

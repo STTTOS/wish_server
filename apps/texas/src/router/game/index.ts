@@ -57,6 +57,22 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       }
     })
     texas.start()
+    logger.info('向客户端推送game-start事件')
+    // 推送各个玩家的手牌信息
+    clients.forEach((ws, userId) => {
+      ws.send({
+        type: 'game-start',
+        data: {
+          handPokes: texas.dealer
+            .find((player) => player.getUserInfo().id === userId)
+            ?.getHandPokes(),
+          stage: texas.controller.stage,
+          pool: texas.pool.totalAmount,
+          matchId: matchInfo.id,
+          defaultBets: texas.getDefaultBet()
+        }
+      })
+    })
     await matchStageTimeRecord.create({
       data: {
         stage: 'pre_flop',
@@ -172,23 +188,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     })
     await playerHand.createMany({
       data: playerHands
-    })
-
-    logger.info('向客户端推送game-start事件')
-    // 推送各个玩家的手牌信息
-    clients.forEach((ws, userId) => {
-      ws.send({
-        type: 'game-start',
-        data: {
-          handPokes: texas.dealer
-            .find((player) => player.getUserInfo().id === userId)
-            ?.getHandPokes(),
-          stage: texas.controller.stage,
-          pool: texas.pool.totalAmount,
-          matchId: matchInfo.id,
-          defaultBets: texas.getDefaultBet()
-        }
-      })
     })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
