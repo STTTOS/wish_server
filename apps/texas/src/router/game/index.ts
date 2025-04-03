@@ -104,7 +104,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           type: 'stage-change',
           data: {
             stage,
-            commonPokes
+            resetCommonPokes: commonPokes
           }
         })
       })
