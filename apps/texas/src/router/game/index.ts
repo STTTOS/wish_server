@@ -44,7 +44,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         ws.send({
           type: 'player-action',
           data: {
-            userId: id,
+            userId,
             ...extraData
           }
         })
