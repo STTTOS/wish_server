@@ -50,11 +50,17 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         })
       })
     })
-    texas.start()
     // 需要创建对局信息
     const matchInfo = await match.create({
       data: {
         playersCount: texas.dealer.count
+      }
+    })
+    texas.start()
+    await matchStageTimeRecord.create({
+      data: {
+        stage: 'pre_flop',
+        matchId: matchInfo.id
       }
     })
 
