@@ -37,10 +37,10 @@ router.post(toolsApi('/take'), async (ctx) => {
   const stage = texas.controller.stage
   await record.create({
     data: {
-      action: 'bet',
       amount,
       stage,
       matchId,
+      action: actionType,
       playerId: user.id
     }
   })
@@ -51,7 +51,7 @@ router.post(toolsApi('/take'), async (ctx) => {
   try {
     player[actionType](amount)
 
-    logger.info('向客户端推送player-take-actions事件')
+    logger.info('向客户端推送player-take-action事件')
     clients.forEach((client) => {
       client.send({
         type: 'player-take-action',
@@ -69,5 +69,6 @@ router.post(toolsApi('/take'), async (ctx) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     response.error(ctx, 2000, error.message)
+    logger.error(error.message)
   }
 })
