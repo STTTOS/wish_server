@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { clients } from '../..'
 import router from '../instance'
 import { logger } from '../../logger'
@@ -73,30 +74,30 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         }
       })
     })
-    await matchStageTimeRecord.create({
-      data: {
-        stage: 'pre_flop',
-        matchId: matchInfo.id
-      }
-    })
+    // await matchStageTimeRecord.create({
+    //   data: {
+    //     stage: 'pre_flop',
+    //     matchId: matchInfo.id
+    //   }
+    // })
 
     texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
       // 更新上一个阶段的结束时间
-      await matchStageTimeRecord.update({
-        where: {
-          id: matchInfo.id,
-          stage: lastStage
-        },
-        data: {
-          endAt: new Date()
-        }
-      })
-      await matchStageTimeRecord.create({
-        data: {
-          stage,
-          matchId: matchInfo.id
-        }
-      })
+      // await matchStageTimeRecord.update({
+      //   where: {
+      //     id: matchInfo.id,
+      //     stage: lastStage
+      //   },
+      //   data: {
+      //     endAt: new Date()
+      //   }
+      // })
+      // await matchStageTimeRecord.create({
+      //   data: {
+      //     stage,
+      //     matchId: matchInfo.id
+      //   }
+      // })
       logger.info('向客户端推送stage-change事件')
       clients.forEach((ws) => {
         ws.send({
@@ -116,31 +117,31 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         // 然后需要设置当前阶段的结束时间
         // 如果是all-in直接推进到游戏结束
         // 那么游戏则视为只进行到当前所处的阶段
-        await matchStageTimeRecord.update({
-          where: {
-            id: matchInfo.id,
-            stage: currentStage
-          },
-          data: {
-            endAt: new Date()
-          }
-        })
-        await match.update({
-          where: {
-            id: matchInfo.id
-          },
-          data: {
-            endedAt: new Date(),
-            endStage: texas.controller.endAt,
-            totalBetAmount: texas.pool.totalAmount,
-            // 最大牌型组合
-            maximumPokes: texas.dealer.getMaxPokes(),
-            // 最大牌力
-            maximumType: texas.dealer.getMaxPresentation(),
-            // 底牌
-            commonPokes: texas.dealer.getDeck().getPokes().commonPokes
-          }
-        })
+        // await matchStageTimeRecord.update({
+        //   where: {
+        //     id: matchInfo.id,
+        //     stage: currentStage
+        //   },
+        //   data: {
+        //     endAt: new Date()
+        //   }
+        // })
+        // await match.update({
+        //   where: {
+        //     id: matchInfo.id
+        //   },
+        //   data: {
+        //     endedAt: new Date(),
+        //     endStage: texas.controller.endAt,
+        //     totalBetAmount: texas.pool.totalAmount,
+        //     // 最大牌型组合
+        //     maximumPokes: texas.dealer.getMaxPokes(),
+        //     // 最大牌力
+        //     maximumType: texas.dealer.getMaxPresentation(),
+        //     // 底牌
+        //     commonPokes: texas.dealer.getDeck().getPokes().commonPokes
+        //   }
+        // })
         const winners = texas.dealer.getWinners()
         // 记录赢家信息
         await win.createMany({
