@@ -3,6 +3,7 @@ import { $Enums } from '@prisma/texas-client'
 import { clients } from '../..'
 import router from '../instance'
 import { record } from '../../models'
+import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
@@ -49,6 +50,8 @@ router.post(toolsApi('/take'), async (ctx) => {
   )!
   try {
     player[actionType](amount)
+
+    logger.info('向客户端推送player-take-actions事件')
     clients.forEach((client) => {
       const wsRes = {
         type: 'player-take-action',

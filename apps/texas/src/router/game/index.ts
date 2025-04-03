@@ -1,5 +1,6 @@
 import { clients } from '../..'
 import router from '../instance'
+import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import { rooms, Texas } from '../../gameCenter'
@@ -28,6 +29,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       // TODO: 如果client不存在, 则表示掉线
       // 掉线后需要向其他玩家推送当前玩家的状态信息
       // 同时需要将Player的状态置为offline
+      logger.info('向行动玩家推送player-action事件')
       clients.get(userId)?.send({
         type: 'player-action',
         data: {
@@ -36,6 +38,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           userId
         }
       })
+      logger.info('向其他玩家推送player-active事件')
       // 向其他玩家推送当前正在行动的玩家
       clients.forEach((ws, id) => {
         if (id !== userId)
@@ -72,6 +75,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           matchId: matchInfo.id
         }
       })
+      logger.info('向客户端推送stage-change事件')
       clients.forEach((ws) => {
         ws.send({
           type: 'stage-change',
@@ -126,6 +130,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           })
         })
 
+        logger.info('向客户端推送game-end事件')
         clients.forEach((ws) => {
           ws.send({
             type: 'game-end',
@@ -162,6 +167,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     await playerHand.createMany({
       data: playerHands
     })
+
+    logger.info('向客户端推送game-start事件')
     // 推送各个玩家的手牌信息
     clients.forEach((ws, userId) => {
       ws.send({
@@ -185,6 +192,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
 })
 
 export function broadCastRoles(texas: Texas) {
+  logger.info('向客户端推送set-role事件')
   clients.forEach((ws) => {
     ws.send({
       type: 'set-role',

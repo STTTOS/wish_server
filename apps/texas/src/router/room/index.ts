@@ -5,6 +5,7 @@ import { Player, initialGame } from 'texas-poker-core'
 import { clients } from '../..'
 import router from '../instance'
 import { user } from '../../models'
+import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import { rooms, Texas } from '../../gameCenter'
@@ -147,6 +148,8 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
 
     // 离开房间需要
     clients.delete(userId)
+
+    logger.info('向客户端推送player-leave事件')
     clients.forEach((ws) => {
       ws.send({
         type: 'player-leave',
@@ -173,6 +176,7 @@ function broadCastPlayerOnSeat(player: Player, selfId: number) {
     // 向其他玩家推送
     if (id === selfId) return
 
+    logger.info('向客户端推送player-on-seat事件')
     ws.send({
       type: 'player-on-seat',
       data: {
@@ -209,6 +213,7 @@ function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
     // 向其他玩家推送
     if (id === selfId) return
 
+    logger.info('向客户端推送player-on-watch事件')
     ws.send({
       type: 'player-on-watch',
       data: {
