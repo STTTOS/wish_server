@@ -33,6 +33,7 @@ enum Action {
   bet
   raise
   allIn
+  call
 }
 
 enum Stage {
