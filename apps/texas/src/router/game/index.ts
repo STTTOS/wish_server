@@ -29,25 +29,25 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       // TODO: 如果client不存在, 则表示掉线
       // 掉线后需要向其他玩家推送当前玩家的状态信息
       // 同时需要将Player的状态置为offline
-      logger.info('向行动玩家推送player-action事件')
-      clients.get(userId)?.send({
-        type: 'player-action',
-        data: {
-          restrict,
-          allowedActions,
-          userId
-        }
-      })
-      logger.info('向其他玩家推送player-active事件')
-      // 向其他玩家推送当前正在行动的玩家
+
+      // // 向其他玩家推送当前正在行动的玩家
+      logger.info('向客户端推送player-action事件')
       clients.forEach((ws, id) => {
-        if (id !== userId)
-          ws.send({
-            type: 'player-active',
-            data: {
-              userId: id
+        const extraData = (() => {
+          if (id === userId)
+            return {
+              restrict,
+              allowedActions
             }
-          })
+          return {}
+        })()
+        ws.send({
+          type: 'player-action',
+          data: {
+            userId: id,
+            ...extraData
+          }
+        })
       })
     })
     texas.start()
