@@ -1,6 +1,5 @@
 import { $Enums } from '@prisma/texas-client'
 
-import { clients } from '../..'
 import router from '../instance'
 import { record } from '../../models'
 import { logger } from '../../logger'
@@ -50,21 +49,6 @@ router.post(toolsApi('/take'), async (ctx) => {
   )!
   try {
     player[actionType](amount)
-
-    logger.info('向客户端推送player-take-action事件')
-    clients.forEach((client) => {
-      client.send({
-        type: 'player-take-action',
-        data: {
-          amount,
-          actionType,
-          userId: user.id,
-          pool: texas.pool.totalAmount,
-          balance: player.getBalance(),
-          currentStageBetAmount: player.getCurrentStageTotalAmount()
-        }
-      })
-    })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {

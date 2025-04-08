@@ -51,35 +51,25 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         })
       })
     })
-    // 需要创建对局信息
-    const matchInfo = await match.create({
-      data: {
-        playersCount: texas.dealer.count
-      }
-    })
-    texas.start()
-    logger.info('向客户端推送game-start事件')
-    // 推送各个玩家的手牌信息
-    clients.forEach((ws, userId) => {
-      ws.send({
-        type: 'game-start',
-        data: {
-          handPokes: texas.dealer
-            .find((player) => player.getUserInfo().id === userId)
-            ?.getHandPokes(),
-          stage: texas.controller.stage,
-          pool: texas.pool.totalAmount,
-          matchId: matchInfo.id,
-          defaultBets: texas.getDefaultBet()
-        }
+
+    texas.onGameStart(() => {
+      logger.info('向客户端推送game-start事件')
+      // 推送各个玩家的手牌信息
+      clients.forEach((ws, userId) => {
+        ws.send({
+          type: 'game-start',
+          data: {
+            handPokes: texas.dealer
+              .find((player) => player.getUserInfo().id === userId)
+              ?.getHandPokes(),
+            stage: texas.controller.stage,
+            pool: texas.pool.totalAmount,
+            matchId: matchInfo.id,
+            defaultBets: texas.getDefaultBet()
+          }
+        })
       })
     })
-    // await matchStageTimeRecord.create({
-    //   data: {
-    //     stage: 'pre_flop',
-    //     matchId: matchInfo.id
-    //   }
-    // })
 
     texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
       // 更新上一个阶段的结束时间
@@ -180,6 +170,31 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         broadCastRoles(texas)
       }
     )
+    texas.onAction((action) => {
+      logger.info('向客户端推送player-take-action事件')
+      clients.forEach((client) => {
+        client.send({
+          type: 'player-take-action',
+          data: {
+            userId,
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            amount: action.payload,
+            actionType: action.type,
+            pool: texas.pool.totalAmount,
+            balance: player.getBalance(),
+            currentStageBetAmount: player.getCurrentStageTotalAmount()
+          }
+        })
+      })
+    })
+    // 需要创建对局信息
+    const matchInfo = await match.create({
+      data: {
+        playersCount: texas.dealer.count
+      }
+    })
+    texas.start()
 
     const playerHands = texas.dealer.map((player) => {
       return {
