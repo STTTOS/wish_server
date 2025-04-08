@@ -142,6 +142,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         //     commonPokes: texas.dealer.getDeck().getPokes().commonPokes
         //   }
         // })
+        await texas.settle()
         const winners = texas.dealer.getWinners()
         // 记录赢家信息
         await win.createMany({
