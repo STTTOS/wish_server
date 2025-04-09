@@ -426,9 +426,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       {
         OR: [
           {
-            timeline: {
-              userId: user?.id
-            }
+            ownerId: user?.id
           },
           { isPrivate: false }
         ]
@@ -482,6 +480,8 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       createdAt: order
     }
   })
+  // eslint-disable-next-line no-console
+  console.log('list', list.length, total)
   response.success(
     ctx,
     withList(
@@ -591,9 +591,7 @@ router.post(timelineApi('/moments'), async (ctx) => {
     where: {
       OR: [
         {
-          timeline: {
-            userId: user?.id
-          }
+          ownerId: user?.id
         },
         { isPrivate: false }
       ]
