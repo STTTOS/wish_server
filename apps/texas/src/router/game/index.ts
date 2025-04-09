@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { ActionWithPayload } from 'texas-poker-core'
+import { Player, ActionWithPayload } from 'texas-poker-core'
 
 import { clients } from '../..'
 import router from '../instance'
@@ -155,11 +155,11 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
               showHandPokes,
               settleList: Array.from(texas.pool.bills).map(
                 ([userId, amount]) => {
+                  const player = texas.room.getPlayerById(userId)
                   return {
-                    userId,
-                    amount,
-                    balance: texas.room.getPlayerById(userId)?.getUserInfo()
-                      .balance
+                    ...player?.getUserInfo(),
+                    balance: player?.getBalance(),
+                    amount
                   }
                 }
               )
