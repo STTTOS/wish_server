@@ -420,17 +420,13 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     id: Number(timelineId)
   }
   const where: Prisma.MomentWhereInput = {
-    AND: [
-      { timeline: timelineWhere },
-      { content: keyword ? { contains: keyword } : undefined },
+    timeline: timelineWhere,
+    content: { contains: keyword ?? '' },
+    OR: [
       {
-        OR: [
-          {
-            ownerId: user?.id
-          },
-          { isPrivate: false }
-        ]
-      }
+        ownerId: user?.id
+      },
+      { isPrivate: false }
     ]
   }
 
@@ -479,20 +475,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     }
   })
   const total = await moment.count({
-    where: {
-      AND: [
-        { timeline: timelineWhere },
-        { content: keyword ? { contains: keyword } : undefined },
-        {
-          OR: [
-            {
-              ownerId: user?.id
-            },
-            { isPrivate: false }
-          ]
-        }
-      ]
-    }
+    where
   })
   // eslint-disable-next-line no-console
   console.log('list', list.length, total)
