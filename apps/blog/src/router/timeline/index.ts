@@ -433,9 +433,7 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
       }
     ]
   }
-  const total = await moment.count({
-    where
-  })
+
   const order =
     (
       await timeline.findUnique({
@@ -478,6 +476,22 @@ router.post(timelineApi('/moment/:timelineId'), async (ctx) => {
     },
     orderBy: {
       createdAt: order
+    }
+  })
+  const total = await moment.count({
+    where: {
+      AND: [
+        { timeline: timelineWhere },
+        { content: keyword ? { contains: keyword } : undefined },
+        {
+          OR: [
+            {
+              ownerId: user?.id
+            },
+            { isPrivate: false }
+          ]
+        }
+      ]
     }
   })
   // eslint-disable-next-line no-console
