@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import { ActionWithPayload } from 'texas-poker-core'
+
 import { clients } from '../..'
 import router from '../instance'
 import { logger } from '../../logger'
@@ -170,20 +172,23 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         broadCastRoles(texas)
       }
     )
-    texas.onAction((action) => {
+    texas.onAction((player) => {
       logger.info('向客户端推送player-take-action事件')
+
+      const action = player.getAction() as ActionWithPayload
       clients.forEach((client) => {
         client.send({
           type: 'player-take-action',
           data: {
-            userId,
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            amount: action.payload,
-            actionType: action.type,
+            actionType: action?.type,
             pool: texas.pool.totalAmount,
             balance: player.getBalance(),
-            currentStageBetAmount: player.getCurrentStageTotalAmount()
+            amount: action.payload?.amount ?? 0,
+            currentStageBetAmount: player.getCurrentStageTotalAmount(),
+            userInfo: {
+              id: player.getUserInfo().id,
+              name: player.getUserInfo().name
+            }
           }
         })
       })
