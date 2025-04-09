@@ -169,6 +169,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         // 游戏结束后轮换角色
         texas.dealer.changeButtonToNextPlayer()
         texas.dealer.setOthers()
+        texas.reset()
         broadCastRoles(texas)
       }
     )
