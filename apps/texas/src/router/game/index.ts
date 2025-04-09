@@ -184,7 +184,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             actionType: action?.type,
             pool: texas.pool.totalAmount,
             balance: player.getBalance(),
-            amount: action.payload?.amount ?? 0,
+            amount: action.payload.value ?? 0,
             currentStageBetAmount: player.getCurrentStageTotalAmount(),
             userInfo: {
               id: player.getUserInfo().id,
