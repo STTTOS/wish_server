@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `Moment` ADD COLUMN `ownerId` INTEGER NULL;
+-- AddForeignKey
+ALTER TABLE `Moment` ADD CONSTRAINT `Moment_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
