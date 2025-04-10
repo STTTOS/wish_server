@@ -4,8 +4,8 @@ import { Prisma } from '@prisma/texas-client'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
-import { match, record, playerHand } from '../../models'
 import response, { withList } from '../../utils/response'
+import { win, match, record, playerHand } from '../../models'
 
 const analysisApi = combinePath(apiPrefix)('/analysis')
 router.post(analysisApi('/match/list'), async (ctx) => {
@@ -62,6 +62,11 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     return
   }
 
+  const winners = await win.findMany({
+    where: {
+      matchId: id
+    }
+  })
   const detail = await match.findUnique({
     where: { id },
     include: {
@@ -77,7 +82,21 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
       }
     }
   })
-  response.success(ctx, detail)
+  if (!detail) {
+    response.error(ctx, 404, '对局不存在')
+    return
+  }
+  response.success(ctx, {
+    ...detail,
+    startedAt: dayjs(detail.startedAt).format(timeFormat),
+    endAt: dayjs(detail.endedAt).format(timeFormat),
+    playerHands: detail.playerHands.map((playerHand) => {
+      return {
+        ...playerHand,
+        win: winners.find((winner) => winner.playerId === playerHand.playerId)
+      }
+    })
+  })
 })
 
 router.post(analysisApi('/records/:matchId'), async (ctx) => {
