@@ -3,9 +3,9 @@ export const port = '7501'
 
 export const apiPrefix = '/api'
 
-export const timeFormat = 'yyyy-MM-DD HH:mm:ss'
+export const timeFormat = 'YYYY-MM-DD HH:mm:ss'
 
-export const timeFormatWithoutSeconds = 'yyyy-MM-DD HH:mm'
+export const timeFormatWithoutSeconds = 'YYYY-MM-DD HH:mm'
 
 export const wordsToMinuteBaseNumber = 500
 

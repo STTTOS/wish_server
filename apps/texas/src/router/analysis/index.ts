@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
+import { apiPrefix, timeFormat } from '../../config'
 import { match, record, playerHand } from '../../models'
 import response, { withList } from '../../utils/response'
-import { apiPrefix, timeFormatWithoutSeconds } from '../../config'
 
 const analysisApi = combinePath(apiPrefix)('/analysis')
 router.post(analysisApi('/match/list'), async (ctx) => {
@@ -44,7 +44,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       list.map((item) => {
         return {
           ...item,
-          startedAt: dayjs(item.startedAt).format(timeFormatWithoutSeconds)
+          startedAt: dayjs(item.startedAt).format(timeFormat)
         }
       }),
       total
