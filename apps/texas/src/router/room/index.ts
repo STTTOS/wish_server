@@ -2,8 +2,8 @@ import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { Player, initialGame } from 'texas-poker-core'
 
-import { clients } from '../..'
 import router from '../instance'
+import { ws } from '../../server'
 import { user } from '../../models'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
@@ -153,24 +153,37 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     }
 
     // 离开房间需要
-    clients.delete(userId)
+    ws.remove(userId)
 
     logger.info('向客户端推送player-leave事件')
-    clients.forEach((ws) => {
-      ws.send({
-        type: 'player-leave',
-        data: {
-          userId,
-          // TODO: 当前玩家之后的角色才会改变
-          roleChangesList: texas.dealer.map((player) => {
-            return {
-              userId: player.getUserInfo().id,
-              role: player.getRole()
-            }
-          })
-        }
-      })
+    ws.broadcast({
+      type: 'player-leave',
+      data: {
+        userId,
+        // TODO: 当前玩家之后的角色才会改变
+        roleChangesList: texas.dealer.map((player) => {
+          return {
+            userId: player.getUserInfo().id,
+            role: player.getRole()
+          }
+        })
+      }
     })
+    // clients.forEach((ws) => {
+    //   ws.send({
+    //     type: 'player-leave',
+    //     data: {
+    //       userId,
+    //       // TODO: 当前玩家之后的角色才会改变
+    //       roleChangesList: texas.dealer.map((player) => {
+    //         return {
+    //           userId: player.getUserInfo().id,
+    //           role: player.getRole()
+    //         }
+    //       })
+    //     }
+    //   })
+    // })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     response.error(ctx, 2000, error.message)
@@ -178,21 +191,26 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
 })
 
 function broadCastPlayerOnSeat(player: Player, selfId: number) {
-  clients.forEach((ws, id) => {
-    // 向其他玩家推送
-    if (id === selfId) return
-
-    logger.info('向客户端推送player-on-seat事件')
-    ws.send({
-      type: 'player-on-seat',
-      data: {
-        ...player.getUserInfo(),
-        role: player.getRole(),
-        balance: player.getBalance(),
-        userId: player.getUserInfo().id
-      }
-    })
+  ws.broadcastExcept(selfId, {
+    type: 'player-on-seat',
+    data: {
+      userInfo: player.getUserInfo(),
+      role: player.getRole()
+    }
   })
+  // clients.forEach((ws, id) => {
+  //   // 向其他玩家推送
+  //   if (id === selfId) return
+
+  //   logger.info('向客户端推送player-on-seat事件')
+  //   ws.send({
+  //     type: 'player-on-seat',
+  //     data: {
+  //       userInfo: player.getUserInfo(),
+  //       role: player.getRole()
+  //     }
+  //   })
+  // })
 }
 router.post(roomApi('/seat/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
@@ -215,24 +233,40 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
   }
 })
 function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
-  clients.forEach((ws, id) => {
-    // 向其他玩家推送
-    if (id === selfId) return
-
-    logger.info('向客户端推送player-on-watch事件')
-    ws.send({
-      type: 'player-on-watch',
-      data: {
-        userId: player.getUserInfo().id,
-        roleChangesList: texas.dealer.map((player) => {
-          return {
-            userId: player.getUserInfo().id,
-            role: player.getRole()
-          }
-        })
-      }
-    })
+  logger.info('向客户端推送player-on-watch事件')
+  ws.broadcastExcept(selfId, {
+    type: 'player-on-watch',
+    data: {
+      userId: player.getUserInfo().id,
+      roleChangesList: texas.dealer.map((player) => {
+        return {
+          userInfo: {
+            id: player.getUserInfo().id
+          },
+          role: player.getRole()
+        }
+      })
+    }
   })
+  // clients.forEach((ws, id) => {
+  //   // 向其他玩家推送
+  //   if (id === selfId) return
+
+  // ws.send({
+  //   type: 'player-on-watch',
+  //   data: {
+  //     userId: player.getUserInfo().id,
+  //     roleChangesList: texas.dealer.map((player) => {
+  //       return {
+  //         userInfo: {
+  //           id: player.getUserInfo().id
+  //         },
+  //         role: player.getRole()
+  //       }
+  //     })
+  //   }
+  // })
+  // })
 }
 // 从坐席到观战席
 router.post(roomApi('/watch/:roomId'), async (ctx) => {
@@ -270,7 +304,7 @@ router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
     (status) =>
       texas?.room.getPlayersBySeatStatus(status).map((player) => {
         return {
-          ...player.getUserInfo(),
+          userInfo: player.getUserInfo(),
           role: player.getRole()
         }
       })

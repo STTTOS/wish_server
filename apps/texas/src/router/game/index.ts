@@ -1,8 +1,8 @@
 /* eslint-disable camelcase */
 import { ActionWithPayload } from 'texas-poker-core'
 
-import { clients } from '../..'
 import router from '../instance'
+import { ws } from '../../server'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import response from '../../utils/response'
@@ -41,22 +41,19 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
 
       // // 向其他玩家推送当前正在行动的玩家
       logger.info('向客户端推送player-action事件')
-      clients.forEach((ws, id) => {
-        const extraData = (() => {
-          if (id === userId)
-            return {
-              restrict,
-              allowedActions
-            }
-          return {}
-        })()
-        ws.send({
-          type: 'player-action',
-          data: {
-            userId,
-            ...extraData
-          }
-        })
+      ws.broadcastTo(userId, {
+        type: 'player-action',
+        userInfo: {
+          id: userId
+        },
+        restrict,
+        allowedActions
+      })
+      ws.broadcastExcept(userId, {
+        type: 'player-action',
+        userInfo: {
+          id: userId
+        }
       })
     })
 
@@ -79,21 +76,33 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         data: playerHands
       })
       logger.info('向客户端推送game-start事件')
-      // 推送各个玩家的手牌信息
-      clients.forEach((ws, userId) => {
-        ws.send({
-          type: 'game-start',
-          data: {
-            handPokes: texas.dealer
-              .find((player) => player.getUserInfo().id === userId)
-              ?.getHandPokes(),
-            stage: texas.controller.stage,
-            pool: texas.pool.totalAmount,
-            matchId: matchInfo.id,
-            defaultBets: texas.getDefaultBet()
-          }
-        })
+      ws.broadcast({
+        type: 'game-start',
+        data: {
+          handPokes: texas.dealer
+            .find((player) => player.getUserInfo().id === userId)
+            ?.getHandPokes(),
+          stage: texas.controller.stage,
+          pool: texas.pool.totalAmount,
+          matchId: matchInfo.id,
+          defaultBets: texas.getDefaultBet()
+        }
       })
+      // 推送各个玩家的手牌信息
+      // clients.forEach((ws, userId) => {
+      //   ws.send({
+      //     type: 'game-start',
+      //     data: {
+      //       handPokes: texas.dealer
+      //         .find((player) => player.getUserInfo().id === userId)
+      //         ?.getHandPokes(),
+      //       stage: texas.controller.stage,
+      //       pool: texas.pool.totalAmount,
+      //       matchId: matchInfo.id,
+      //       defaultBets: texas.getDefaultBet()
+      //     }
+      //   })
+      // })
     })
 
     texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
@@ -116,15 +125,22 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         }
       })
       logger.info('向客户端推送stage-change事件')
-      clients.forEach((ws) => {
-        ws.send({
-          type: 'stage-change',
-          data: {
-            stage,
-            restCommonPokes: commonPokes
-          }
-        })
+      ws.broadcast({
+        type: 'stage-change',
+        data: {
+          stage,
+          restCommonPokes: commonPokes
+        }
       })
+      // clients.forEach((ws) => {
+      //   ws.send({
+      //     type: 'stage-change',
+      //     data: {
+      //       stage,
+      //       restCommonPokes: commonPokes
+      //     }
+      //   })
+      // })
     })
 
     texas.onGameEnd(
@@ -187,26 +203,42 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             })
           return []
         })()
-        clients.forEach((ws) => {
-          ws.send({
-            type: 'game-end',
-            data: {
-              handPokes,
-              showHandPokes,
-              restCommonPokes,
-              settleList: Array.from(texas.pool.bills).map(
-                ([userId, amount]) => {
-                  const player = texas.room.getPlayerById(userId)
-                  return {
-                    ...player?.getUserInfo(),
-                    balance: player?.getBalance(),
-                    amount
-                  }
-                }
-              )
-            }
-          })
+        ws.broadcast({
+          type: 'game-end',
+          data: {
+            handPokes,
+            showHandPokes,
+            restCommonPokes,
+            settleList: Array.from(texas.pool.bills).map(([userId, amount]) => {
+              const player = texas.room.getPlayerById(userId)
+
+              return {
+                amount,
+                userInfo: player?.getUserInfo()
+              }
+            })
+          }
         })
+        // clients.forEach((ws) => {
+        //   ws.send({
+        //     type: 'game-end',
+        //     data: {
+        //       handPokes,
+        //       showHandPokes,
+        //       restCommonPokes,
+        //       settleList: Array.from(texas.pool.bills).map(
+        //         ([userId, amount]) => {
+        //           const player = texas.room.getPlayerById(userId)
+
+        //           return {
+        //             amount,
+        //             userInfo: player?.getUserInfo()
+        //           }
+        //         }
+        //       )
+        //     }
+        //   })
+        // })
         // 游戏结束后轮换角色
         texas.dealer.changeButtonToNextPlayer()
         texas.dealer.setOthers()
@@ -221,22 +253,28 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       const action = player.getAction() as ActionWithPayload
       // 默认下注行为不推送
       if (!isPreFlop)
-        clients.forEach((client) => {
-          client.send({
-            type: 'player-take-action',
-            data: {
-              actionType: action?.type,
-              pool: texas.pool.totalAmount,
-              balance: player.getBalance(),
-              amount: action.payload?.value ?? 0,
-              currentStageBetAmount: player.getCurrentStageTotalAmount(),
-              userInfo: {
-                id: player.getUserInfo().id,
-                name: player.getUserInfo().name
-              }
-            }
-          })
+        ws.broadcast({
+          type: 'player-take-action',
+          data: {
+            actionType: action?.type,
+            pool: texas.pool.totalAmount,
+            userInfo: player.getUserInfo(),
+            amount: action.payload?.value ?? 0,
+            currentStageBetAmount: player.getCurrentStageTotalAmount()
+          }
         })
+      // clients.forEach((client) => {
+      //   client.send({
+      //     type: 'player-take-action',
+      //     data: {
+      //       actionType: action?.type,
+      //       pool: texas.pool.totalAmount,
+      //       amount: action.payload?.value ?? 0,
+      //       currentStageBetAmount: player.getCurrentStageTotalAmount(),
+      //       userInfo: player.getUserInfo()
+      //     }
+      //   })
+      // })
       await record.create({
         data: {
           playerId: player.getUserInfo().id,
@@ -265,17 +303,30 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
 
 export function broadCastRoles(texas: Texas) {
   logger.info('向客户端推送set-role事件')
-  clients.forEach((ws) => {
-    ws.send({
-      type: 'set-role',
-      data: texas.dealer.map((player) => {
-        return {
-          userId: player.getUserInfo().id,
-          role: player.getRole()
-        }
-      })
+  ws.broadcast({
+    type: 'set-role',
+    data: texas.dealer.map((player) => {
+      return {
+        userInfo: {
+          id: player.getUserInfo().id
+        },
+        role: player.getRole()
+      }
     })
   })
+  // clients.forEach((ws) => {
+  //   ws.send({
+  //     type: 'set-role',
+  //     data: texas.dealer.map((player) => {
+  //       return {
+  //         userInfo: {
+  //           id: player.getUserInfo().id
+  //         },
+  //         role: player.getRole()
+  //       }
+  //     })
+  //   })
+  // })
 }
 // 房主开始游戏
 // 确认各个玩家的角色

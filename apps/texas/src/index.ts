@@ -3,19 +3,17 @@
 /* eslint-disable no-console */
 import type { BizError } from './router/interface'
 
-import Koa from 'koa'
-import http from 'http'
 import { join } from 'path'
 import cors from '@koa/cors'
 import koaJwt from 'koa-jwt'
 import mount from 'koa-mount'
 import koaBody from 'koa-body'
 import serve from 'koa-static'
-import { Server, Socket } from 'socket.io'
 import historyApiFallback from 'koa2-connect-history-api-fallback'
 
 import router from './router'
 import { logger } from './logger'
+import { app, server } from './server'
 import response from './utils/response'
 import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
@@ -23,64 +21,6 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
 // import { match, matchStageTimeRecord, playerHand, record, win } from './models'
-
-export const app = new Koa()
-
-const server = http.createServer(app.callback())
-const io = new Server(server, {
-  cors: { origin: 'https://texas.wishufree.com' }
-  // cors: { origin: '*' }
-})
-
-export const clients = new Map<number, Socket>()
-
-// 使用 middleware 验证连接参数
-io.use((socket, next) => {
-  const queryParams = socket.handshake.query
-  const [userId, roomId] = [
-    Number(queryParams.userId),
-    queryParams.roomId as string
-  ]
-  // 验证参数
-  if (!userId || !roomId) {
-    // 传递错误，拒绝连接
-    logger.error(`ws连接url:${socket.handshake.url}(参数异常), 拒绝连接`)
-    return next(new Error('无效的连接参数, 拒绝连接'))
-  }
-
-  // 允许连接
-  next()
-})
-// 只有当玩家加入房间时, 才开启ws连接
-// 退出房间时, 需要关闭连接
-io.on('connection', (socket) => {
-  logger.info('新的客户端连接, url', socket.handshake.url)
-
-  const queryParams = socket.handshake.query
-  const [userId] = [Number(queryParams.userId), queryParams.roomId as string]
-
-  // 将用户ID与连接关联
-  clients.set(userId, socket)
-  socket.send({ type: 'initial connect', data: null })
-  // 向客户端发送欢迎消息
-  // ws.readyState === WebSocket.OPEN
-
-  // 处理连接关闭
-  socket.on('disconnect', (reason) => {
-    // 玩家离开房间, 玩家离线等
-    // 需要向其他客户端推送消息
-    clients.delete(userId)
-    logger.info('客户端断开连接, id:', socket.id, '原因', reason)
-  })
-
-  // 处理错误
-  socket.on('error', (error) => {
-    // 连接出现异常, 则无法正常加入房间
-    clients.delete(userId)
-    console.error('连接错误:', error)
-    logger.error('WebSocket 错误:', error)
-  })
-})
 
 //统一错误处理
 app.use(async (ctx, next) => {
