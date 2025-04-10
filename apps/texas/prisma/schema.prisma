@@ -68,7 +68,7 @@ enum PresentationType {
 
 // 记录玩家手牌
 model PlayerHand {
-  id       Int  @id @default(autoincrement())
+  id       Int     @id @default(autoincrement())
   // 对应的对局 ID
   matchId  Int
   // 对应的玩家 ID
@@ -76,33 +76,32 @@ model PlayerHand {
   // string[]
   hand     Json
   // 记录用户角色
-  role String?
+  role     String?
 
-  match  Match @relation(fields: [matchId], references: [id])
+  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   player User  @relation(fields: [playerId], references: [id])
 }
 
 // 对局信息
 model Match {
-  id             Int               @id @default(autoincrement())
+  id              Int               @id @default(autoincrement())
   // 对局开始的时间
-  startedAt      DateTime          @default(now())
+  startedAt       DateTime          @default(now())
   // 对局结束的时间
-  endedAt        DateTime?
-  playersCount   Int
+  endedAt         DateTime?
+  playersCount    Int
   // 总的下注额度
-  totalBetAmount Float?
+  totalBetAmount  Float?
   // 记录游戏在哪个阶段结束的
-  endStage       Stage?
+  endStage        Stage?
   // 公共牌
-  commonPokes    Json?
+  commonPokes     Json?
   // 存储计算后的最大牌力
-  maximumType    PresentationType?
+  maximumType     PresentationType?
   // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
-  maximumPokes   Json?
+  maximumPokes    Json?
   // 大盲注
-  lowestBetAmount Int @default(0)
-
+  lowestBetAmount Int               @default(0)
 
   // players              User[]
   winners              Win[]
@@ -113,9 +112,9 @@ model Match {
 }
 
 model MatchStageTimeRecord {
-  id      Int      @id @default(autoincrement())
-  stage   Stage    
-  startAt DateTime @default(now())
+  id      Int       @id @default(autoincrement())
+  stage   Stage
+  startAt DateTime  @default(now())
   endAt   DateTime?
 
   matchId Int
