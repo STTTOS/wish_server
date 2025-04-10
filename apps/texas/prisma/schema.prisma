@@ -119,7 +119,7 @@ model MatchStageTimeRecord {
   endAt   DateTime?
 
   matchId Int
-  match   Match @relation(fields: [matchId], references: [id])
+  match   Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, stage])
 }
@@ -138,7 +138,7 @@ model Record {
   player    User     @relation(fields: [playerId], references: [id])
   createdAt DateTime @default(now())
 
-  match   Match? @relation(fields: [matchId], references: [id])
+  match   Match? @relation(fields: [matchId], references: [id], onDelete: Cascade)
   matchId Int?
 }
 
@@ -148,6 +148,6 @@ model Win {
   matchId  Int // 对应的对局 ID
   playerId Int // 对应的玩家 ID
 
-  match Match @relation(fields: [matchId], references: [id])
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [playerId], references: [id])
 }
