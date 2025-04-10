@@ -192,7 +192,9 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
               ),
               handPokes: texas.dealer.map((player) => {
                 return {
-                  userInfo: player.getUserInfo(),
+                  userInfo: {
+                    id: player.getUserInfo().id
+                  },
                   hand: player.getHandPokes()
                 }
               })
