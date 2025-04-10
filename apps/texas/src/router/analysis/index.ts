@@ -27,6 +27,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
     skip: (skip - 1) * take,
     where,
     select: {
+      id: true,
       startedAt: true,
       maximumType: true,
       commonPokes: true,
