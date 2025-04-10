@@ -174,12 +174,26 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         })
 
         logger.info('向客户端推送game-end事件')
+
+        const handPokes = (() => {
+          if (showHandPokes)
+            return texas.dealer.map((player) => {
+              return {
+                userInfo: {
+                  id: player.getUserInfo().id
+                },
+                hand: player.getHandPokes()
+              }
+            })
+          return []
+        })()
         clients.forEach((ws) => {
           ws.send({
             type: 'game-end',
             data: {
-              restCommonPokes,
+              handPokes,
               showHandPokes,
+              restCommonPokes,
               settleList: Array.from(texas.pool.bills).map(
                 ([userId, amount]) => {
                   const player = texas.room.getPlayerById(userId)
@@ -189,15 +203,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
                     amount
                   }
                 }
-              ),
-              handPokes: texas.dealer.map((player) => {
-                return {
-                  userInfo: {
-                    id: player.getUserInfo().id
-                  },
-                  hand: player.getHandPokes()
-                }
-              })
+              )
             }
           })
         })
