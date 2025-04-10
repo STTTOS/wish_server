@@ -8,13 +8,16 @@ import http from 'http'
 import { join } from 'path'
 import cors from '@koa/cors'
 import koaJwt from 'koa-jwt'
+import mount from 'koa-mount'
 import koaBody from 'koa-body'
+import serve from 'koa-static'
 import { Server, Socket } from 'socket.io'
+import historyApiFallback from 'koa2-connect-history-api-fallback'
 
 import router from './router'
-import { port } from './config'
 import { logger } from './logger'
 import response from './utils/response'
+import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
 import loggerMiddleware from './middleware/loggerMiddleware'
 
@@ -92,13 +95,44 @@ app.use(async (ctx, next) => {
   }
 })
 
+// 记录请求
 app.use(async (ctx, next) => {
   const { ip, url } = ctx.request
   logger.info(`ip: ${ip}, request for ${url}`)
   await next()
 })
-// 请求跨域
-app.use(cors())
+
+// 配合history模式
+// 放在静态资源服务中间件前面加载
+// 404  重定向到 /public/index.html
+app.use(historyApiFallback({ index: '/public/index.html' }))
+
+// 跨域设置
+app.use(
+  cors({
+    origin(ctx) {
+      return ctx.get('Origin') || '*'
+    }
+  })
+)
+
+// 访问网站静态文件
+app.use(async (ctx, next) => {
+  if (ctx.path === '/public/index.html' || ctx.path === '/index.html') {
+    // 不缓存 index.html
+    ctx.set('Cache-Control', 'max-age=0')
+  }
+  await next()
+})
+
+// 访问 网站静态文件
+app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
+
+// 访问 网站静态文件
+app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
+
+// 注册静态资源前缀 /static
+app.use(mount('/static', serve(join(__dirname, '../static'), { maxAge })))
 
 app.use(
   koaJwt({
@@ -109,6 +143,7 @@ app.use(
     passthrough: true
   })
 )
+
 // Custom 401 handling
 app.use(customHandle401)
 
