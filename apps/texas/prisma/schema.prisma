@@ -21,7 +21,7 @@ model User {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @default(now())
   records    Record[]
-  matches    Match[]
+  // matches    Match[]
   deletedAt  DateTime?
   win        Win[]
   playerHand PlayerHand[]
@@ -99,7 +99,7 @@ model Match {
   // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
   maximumPokes   Json?
 
-  players              User[]
+  // players              User[]
   winners              Win[]
   records              Record[]
   playerHands          PlayerHand[]

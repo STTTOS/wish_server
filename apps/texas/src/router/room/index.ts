@@ -23,7 +23,6 @@ router.post(roomApi('/create'), async (ctx) => {
     allowPlayersToWatch,
     thinkingTime
   }: {
-    userId: number
     lowestBetAmount: number
     maximumCountOfPlayers: number
     allowPlayersToWatch: boolean

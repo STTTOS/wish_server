@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { Player, ActionWithPayload } from 'texas-poker-core'
+/* eslint-disable camelcase */
+import { ActionWithPayload } from 'texas-poker-core'
 
 import { clients } from '../..'
 import router from '../instance'
@@ -8,7 +8,13 @@ import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
-import { win, match, playerHand, matchStageTimeRecord } from '../../models'
+import {
+  win,
+  match,
+  record,
+  playerHand,
+  matchStageTimeRecord
+} from '../../models'
 
 const toolsApi = combinePath(apiPrefix)('/game')
 
@@ -54,7 +60,23 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     })
 
-    texas.onGameStart(() => {
+    texas.onGameStart(async () => {
+      await matchStageTimeRecord.create({
+        data: {
+          stage: 'pre_flop',
+          matchId: matchInfo.id
+        }
+      })
+      const playerHands = texas.dealer.map((player) => {
+        return {
+          hand: player.getHandPokes(),
+          playerId: player.getUserInfo().id,
+          matchId: matchInfo.id
+        }
+      })
+      await playerHand.createMany({
+        data: playerHands
+      })
       logger.info('向客户端推送game-start事件')
       // 推送各个玩家的手牌信息
       clients.forEach((ws, userId) => {
@@ -75,21 +97,23 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
 
     texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
       // 更新上一个阶段的结束时间
-      // await matchStageTimeRecord.update({
-      //   where: {
-      //     id: matchInfo.id,
-      //     stage: lastStage
-      //   },
-      //   data: {
-      //     endAt: new Date()
-      //   }
-      // })
-      // await matchStageTimeRecord.create({
-      //   data: {
-      //     stage,
-      //     matchId: matchInfo.id
-      //   }
-      // })
+      await matchStageTimeRecord.update({
+        where: {
+          matchId_stage: {
+            matchId: matchInfo.id,
+            stage: lastStage
+          }
+        },
+        data: {
+          endAt: new Date()
+        }
+      })
+      await matchStageTimeRecord.create({
+        data: {
+          stage,
+          matchId: matchInfo.id
+        }
+      })
       logger.info('向客户端推送stage-change事件')
       clients.forEach((ws) => {
         ws.send({
@@ -109,32 +133,34 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         // 然后需要设置当前阶段的结束时间
         // 如果是all-in直接推进到游戏结束
         // 那么游戏则视为只进行到当前所处的阶段
-        // await matchStageTimeRecord.update({
-        //   where: {
-        //     id: matchInfo.id,
-        //     stage: currentStage
-        //   },
-        //   data: {
-        //     endAt: new Date()
-        //   }
-        // })
-        // await match.update({
-        //   where: {
-        //     id: matchInfo.id
-        //   },
-        //   data: {
-        //     endedAt: new Date(),
-        //     endStage: texas.controller.endAt,
-        //     totalBetAmount: texas.pool.totalAmount,
-        //     // 最大牌型组合
-        //     maximumPokes: texas.dealer.getMaxPokes(),
-        //     // 最大牌力
-        //     maximumType: texas.dealer.getMaxPresentation(),
-        //     // 底牌
-        //     commonPokes: texas.dealer.getDeck().getPokes().commonPokes
-        //   }
-        // })
         await texas.settle()
+        await matchStageTimeRecord.update({
+          where: {
+            matchId_stage: {
+              matchId: matchInfo.id,
+              stage: currentStage
+            }
+          },
+          data: {
+            endAt: new Date()
+          }
+        })
+        await match.update({
+          where: {
+            id: matchInfo.id
+          },
+          data: {
+            endedAt: new Date(),
+            endStage: texas.controller.endAt,
+            totalBetAmount: texas.pool.totalAmount,
+            // 最大牌型组合
+            maximumPokes: texas.dealer.getMaxPokes(),
+            // 最大牌力
+            maximumType: texas.dealer.getMaxPresentation(),
+            // 底牌
+            commonPokes: texas.dealer.getDeck().getPokes().commonPokes
+          }
+        })
         const winners = texas.dealer.getWinners()
         // 记录赢家信息
         await win.createMany({
@@ -173,10 +199,20 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         broadCastRoles(texas)
       }
     )
-    texas.onAction((player) => {
+
+    texas.onAction(async (player) => {
       logger.info('向客户端推送player-take-action事件')
 
       const action = player.getAction() as ActionWithPayload
+      await record.create({
+        data: {
+          playerId: player.getUserInfo().id,
+          stage: texas.controller.stage,
+          action: action!.type,
+          amount: action.payload?.value,
+          matchId: matchInfo.id
+        }
+      })
       clients.forEach((client) => {
         client.send({
           type: 'player-take-action',
@@ -202,16 +238,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     })
     texas.start()
 
-    const playerHands = texas.dealer.map((player) => {
-      return {
-        hand: player.getHandPokes(),
-        playerId: player.getUserInfo().id,
-        matchId: matchInfo.id
-      }
-    })
-    await playerHand.createMany({
-      data: playerHands
-    })
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
