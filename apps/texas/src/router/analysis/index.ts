@@ -89,7 +89,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
   response.success(ctx, {
     ...detail,
     startedAt: dayjs(detail.startedAt).format(timeFormat),
-    endAt: dayjs(detail.endedAt).format(timeFormat),
+    endedAt: dayjs(detail.endedAt).format(timeFormat),
     playerHands: detail.playerHands.map((playerHand) => {
       return {
         ...playerHand,
