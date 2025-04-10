@@ -1,7 +1,6 @@
 import { $Enums } from '@prisma/texas-client'
 
 import router from '../instance'
-import { record } from '../../models'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
@@ -33,17 +32,6 @@ router.post(toolsApi('/take'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  const stage = texas.controller.stage
-  await record.create({
-    data: {
-      amount,
-      stage,
-      matchId,
-      action: actionType,
-      playerId: user.id
-    }
-  })
-
   const player = texas.dealer.find(
     (player) => player.getUserInfo().id === user.id
   )!

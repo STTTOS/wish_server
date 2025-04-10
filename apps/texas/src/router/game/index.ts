@@ -200,7 +200,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       }
     )
 
-    texas.onAction(async (player) => {
+    texas.onAction(async (player, isPreFlop) => {
       logger.info('向客户端推送player-take-action事件')
 
       const action = player.getAction() as ActionWithPayload
@@ -213,22 +213,24 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           matchId: matchInfo.id
         }
       })
-      clients.forEach((client) => {
-        client.send({
-          type: 'player-take-action',
-          data: {
-            actionType: action?.type,
-            pool: texas.pool.totalAmount,
-            balance: player.getBalance(),
-            amount: action.payload?.value ?? 0,
-            currentStageBetAmount: player.getCurrentStageTotalAmount(),
-            userInfo: {
-              id: player.getUserInfo().id,
-              name: player.getUserInfo().name
+      // 默认下注行为不推送
+      if (!isPreFlop)
+        clients.forEach((client) => {
+          client.send({
+            type: 'player-take-action',
+            data: {
+              actionType: action?.type,
+              pool: texas.pool.totalAmount,
+              balance: player.getBalance(),
+              amount: action.payload?.value ?? 0,
+              currentStageBetAmount: player.getCurrentStageTotalAmount(),
+              userInfo: {
+                id: player.getUserInfo().id,
+                name: player.getUserInfo().name
+              }
             }
-          }
+          })
         })
-      })
     })
     // 需要创建对局信息
     const matchInfo = await match.create({
