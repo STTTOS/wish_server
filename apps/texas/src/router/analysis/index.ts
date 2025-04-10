@@ -1,0 +1,101 @@
+import dayjs from 'dayjs'
+import { Prisma } from '@prisma/texas-client'
+
+import router from '../instance'
+import combinePath from '../../utils/combinePath'
+import { match, record, playerHand } from '../../models'
+import response, { withList } from '../../utils/response'
+import { apiPrefix, timeFormatWithoutSeconds } from '../../config'
+
+const analysis = combinePath(apiPrefix)('/analysis')
+router.post(analysis('/match/list'), async (ctx) => {
+  const { current: skip, pageSize: take, time } = ctx.request.body
+  if (!skip || !take) {
+    response.error(ctx, 400, '分页参数错误')
+  }
+  const where: Prisma.MatchWhereInput = {}
+  if (time) {
+    const [start, end] = time
+    where.startedAt = {
+      gte: new Date(start),
+      lte: new Date(end)
+    }
+  }
+  const total = await match.count({ where })
+  const list = await match.findMany({
+    take,
+    skip: (skip - 1) * take,
+    where,
+    select: {
+      startedAt: true,
+      commonPokes: true,
+      playersCount: true,
+      lowestBetAmount: true
+    }
+  })
+  response.success(
+    ctx,
+    withList(
+      list.map((item) => {
+        return {
+          ...item,
+          startedAt: dayjs(item.startedAt).format(timeFormatWithoutSeconds)
+        }
+      }),
+      total
+    )
+  )
+})
+
+router.post(analysis('/match/detail/:id'), async (ctx) => {
+  const id = Number(ctx.params.id)
+  if (isNaN(id)) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+
+  const detail = await match.findUnique({
+    where: { id },
+    include: {
+      records: true,
+      playerHands: {
+        include: {
+          player: true
+        }
+      }
+    }
+  })
+  response.success(ctx, detail)
+})
+
+router.post(analysis('/records/:matchId'), async (ctx) => {
+  const matchId = Number(ctx.params.matchId)
+
+  if (isNaN(matchId)) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const list = await record.findMany({
+    where: {
+      matchId
+    }
+  })
+  response.success(ctx, { list })
+})
+
+router.post(analysis('/players/:matchId'), async (ctx) => {
+  const matchId = Number(ctx.params.matchId)
+  if (isNaN(matchId)) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const list = await playerHand.findMany({
+    where: {
+      matchId
+    },
+    include: {
+      player: true
+    }
+  })
+  response.success(ctx, { list })
+})

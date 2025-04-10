@@ -98,6 +98,9 @@ model Match {
   maximumType    PresentationType?
   // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
   maximumPokes   Json?
+  // 大盲注
+  lowestBetAmount Int @default(0)
+
 
   // players              User[]
   winners              Win[]

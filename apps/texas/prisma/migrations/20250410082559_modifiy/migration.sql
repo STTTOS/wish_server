@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Match` ADD COLUMN `lowestBetAmount` INTEGER NOT NULL DEFAULT 0;
