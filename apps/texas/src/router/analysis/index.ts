@@ -31,6 +31,9 @@ router.post(analysis('/match/list'), async (ctx) => {
       commonPokes: true,
       playersCount: true,
       lowestBetAmount: true
+    },
+    orderBy: {
+      startedAt: 'desc'
     }
   })
   response.success(
