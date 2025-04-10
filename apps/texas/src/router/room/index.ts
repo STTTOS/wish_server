@@ -20,12 +20,14 @@ router.post(roomApi('/create'), async (ctx) => {
   const {
     lowestBetAmount,
     maximumCountOfPlayers,
-    allowPlayersToWatch
+    allowPlayersToWatch,
+    thinkingTime
   }: {
     userId: number
     lowestBetAmount: number
     maximumCountOfPlayers: number
     allowPlayersToWatch: boolean
+    thinkingTime?: number
   } = ctx.request.body
   const userId = ctx.state.user!.id
 
@@ -35,6 +37,10 @@ router.post(roomApi('/create'), async (ctx) => {
     )
   ) {
     response.error(ctx, 400, '参数异常')
+    return
+  }
+  if (!isNil(thinkingTime) && thinkingTime < 30) {
+    response.error(ctx, 400, '超时时间不可小于30s')
     return
   }
   if (lowestBetAmount < 0) {
@@ -68,7 +74,8 @@ router.post(roomApi('/create'), async (ctx) => {
     lowestBetAmount,
     maximumCountOfPlayers,
     allowPlayersToWatch,
-    user: userInfo
+    user: userInfo,
+    thinkingTime
   })
   rooms.set(roomId, texas)
   response.success(ctx, { roomId }, '房间创建成功')
