@@ -31,7 +31,8 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       maximumType: true,
       commonPokes: true,
       playersCount: true,
-      lowestBetAmount: true
+      lowestBetAmount: true,
+      endedAt: true
     },
     orderBy: {
       startedAt: 'desc'
