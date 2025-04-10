@@ -32,7 +32,8 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       commonPokes: true,
       playersCount: true,
       lowestBetAmount: true,
-      endedAt: true
+      endedAt: true,
+      endStage: true
     },
     orderBy: {
       startedAt: 'desc'
@@ -44,7 +45,8 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       list.map((item) => {
         return {
           ...item,
-          startedAt: dayjs(item.startedAt).format(timeFormat)
+          startedAt: dayjs(item.startedAt).format(timeFormat),
+          endAt: dayjs(item.endedAt).format(timeFormat)
         }
       }),
       total
