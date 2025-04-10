@@ -71,7 +71,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         return {
           hand: player.getHandPokes(),
           playerId: player.getUserInfo().id,
-          matchId: matchInfo.id
+          matchId: matchInfo.id,
+          role: player.getRole()
         }
       })
       await playerHand.createMany({

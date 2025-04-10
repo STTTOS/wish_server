@@ -65,7 +65,11 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
   const detail = await match.findUnique({
     where: { id },
     include: {
-      records: true,
+      records: {
+        include: {
+          player: true
+        }
+      },
       playerHands: {
         include: {
           player: true
