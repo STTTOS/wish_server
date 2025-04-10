@@ -36,7 +36,7 @@ router.post(toolsApi('/take'), async (ctx) => {
     (player) => player.getUserInfo().id === user.id
   )!
   try {
-    player[actionType](amount)
+    await player[actionType](amount)
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {

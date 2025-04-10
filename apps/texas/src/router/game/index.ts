@@ -189,7 +189,13 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
                     amount
                   }
                 }
-              )
+              ),
+              handPokes: texas.dealer.map((player) => {
+                return {
+                  userInfo: player.getUserInfo(),
+                  hand: player.getHandPokes()
+                }
+              })
             }
           })
         })
@@ -205,15 +211,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       logger.info('向客户端推送player-take-action事件')
 
       const action = player.getAction() as ActionWithPayload
-      await record.create({
-        data: {
-          playerId: player.getUserInfo().id,
-          stage: texas.controller.stage,
-          action: action!.type,
-          amount: action.payload?.value,
-          matchId: matchInfo.id
-        }
-      })
       // 默认下注行为不推送
       if (!isPreFlop)
         clients.forEach((client) => {
@@ -232,6 +229,15 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             }
           })
         })
+      await record.create({
+        data: {
+          playerId: player.getUserInfo().id,
+          stage: texas.controller.stage,
+          action: action!.type,
+          amount: action.payload?.value,
+          matchId: matchInfo.id
+        }
+      })
     })
     // 需要创建对局信息
     const matchInfo = await match.create({
