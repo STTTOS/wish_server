@@ -73,7 +73,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             matchId: matchInfo.id,
             // each player has different handPokes
             handPokes: texas.dealer
-              .find((player) => player.getUserInfo().id === id)
+              .find((player) => player.id === id)
               ?.getHandPokes(),
             stage: texas.controller.stage,
             pool: texas.pool.totalAmount,
