@@ -13,6 +13,9 @@ class SocketServer {
       // cors: { origin: '*' }
     })
 
+    // socket.io中间件
+    // 检查userId与roomId参数是否传递
+    // 否则不予链接
     this.#io.use((socket, next) => {
       const queryParams = socket.handshake.query
       const [userId, roomId] = [
@@ -75,6 +78,9 @@ class SocketServer {
       client.send(data)
     })
   }
+  /**
+   * @description 向除了目标userId的所有端广播
+   */
   broadcastExcept(userId: number, data: Parameters<Socket['send']>[0]) {
     this.#clients.forEach((client, id) => {
       if (id !== userId) {
@@ -82,15 +88,25 @@ class SocketServer {
       }
     })
   }
+  /**
+   * @description 向指定的端推送消息
+   */
   broadcastTo(userId: number, data: Parameters<Socket['send']>[0]) {
     this.#clients.get(userId)?.send(data)
   }
+
+  /**
+   * @description 自定义广播方式, 用于向所有端广播时, 每个端的数据有差异时
+   */
   broadcastEach(callback: (userId: number) => Parameters<Socket['send']>[0]) {
     this.#clients.forEach((client, id) => {
       client.send(callback(id))
     })
   }
 
+  /**
+   * @description 移除ws客户端
+   */
   remove(userId: number) {
     this.#clients.delete(userId)
   }

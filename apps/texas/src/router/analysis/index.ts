@@ -106,7 +106,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     playerHands: detail.playerHands.map((playerHand) => {
       return {
         ...playerHand,
-        win: winners.find((winner) => winner.playerId === playerHand.playerId)
+        win: !!winners.find((winner) => winner.playerId === playerHand.playerId)
       }
     })
   })
