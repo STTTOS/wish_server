@@ -12,6 +12,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
   const { current: skip, pageSize: take, time } = ctx.request.body
   if (!skip || !take) {
     response.error(ctx, 400, '分页参数错误')
+    return
   }
   const where: Prisma.MatchWhereInput = {}
   if (time) {
