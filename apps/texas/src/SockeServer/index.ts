@@ -85,6 +85,11 @@ class SocketServer {
   broadcastTo(userId: number, data: Parameters<Socket['send']>[0]) {
     this.#clients.get(userId)?.send(data)
   }
+  broadcastEach(callback: (userId: number) => Parameters<Socket['send']>[0]) {
+    this.#clients.forEach((client, id) => {
+      client.send(callback(id))
+    })
+  }
 
   remove(userId: number) {
     this.#clients.delete(userId)

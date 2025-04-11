@@ -65,16 +65,25 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         }
       })
       logger.info('向客户端推送game-start事件')
-      ws.broadcast({
-        type: 'game-start',
-        data: {
-          handPokes: texas.dealer
-            .find((player) => player.getUserInfo().id === userId)
-            ?.getHandPokes(),
-          stage: texas.controller.stage,
-          pool: texas.pool.totalAmount,
-          matchId: matchInfo.id,
-          defaultBets: texas.getDefaultBet()
+
+      ws.broadcastEach((id) => {
+        return {
+          type: 'game-start',
+          data: {
+            matchId: matchInfo.id,
+            // each player has different handPokes
+            handPokes: texas.dealer
+              .find((player) => player.getUserInfo().id === id)
+              ?.getHandPokes(),
+            stage: texas.controller.stage,
+            pool: texas.pool.totalAmount,
+            defaultBets: texas.getDefaultBet().map(({ userId, amount }) => {
+              return {
+                amount,
+                userInfo: texas.room.getPlayerById(userId)?.getUserInfo()
+              }
+            })
+          }
         }
       })
       // 推送各个玩家的手牌信息
