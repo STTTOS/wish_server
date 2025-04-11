@@ -92,6 +92,13 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
             }
           }
         }
+      },
+      matchStageTimeRecord: {
+        select: {
+          endAt: true,
+          startAt: true,
+          stage: true
+        }
       }
     }
   })
