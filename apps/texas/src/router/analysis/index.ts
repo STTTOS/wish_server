@@ -73,12 +73,24 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     include: {
       records: {
         include: {
-          player: true
+          player: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true
+            }
+          }
         }
       },
       playerHands: {
         include: {
-          player: true
+          player: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true
+            }
+          }
         }
       }
     }
