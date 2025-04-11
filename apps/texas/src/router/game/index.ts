@@ -64,17 +64,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           matchId: matchInfo.id
         }
       })
-      const playerHands = texas.dealer.map((player) => {
-        return {
-          hand: player.getHandPokes(),
-          playerId: player.getUserInfo().id,
-          matchId: matchInfo.id,
-          role: player.getRole()
-        }
-      })
-      await playerHand.createMany({
-        data: playerHands
-      })
       logger.info('向客户端推送game-start事件')
       ws.broadcast({
         type: 'game-start',
@@ -162,6 +151,22 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             endAt: new Date()
           }
         })
+
+        // 记录玩家手牌以及奖池分配情况
+        const playerHands = texas.dealer.map((player) => {
+          return {
+            matchId: matchInfo.id,
+            role: player.getRole(),
+            hand: player.getHandPokes(),
+            playerId: player.getUserInfo().id,
+            earn: texas.pool.bills.get(userId)
+          }
+        })
+        await playerHand.createMany({
+          data: playerHands
+        })
+
+        // 更新对局信息
         await match.update({
           where: {
             id: matchInfo.id
@@ -178,6 +183,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             commonPokes: texas.dealer.getDeck().getPokes().commonPokes
           }
         })
+
+        // 记录玩家信息
         const winners = texas.dealer.getWinners()
         // 记录赢家信息
         await win.createMany({
