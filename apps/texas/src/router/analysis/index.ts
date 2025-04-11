@@ -2,6 +2,7 @@ import dayjs from 'dayjs'
 import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
+import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '../../utils/response'
@@ -108,8 +109,15 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
   }
   response.success(ctx, {
     ...detail,
-    startedAt: dayjs(detail.startedAt).format(timeFormat),
-    endedAt: detail.endedAt && dayjs(detail.endedAt).format(timeFormat),
+    startedAt: formatTime(detail.startedAt),
+    endedAt: formatTime(detail.endedAt),
+    matchStageTimeRecord: detail.matchStageTimeRecord?.map((record) => {
+      return {
+        ...record,
+        endAt: formatTime(record.endAt),
+        startAt: formatTime(record.startAt)
+      }
+    }),
     playerHands: detail.playerHands.map((playerHand) => {
       return {
         ...playerHand,
