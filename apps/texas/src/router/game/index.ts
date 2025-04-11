@@ -189,15 +189,13 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             // 最大牌力
             maximumType: texas.dealer.getMaxPresentation(),
             // 底牌
-            commonPokes: texas.dealer.getDeck().getPokes().commonPokes
+            commonPokes: texas.dealer.deck.getPokes().commonPokes
           }
         })
 
-        // 记录玩家信息
-        const winners = texas.dealer.getWinners()
         // 记录赢家信息
         await win.createMany({
-          data: winners.map((winner) => {
+          data: texas.dealer.winners.map((winner) => {
             return {
               matchId: matchInfo.id,
               playerId: winner.getUserInfo().id
@@ -276,7 +274,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             pool: texas.pool.totalAmount,
             userInfo: player.getUserInfo(),
             amount: action.payload?.value ?? 0,
-            currentStageBetAmount: player.getCurrentStageTotalAmount()
+            currentStageBetAmount: player.currentStageTotalAmount
           }
         })
       // clients.forEach((client) => {
