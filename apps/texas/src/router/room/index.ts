@@ -30,6 +30,15 @@ router.post(roomApi('/create'), async (ctx) => {
   } = ctx.request.body
   const userId = ctx.state.user!.id
 
+  const userInfo = await user.findUnique({
+    where: {
+      id: userId
+    }
+  })
+  if (!userInfo) {
+    response.error(ctx, 2100, '玩家不存在, 无法创建房间')
+    return
+  }
   if (
     [lowestBetAmount, maximumCountOfPlayers, allowPlayersToWatch, userId].some(
       isNil
@@ -50,32 +59,24 @@ router.post(roomApi('/create'), async (ctx) => {
     response.error(ctx, 400, '玩家不能超过10个')
     return
   }
+
   if (
     Array.from(rooms.values())
       .map((texas) => texas.room.owner?.getUserInfo().id)
       .includes(userId)
   ) {
-    response.error(ctx, 2000, '不可重复创建房间')
-    return
-  }
-  const userInfo = await user.findUnique({
-    where: {
-      id: userId
-    }
-  })
-  if (!userInfo) {
-    response.error(ctx, 2000, '游戏数据异常')
+    response.error(ctx, 2100, '不可重复创建房间')
     return
   }
 
   const uuid = uuidv4()
   await room.create({
     data: {
+      uuid,
       lowestBetAmount,
       allowPlayersToWatch,
       ownerId: userInfo.id,
-      maximumCountOfPlayers,
-      uuid
+      maximumCountOfPlayers
     }
   })
   const texas = initialGame({
