@@ -268,6 +268,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       logger.info('向客户端推送player-take-action事件')
 
       const action = player.getAction() as ActionWithPayload
+      logger.info('isPreFlop', isPreFlop)
       // 默认下注行为不推送
       if (!isPreFlop)
         ws.broadcast({
