@@ -41,6 +41,7 @@ model Room {
   maximumCountOfPlayers Int
   // 房间密码, 如果是私密房间, 则需要
   privateKey            String?
+  createdAt  DateTime     @default(now())
 
   // 房主
   ownerId Int
