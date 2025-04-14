@@ -344,10 +344,10 @@ router.post(roomApi('/all'), async (ctx) => {
 
   response.success(
     ctx,
-    allRooms.map(({ id }) => {
+    allRooms.map(({ uuid }) => {
       return {
-        id,
-        ...rooms.get(String(id))?.room.getBaseInfo()
+        id: uuid,
+        ...rooms.get(uuid)?.room.getBaseInfo()
       }
     })
   )
