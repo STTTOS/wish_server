@@ -1,12 +1,11 @@
 import { isNil } from 'ramda'
-import { v4 as uuidv4 } from 'uuid'
 import { Player, initialGame } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
-import { user } from '../../models'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
+import { room, user } from '../../models'
 import response from '../../utils/response'
 import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
@@ -68,7 +67,14 @@ router.post(roomApi('/create'), async (ctx) => {
     return
   }
 
-  const roomId = uuidv4()
+  const roomInfo = await room.create({
+    data: {
+      lowestBetAmount,
+      allowPlayersToWatch,
+      ownerId: userInfo.id,
+      maximumCountOfPlayers
+    }
+  })
   const texas = initialGame({
     lowestBetAmount,
     maximumCountOfPlayers,
@@ -76,13 +82,12 @@ router.post(roomApi('/create'), async (ctx) => {
     user: userInfo,
     thinkingTime
   })
-  rooms.set(roomId, texas)
-  response.success(ctx, { roomId }, '房间创建成功')
+  rooms.set(String(roomInfo.id), texas)
+  response.success(ctx, { roomId: roomInfo.id }, '房间创建成功')
 })
 
 router.post(roomApi('/join/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
-  // const {} = ctx.request.body
 
   const texas = rooms.get(roomId)
   if (!texas) {
@@ -145,9 +150,24 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
   try {
     const userId = ctx.state.user!.id
     const ownerId = texas.room.removeById(userId)
-    if (ownerId) response.success(ctx, { ownerId })
+    if (ownerId) {
+      await room.update({
+        where: {
+          id: Number(roomId)
+        },
+        data: {
+          ownerId
+        }
+      })
+      response.success(ctx, { ownerId })
+    }
     // 最后一位玩家离开房间
     else {
+      await room.delete({
+        where: {
+          id: Number(roomId)
+        }
+      })
       rooms.delete(roomId)
       response.success(ctx)
     }
@@ -212,21 +232,7 @@ function broadCastPlayerOnSeat(player: Player, selfId: number) {
   //   })
   // })
 }
-router.post(roomApi('/seat/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
 
-  const userId = ctx.state.user!.id
-  const texas = rooms.get(roomId)
-
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-  texas?.room.seatById(userId)
-  const player = texas.room.getPlayerById(userId)!
-  broadCastPlayerOnSeat(player, userId)
-  response.success(ctx)
-})
 function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
   logger.info('向客户端推送player-on-watch事件')
   ws.broadcastExcept(selfId, {
@@ -243,26 +249,22 @@ function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
       })
     }
   })
-  // clients.forEach((ws, id) => {
-  //   // 向其他玩家推送
-  //   if (id === selfId) return
-
-  // ws.send({
-  //   type: 'player-on-watch',
-  //   data: {
-  //     userId: player.getUserInfo().id,
-  //     roleChangesList: texas.dealer.map((player) => {
-  //       return {
-  //         userInfo: {
-  //           id: player.getUserInfo().id
-  //         },
-  //         role: player.getRole()
-  //       }
-  //     })
-  //   }
-  // })
-  // })
 }
+router.post(roomApi('/seat/:roomId'), async (ctx) => {
+  const roomId = ctx.params.roomId
+
+  const userId = ctx.state.user!.id
+  const texas = rooms.get(roomId)
+
+  if (!texas) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  texas?.room.seatById(userId)
+  const player = texas.room.getPlayerById(userId)!
+  broadCastPlayerOnSeat(player, userId)
+  response.success(ctx)
+})
 // 从坐席到观战席
 router.post(roomApi('/watch/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
@@ -283,7 +285,6 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
 // 获取房间下所有玩家信息
 router.post(roomApi('/allPlayers/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
-  // const { roomId }: { roomId: string } = ctx.request.body
   if (!roomId) {
     response.error(ctx, 400, '参数异常')
     return
@@ -324,24 +325,33 @@ router.post(roomApi('/delete/:roomId'), async (ctx) => {
     return
   }
 
+  await room.delete({
+    where: {
+      id: Number(roomId)
+    }
+  })
   rooms.delete(roomId)
   response.success(ctx, null, '删除成功')
 })
 
 // 获取所有房间
 router.post(roomApi('/all'), async (ctx) => {
+  const allRooms = await room.findMany()
+
   response.success(
     ctx,
-    Array.from(rooms.entries()).map(([id, texas]) => {
+    allRooms.map(({ id }) => {
       return {
         id,
-        ...texas.room.getBaseInfo()
+        ...rooms.get(String(id))?.room.getBaseInfo()
       }
     })
   )
 })
 
 router.post(roomApi('/clear'), async (ctx) => {
+  await room.deleteMany()
+
   rooms.forEach((texas) => {
     try {
       texas.end()

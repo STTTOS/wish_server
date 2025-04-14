@@ -25,6 +25,24 @@ model User {
   deletedAt  DateTime?
   win        Win[]
   playerHand PlayerHand[]
+
+  Room Room[]
+}
+
+model Room {
+  id                    Int     @id @default(autoincrement())
+  // 大盲注
+  lowestBetAmount       Int
+  // 是否允许观战
+  allowPlayersToWatch   Boolean
+  // 允许的最大人数
+  maximumCountOfPlayers Int
+  // 房间密码, 如果是私密房间, 则需要
+  privateKey            String?
+
+  // 房主
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id])
 }
 
 enum Action {
