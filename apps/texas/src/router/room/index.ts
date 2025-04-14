@@ -1,4 +1,5 @@
 import { isNil } from 'ramda'
+import { v4 as uuidv4 } from 'uuid'
 import { Player, initialGame } from 'texas-poker-core'
 
 import router from '../instance'
@@ -67,12 +68,14 @@ router.post(roomApi('/create'), async (ctx) => {
     return
   }
 
-  const roomInfo = await room.create({
+  const uuid = uuidv4()
+  await room.create({
     data: {
       lowestBetAmount,
       allowPlayersToWatch,
       ownerId: userInfo.id,
-      maximumCountOfPlayers
+      maximumCountOfPlayers,
+      uuid
     }
   })
   const texas = initialGame({
@@ -82,8 +85,8 @@ router.post(roomApi('/create'), async (ctx) => {
     user: userInfo,
     thinkingTime
   })
-  rooms.set(String(roomInfo.id), texas)
-  response.success(ctx, { roomId: roomInfo.id }, '房间创建成功')
+  rooms.set(uuid, texas)
+  response.success(ctx, { roomId: uuid }, '房间创建成功')
 })
 
 router.post(roomApi('/join/:roomId'), async (ctx) => {
@@ -153,7 +156,7 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     if (ownerId) {
       await room.update({
         where: {
-          id: Number(roomId)
+          uuid: roomId
         },
         data: {
           ownerId
@@ -165,7 +168,7 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     else {
       await room.delete({
         where: {
-          id: Number(roomId)
+          uuid: roomId
         }
       })
       rooms.delete(roomId)
@@ -327,7 +330,7 @@ router.post(roomApi('/delete/:roomId'), async (ctx) => {
 
   await room.delete({
     where: {
-      id: Number(roomId)
+      uuid: roomId
     }
   })
   rooms.delete(roomId)

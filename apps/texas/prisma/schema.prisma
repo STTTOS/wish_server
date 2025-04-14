@@ -31,6 +31,8 @@ model User {
 
 model Room {
   id                    Int     @id @default(autoincrement())
+  // 房间uuid
+  uuid                  String @unique
   // 大盲注
   lowestBetAmount       Int
   // 是否允许观战

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Room` ADD COLUMN `uuid` VARCHAR(191) NULL;
