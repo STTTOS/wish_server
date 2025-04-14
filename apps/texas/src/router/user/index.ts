@@ -37,20 +37,31 @@ router.post(userApi('/sign'), async (ctx) => {
     )
     // 注册
   } else {
-    const target = await user.create({
-      data: {
-        name,
-        balance: 20_000,
-        avatar:
-          'https://www.wishufree.com/static/files/download__2ea40fda-d3d0-4504-809c-996b2cb13ec0.jpeg'
+    try {
+      const target = await user.create({
+        data: {
+          name,
+          balance: 20_000,
+          avatar:
+            'https://www.wishufree.com/static/files/download__2ea40fda-d3d0-4504-809c-996b2cb13ec0.jpeg'
+        }
+      })
+      loginUsers.set(target.id!, { sessionId, time })
+      response.success(
+        ctx,
+        { token: getToken({ sessionId, id: target.id }) },
+        '注册成功'
+      )
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        response.error(ctx, 2100, '用户昵称已存在')
+      } else {
+        throw error
       }
-    })
-    loginUsers.set(target.id!, { sessionId, time })
-    response.success(
-      ctx,
-      { token: getToken({ sessionId, id: target.id }) },
-      '注册成功'
-    )
+    }
   }
 })
 
