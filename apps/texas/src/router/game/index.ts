@@ -43,16 +43,20 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       logger.info('向客户端推送player-action事件')
       ws.broadcastTo(userId, {
         type: 'player-action',
-        userInfo: {
-          id: userId
-        },
-        restrict,
-        allowedActions
+        data: {
+          userInfo: {
+            id: userId
+          },
+          restrict,
+          allowedActions
+        }
       })
       ws.broadcastExcept(userId, {
         type: 'player-action',
-        userInfo: {
-          id: userId
+        data: {
+          userInfo: {
+            id: userId
+          }
         }
       })
     })
