@@ -265,12 +265,10 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     )
 
     texas.onAction(async (player, isPreFlop) => {
-      logger.info('向客户端推送player-take-action事件')
-
       const action = player.getAction() as ActionWithPayload
-      logger.info('isPreFlop', isPreFlop)
       // 默认下注行为不推送
-      if (!isPreFlop)
+      if (!isPreFlop) {
+        logger.info('向客户端推送player-take-action事件')
         ws.broadcast({
           type: 'player-take-action',
           data: {
@@ -281,6 +279,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
             currentStageBetAmount: player.currentStageTotalAmount
           }
         })
+      }
+
       // clients.forEach((client) => {
       //   client.send({
       //     type: 'player-take-action',

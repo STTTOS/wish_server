@@ -70,10 +70,19 @@ class SocketServer {
   get io() {
     return this.#io
   }
+
+  get clients() {
+    return this.#clients
+  }
+
+  get userIds() {
+    return [...this.#clients.keys()]
+  }
   /**
    * @description 向所有端广播
    */
   broadcast(data: Parameters<Socket['send']>[0]) {
+    logger.info(`broadcast, ${this.userIds}, data: ${JSON.stringify(data)}`)
     this.#clients.forEach((client) => {
       client.send(data)
     })
@@ -82,6 +91,11 @@ class SocketServer {
    * @description 向除了目标userId的所有端广播
    */
   broadcastExcept(userId: number, data: Parameters<Socket['send']>[0]) {
+    logger.info(
+      `broadcastExcept, ${this.userIds.filter(
+        (id) => id !== userId
+      )}, data: ${JSON.stringify(data)}`
+    )
     this.#clients.forEach((client, id) => {
       if (id !== userId) {
         client.send(data)
@@ -92,6 +106,7 @@ class SocketServer {
    * @description 向指定的端推送消息
    */
   broadcastTo(userId: number, data: Parameters<Socket['send']>[0]) {
+    logger.info(`broadcastTo, ${userId}, data: ${JSON.stringify(data)}`)
     this.#clients.get(userId)?.send(data)
   }
 
@@ -99,6 +114,7 @@ class SocketServer {
    * @description 自定义广播方式, 用于向所有端广播时, 每个端的数据有差异时
    */
   broadcastEach(callback: (userId: number) => Parameters<Socket['send']>[0]) {
+    logger.info(`broadcastEach, ${this.userIds}`)
     this.#clients.forEach((client, id) => {
       client.send(callback(id))
     })
