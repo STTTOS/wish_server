@@ -1,14 +1,13 @@
 /* eslint-disable camelcase */
 
 /* eslint-disable no-console */
-import type { BizError } from './router/interface'
-
 import { join } from 'path'
 import cors from '@koa/cors'
 import koaJwt from 'koa-jwt'
 import mount from 'koa-mount'
 import koaBody from 'koa-body'
 import serve from 'koa-static'
+import { TexasError } from 'texas-poker-core'
 import historyApiFallback from 'koa2-connect-history-api-fallback'
 
 import router from './router'
@@ -26,12 +25,13 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 app.use(async (ctx, next) => {
   try {
     await next()
-  } catch (err) {
-    const { status = 500 } = err as BizError
-
-    // eslint-disable-next-line no-console
-    logger.error(err)
-    response.error(ctx, status, '系统异常')
+  } catch (error) {
+    if (error instanceof TexasError) {
+      response.error(ctx, error.code, error.message)
+    } else {
+      response.error(ctx, 500, '系统异常')
+    }
+    logger.error(error)
   }
 })
 

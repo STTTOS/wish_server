@@ -1,7 +1,6 @@
 import { $Enums } from '@prisma/texas-client'
 
 import router from '../instance'
-import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
@@ -35,12 +34,6 @@ router.post(toolsApi('/take'), async (ctx) => {
   const player = texas.dealer.find(
     (player) => player.getUserInfo().id === user.id
   )!
-  try {
-    await player[actionType](amount)
-    response.success(ctx)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
-    logger.error(error.message)
-  }
+  await player[actionType](amount)
+  response.success(ctx)
 })

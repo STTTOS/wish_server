@@ -222,15 +222,10 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  try {
-    texas?.room.seatById(userId)
-    const player = texas.room.getPlayerById(userId)!
-    broadCastPlayerOnSeat(player, userId)
-    response.success(ctx)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
-  }
+  texas?.room.seatById(userId)
+  const player = texas.room.getPlayerById(userId)!
+  broadCastPlayerOnSeat(player, userId)
+  response.success(ctx)
 })
 function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
   logger.info('向客户端推送player-on-watch事件')
@@ -279,15 +274,10 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  try {
-    texas?.room.watchById(userId)
-    const player = texas.room.getPlayerById(userId)!
-    broadCastPlayerOnWatch(player, texas, userId)
-    response.success(ctx)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
-  }
+  texas?.room.watchById(userId)
+  const player = texas.room.getPlayerById(userId)!
+  broadCastPlayerOnWatch(player, texas, userId)
+  response.success(ctx)
 })
 
 // 获取房间下所有玩家信息
@@ -352,13 +342,14 @@ router.post(roomApi('/all'), async (ctx) => {
 })
 
 router.post(roomApi('/clear'), async (ctx) => {
-  rooms.clear()
   rooms.forEach((texas) => {
     try {
       texas.end()
+      texas.reset()
     } catch (error) {
       // nothing to do
     }
   })
+  rooms.clear()
   response.success(ctx)
 })
