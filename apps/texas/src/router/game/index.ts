@@ -39,9 +39,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       // 掉线后需要向其他玩家推送当前玩家的状态信息
       // 同时需要将Player的状态置为offline
 
-      logger.info(
-        `ws值: ${JSON.stringify({ userId, restrict, allowedActions })}`
-      )
       // // 向其他玩家推送当前正在行动的玩家
       logger.info('向客户端推送player-action事件')
       ws.broadcastTo(userId, {
