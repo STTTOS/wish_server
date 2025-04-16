@@ -138,7 +138,14 @@ router.post(analysisApi('/match/error/:id'), async (ctx) => {
       matchId: id
     }
   })
-  response.success(ctx, { list })
+  response.success(ctx, {
+    list: list.map((item) => {
+      return {
+        ...item,
+        createdAt: formatTime(item.createdAt)
+      }
+    })
+  })
 })
 router.post(analysisApi('/records/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
