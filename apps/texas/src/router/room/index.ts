@@ -4,10 +4,10 @@ import { Texas, Player } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
+import { user } from '../../models'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
-import { room, user } from '../../models'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 
@@ -70,15 +70,15 @@ router.post(roomApi('/create'), async (ctx) => {
   }
 
   const uuid = uuidv4()
-  await room.create({
-    data: {
-      uuid,
-      lowestBetAmount,
-      allowPlayersToWatch,
-      ownerId: userInfo.id,
-      maximumCountOfPlayers
-    }
-  })
+  // await room.create({
+  //   data: {
+  //     uuid,
+  //     lowestBetAmount,
+  //     allowPlayersToWatch,
+  //     ownerId: userInfo.id,
+  //     maximumCountOfPlayers
+  //   }
+  // })
   const texas = new Texas({
     lowestBetAmount,
     maximumCountOfPlayers,
@@ -155,23 +155,23 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     const userId = ctx.state.user!.id
     const ownerId = texas.room.removeById(userId)
     if (ownerId) {
-      await room.update({
-        where: {
-          uuid: roomId
-        },
-        data: {
-          ownerId
-        }
-      })
+      // await room.update({
+      //   where: {
+      //     uuid: roomId
+      //   },
+      //   data: {
+      //     ownerId
+      //   }
+      // })
       response.success(ctx, { ownerId })
     }
     // 最后一位玩家离开房间
     else {
-      await room.delete({
-        where: {
-          uuid: roomId
-        }
-      })
+      // await room.delete({
+      //   where: {
+      //     uuid: roomId
+      //   }
+      // })
       rooms.delete(roomId)
       response.success(ctx)
     }
@@ -329,32 +329,32 @@ router.post(roomApi('/delete/:roomId'), async (ctx) => {
     return
   }
 
-  await room.delete({
-    where: {
-      uuid: roomId
-    }
-  })
+  // await room.delete({
+  //   where: {
+  //     uuid: roomId
+  //   }
+  // })
   rooms.delete(roomId)
   response.success(ctx, null, '删除成功')
 })
 
 // 获取所有房间
 router.post(roomApi('/all'), async (ctx) => {
-  const allRooms = await room.findMany()
+  // const allRooms = await room.findMany()
 
   response.success(
     ctx,
-    allRooms.map(({ uuid }) => {
+    [...rooms.entries()].map(([id, texas]) => {
       return {
-        id: uuid,
-        ...rooms.get(uuid)?.room.getBaseInfo()
+        id,
+        ...texas.room.getBaseInfo()
       }
     })
   )
 })
 
 router.post(roomApi('/clear'), async (ctx) => {
-  await room.deleteMany()
+  // await room.deleteMany()
 
   rooms.forEach((texas) => {
     try {
