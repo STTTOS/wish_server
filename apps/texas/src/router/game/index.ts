@@ -33,300 +33,293 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '不是庄家, 无法发牌')
     return
   }
-  try {
-    // 轮到玩家行动时, 会触发回调
-    texas.onPreAction(({ userId, restrict, allowedActions }) => {
-      // TODO: 如果client不存在, 则表示掉线
-      // 掉线后需要向其他玩家推送当前玩家的状态信息
-      // 同时需要将Player的状态置为offline
+  // 轮到玩家行动时, 会触发回调
+  texas.onPreAction(({ userId, restrict, allowedActions }) => {
+    // TODO: 如果client不存在, 则表示掉线
+    // 掉线后需要向其他玩家推送当前玩家的状态信息
+    // 同时需要将Player的状态置为offline
 
-      // // 向其他玩家推送当前正在行动的玩家
-      logger.info('向客户端推送player-action事件')
-      ws.broadcastTo(userId, {
-        type: 'player-action',
-        data: {
-          userInfo: {
-            id: userId
-          },
-          restrict,
-          allowedActions
-        }
-      })
-      ws.broadcastExcept(userId, {
-        type: 'player-action',
-        data: {
-          userInfo: {
-            id: userId
-          }
-        }
-      })
-    })
-
-    texas.onGameStart(async () => {
-      await matchStageTimeRecord.create({
-        data: {
-          stage: 'pre_flop',
-          matchId: matchInfo.id
-        }
-      })
-      logger.info('向客户端推送game-start事件')
-
-      ws.broadcastEach((id) => {
-        return {
-          type: 'game-start',
-          data: {
-            matchId: matchInfo.id,
-            // each player has different handPokes
-            handPokes: texas.dealer
-              .find((player) => player.id === id)
-              ?.getHandPokes(),
-            stage: texas.controller.stage,
-            pool: texas.pool.totalAmount,
-            defaultBets: texas.getDefaultBet().map(({ userId, amount }) => {
-              return {
-                amount,
-                userInfo: texas.room.getPlayerById(userId)?.getUserInfo()
-              }
-            })
-          }
-        }
-      })
-      // 推送各个玩家的手牌信息
-      // clients.forEach((ws, userId) => {
-      //   ws.send({
-      //     type: 'game-start',
-      //     data: {
-      //       handPokes: texas.dealer
-      //         .find((player) => player.getUserInfo().id === userId)
-      //         ?.getHandPokes(),
-      //       stage: texas.controller.stage,
-      //       pool: texas.pool.totalAmount,
-      //       matchId: matchInfo.id,
-      //       defaultBets: texas.getDefaultBet()
-      //     }
-      //   })
-      // })
-    })
-
-    texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
-      // 更新上一个阶段的结束时间
-      await matchStageTimeRecord.update({
-        where: {
-          matchId_stage: {
-            matchId: matchInfo.id,
-            stage: lastStage
-          }
-        },
-        data: {
-          endAt: new Date()
-        }
-      })
-      await matchStageTimeRecord.create({
-        data: {
-          stage,
-          matchId: matchInfo.id
-        }
-      })
-      logger.info('向客户端推送stage-change事件')
-      ws.broadcast({
-        type: 'stage-change',
-        data: {
-          stage,
-          restCommonPokes: commonPokes
-        }
-      })
-      // clients.forEach((ws) => {
-      //   ws.send({
-      //     type: 'stage-change',
-      //     data: {
-      //       stage,
-      //       restCommonPokes: commonPokes
-      //     }
-      //   })
-      // })
-    })
-
-    texas.onGameEnd(
-      async ({ restCommonPokes, currentStage, showHandPokes }) => {
-        // 这里也需要更新matchStageTimeRecord表
-        // 首先需要当前在哪个阶段
-        // 然后需要设置当前阶段的结束时间
-        // 如果是all-in直接推进到游戏结束
-        // 那么游戏则视为只进行到当前所处的阶段
-        await texas.settle()
-        await matchStageTimeRecord.update({
-          where: {
-            matchId_stage: {
-              matchId: matchInfo.id,
-              stage: currentStage
-            }
-          },
-          data: {
-            endAt: new Date()
-          }
-        })
-
-        // 记录玩家手牌以及奖池分配情况
-        const playerHands = texas.dealer.map((player) => {
-          return {
-            matchId: matchInfo.id,
-            role: player.getRole(),
-            hand: player.getHandPokes(),
-            playerId: player.getUserInfo().id,
-            earn: texas.pool.bills.get(player.id)
-          }
-        })
-        await playerHand.createMany({
-          data: playerHands
-        })
-
-        // 更新对局信息
-        await match.update({
-          where: {
-            id: matchInfo.id
-          },
-          data: {
-            endedAt: new Date(),
-            endStage: texas.controller.endAt,
-            totalBetAmount: texas.pool.totalAmount,
-            // 最大牌型组合
-            maximumPokes: texas.dealer.getMaxPokes(),
-            // 最大牌力
-            maximumType: texas.dealer.getMaxPresentation(),
-            // 底牌
-            commonPokes: texas.dealer.deck.getPokes().commonPokes
-          }
-        })
-
-        // 记录赢家信息
-        await win.createMany({
-          data: texas.dealer.winners.map((winner) => {
-            return {
-              matchId: matchInfo.id,
-              playerId: winner.getUserInfo().id
-            }
-          })
-        })
-
-        logger.info('向客户端推送game-end事件')
-
-        const handPokes = (() => {
-          if (showHandPokes)
-            return texas.dealer.map((player) => {
-              return {
-                userInfo: {
-                  id: player.getUserInfo().id
-                },
-                hand: player.getHandPokes()
-              }
-            })
-          return []
-        })()
-        ws.broadcast({
-          type: 'game-end',
-          data: {
-            handPokes,
-            showHandPokes,
-            restCommonPokes,
-            settleList: Array.from(texas.pool.bills).map(([userId, amount]) => {
-              const player = texas.room.getPlayerById(userId)
-
-              return {
-                amount,
-                userInfo: player?.getUserInfo()
-              }
-            })
-          }
-        })
-        // clients.forEach((ws) => {
-        //   ws.send({
-        //     type: 'game-end',
-        //     data: {
-        //       handPokes,
-        //       showHandPokes,
-        //       restCommonPokes,
-        //       settleList: Array.from(texas.pool.bills).map(
-        //         ([userId, amount]) => {
-        //           const player = texas.room.getPlayerById(userId)
-
-        //           return {
-        //             amount,
-        //             userInfo: player?.getUserInfo()
-        //           }
-        //         }
-        //       )
-        //     }
-        //   })
-        // })
-        // 游戏结束后轮换角色
-        texas.dealer.changeButtonToNextPlayer()
-        texas.dealer.setOthers()
-        texas.reset()
-        broadCastRoles(texas)
-      }
-    )
-
-    texas.onAction(async (player, isPreFlop) => {
-      const action = player.getAction() as ActionWithPayload
-      // 默认下注行为不推送
-      if (!isPreFlop) {
-        logger.info('向客户端推送player-take-action事件')
-        ws.broadcast({
-          type: 'player-take-action',
-          data: {
-            actionType: action?.type,
-            pool: texas.pool.totalAmount,
-            userInfo: player.getUserInfo(),
-            amount: action.payload?.value ?? 0,
-            currentStageBetAmount: player.currentStageTotalAmount
-          }
-        })
-      }
-
-      // clients.forEach((client) => {
-      //   client.send({
-      //     type: 'player-take-action',
-      //     data: {
-      //       actionType: action?.type,
-      //       pool: texas.pool.totalAmount,
-      //       amount: action.payload?.value ?? 0,
-      //       currentStageBetAmount: player.getCurrentStageTotalAmount(),
-      //       userInfo: player.getUserInfo()
-      //     }
-      //   })
-      // })
-      await record.create({
-        data: {
-          playerId: player.getUserInfo().id,
-          stage: texas.controller.stage,
-          action: action!.type,
-          amount: action.payload?.value,
-          matchId: matchInfo.id
-        }
-      })
-    })
-    // 需要创建对局信息
-    const matchInfo = await match.create({
+    // // 向其他玩家推送当前正在行动的玩家
+    logger.info('向客户端推送player-action事件')
+    ws.broadcastTo(userId, {
+      type: 'player-action',
       data: {
-        playersCount: texas.dealer.count,
-        lowestBetAmount: texas.room.lowestBetAmount
+        userInfo: {
+          id: userId
+        },
+        restrict,
+        allowedActions
       }
     })
-    texas.onError(async (error) => {
-      await matchError.create({
+    ws.broadcastExcept(userId, {
+      type: 'player-action',
+      data: {
+        userInfo: {
+          id: userId
+        }
+      }
+    })
+  })
+
+  texas.onGameStart(async () => {
+    await matchStageTimeRecord.create({
+      data: {
+        stage: 'pre_flop',
+        matchId: matchInfo.id
+      }
+    })
+    logger.info('向客户端推送game-start事件')
+
+    ws.broadcastEach((id) => {
+      return {
+        type: 'game-start',
         data: {
           matchId: matchInfo.id,
-          info: `${error.name}: $${error.message}\n${error.stack}`
+          // each player has different handPokes
+          handPokes: texas.dealer
+            .find((player) => player.id === id)
+            ?.getHandPokes(),
+          stage: texas.controller.stage,
+          pool: texas.pool.totalAmount,
+          defaultBets: texas.getDefaultBet().map(({ userId, amount }) => {
+            return {
+              amount,
+              userInfo: texas.room.getPlayerById(userId)?.getUserInfo()
+            }
+          })
+        }
+      }
+    })
+    // 推送各个玩家的手牌信息
+    // clients.forEach((ws, userId) => {
+    //   ws.send({
+    //     type: 'game-start',
+    //     data: {
+    //       handPokes: texas.dealer
+    //         .find((player) => player.getUserInfo().id === userId)
+    //         ?.getHandPokes(),
+    //       stage: texas.controller.stage,
+    //       pool: texas.pool.totalAmount,
+    //       matchId: matchInfo.id,
+    //       defaultBets: texas.getDefaultBet()
+    //     }
+    //   })
+    // })
+  })
+
+  texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
+    // 更新上一个阶段的结束时间
+    await matchStageTimeRecord.update({
+      where: {
+        matchId_stage: {
+          matchId: matchInfo.id,
+          stage: lastStage
+        }
+      },
+      data: {
+        endAt: new Date()
+      }
+    })
+    await matchStageTimeRecord.create({
+      data: {
+        stage,
+        matchId: matchInfo.id
+      }
+    })
+    logger.info('向客户端推送stage-change事件')
+    ws.broadcast({
+      type: 'stage-change',
+      data: {
+        stage,
+        restCommonPokes: commonPokes
+      }
+    })
+    // clients.forEach((ws) => {
+    //   ws.send({
+    //     type: 'stage-change',
+    //     data: {
+    //       stage,
+    //       restCommonPokes: commonPokes
+    //     }
+    //   })
+    // })
+  })
+
+  texas.onGameEnd(async ({ restCommonPokes, currentStage, showHandPokes }) => {
+    // 这里也需要更新matchStageTimeRecord表
+    // 首先需要当前在哪个阶段
+    // 然后需要设置当前阶段的结束时间
+    // 如果是all-in直接推进到游戏结束
+    // 那么游戏则视为只进行到当前所处的阶段
+    await texas.settle()
+    await matchStageTimeRecord.update({
+      where: {
+        matchId_stage: {
+          matchId: matchInfo.id,
+          stage: currentStage
+        }
+      },
+      data: {
+        endAt: new Date()
+      }
+    })
+
+    // 记录玩家手牌以及奖池分配情况
+    const playerHands = texas.dealer.map((player) => {
+      return {
+        matchId: matchInfo.id,
+        role: player.getRole(),
+        hand: player.getHandPokes(),
+        playerId: player.getUserInfo().id,
+        earn: texas.pool.bills.get(player.id)
+      }
+    })
+    await playerHand.createMany({
+      data: playerHands
+    })
+
+    // 更新对局信息
+    await match.update({
+      where: {
+        id: matchInfo.id
+      },
+      data: {
+        endedAt: new Date(),
+        endStage: texas.controller.endAt,
+        totalBetAmount: texas.pool.totalAmount,
+        // 最大牌型组合
+        maximumPokes: texas.dealer.getMaxPokes(),
+        // 最大牌力
+        maximumType: texas.dealer.getMaxPresentation(),
+        // 底牌
+        commonPokes: texas.dealer.deck.getPokes().commonPokes
+      }
+    })
+
+    // 记录赢家信息
+    await win.createMany({
+      data: texas.dealer.winners.map((winner) => {
+        return {
+          matchId: matchInfo.id,
+          playerId: winner.getUserInfo().id
         }
       })
     })
-    texas.start()
 
-    response.success(ctx)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
-  }
+    logger.info('向客户端推送game-end事件')
+
+    const handPokes = (() => {
+      if (showHandPokes)
+        return texas.dealer.map((player) => {
+          return {
+            userInfo: {
+              id: player.getUserInfo().id
+            },
+            hand: player.getHandPokes()
+          }
+        })
+      return []
+    })()
+    ws.broadcast({
+      type: 'game-end',
+      data: {
+        handPokes,
+        showHandPokes,
+        restCommonPokes,
+        settleList: Array.from(texas.pool.bills).map(([userId, amount]) => {
+          const player = texas.room.getPlayerById(userId)
+
+          return {
+            amount,
+            userInfo: player?.getUserInfo()
+          }
+        })
+      }
+    })
+    // clients.forEach((ws) => {
+    //   ws.send({
+    //     type: 'game-end',
+    //     data: {
+    //       handPokes,
+    //       showHandPokes,
+    //       restCommonPokes,
+    //       settleList: Array.from(texas.pool.bills).map(
+    //         ([userId, amount]) => {
+    //           const player = texas.room.getPlayerById(userId)
+
+    //           return {
+    //             amount,
+    //             userInfo: player?.getUserInfo()
+    //           }
+    //         }
+    //       )
+    //     }
+    //   })
+    // })
+    // 游戏结束后轮换角色
+    texas.dealer.changeButtonToNextPlayer()
+    texas.dealer.setOthers()
+    texas.reset()
+    broadCastRoles(texas)
+  })
+
+  texas.onAction(async (player, isPreFlop) => {
+    const action = player.getAction() as ActionWithPayload
+    // 默认下注行为不推送
+    if (!isPreFlop) {
+      logger.info('向客户端推送player-take-action事件')
+      ws.broadcast({
+        type: 'player-take-action',
+        data: {
+          actionType: action?.type,
+          pool: texas.pool.totalAmount,
+          userInfo: player.getUserInfo(),
+          amount: action.payload?.value ?? 0,
+          currentStageBetAmount: player.currentStageTotalAmount
+        }
+      })
+    }
+
+    // clients.forEach((client) => {
+    //   client.send({
+    //     type: 'player-take-action',
+    //     data: {
+    //       actionType: action?.type,
+    //       pool: texas.pool.totalAmount,
+    //       amount: action.payload?.value ?? 0,
+    //       currentStageBetAmount: player.getCurrentStageTotalAmount(),
+    //       userInfo: player.getUserInfo()
+    //     }
+    //   })
+    // })
+    await record.create({
+      data: {
+        playerId: player.getUserInfo().id,
+        stage: texas.controller.stage,
+        action: action!.type,
+        amount: action.payload?.value,
+        matchId: matchInfo.id
+      }
+    })
+  })
+
+  texas.onError(async (error) => {
+    await matchError.create({
+      data: {
+        matchId: matchInfo.id,
+        info: `${error.name}: $${error.message}\n${error.stack}`
+      }
+    })
+  })
+  // 需要创建对局信息
+  const matchInfo = await match.create({
+    data: {
+      playersCount: texas.dealer.count,
+      lowestBetAmount: texas.room.lowestBetAmount
+    }
+  })
+  await texas.start()
+  response.success(ctx, { matchId: matchInfo.id })
 })
 
 export function broadCastRoles(texas: Texas) {
