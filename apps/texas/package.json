@@ -26,9 +26,9 @@
     "prettier-config": "workspace:*"
   },
   "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "pnpm run lint",
     "**/*.{js,jsx,ts,tsx,less,md,json}": [
       "pnpm run prettier"
-    ]
+    ],
+    "**/*.{js,jsx,ts,tsx}": "pnpm run lint"
   }
 }

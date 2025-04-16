@@ -50,12 +50,12 @@ router.post(analysisApi('/match/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map((item) => {
+      list.map(({ MatchError, ...rest }) => {
         return {
-          ...item,
-          startedAt: dayjs(item.startedAt).format(timeFormat),
-          endAt: dayjs(item.endedAt).format(timeFormat),
-          errorCounts: item.MatchError.length
+          ...rest,
+          startedAt: dayjs(rest.startedAt).format(timeFormat),
+          endAt: dayjs(rest.endedAt).format(timeFormat),
+          errorCount: MatchError.length
         }
       }),
       total
