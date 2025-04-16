@@ -9,7 +9,8 @@ export const {
   matchStageTimeRecord,
   win,
   playerHand,
-  room
+  room,
+  matchError
 } = prisma
 
 export default prisma

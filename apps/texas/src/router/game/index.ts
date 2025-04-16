@@ -1,18 +1,19 @@
 /* eslint-disable camelcase */
-import { ActionWithPayload } from 'texas-poker-core'
+import { Texas, ActionWithPayload } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
+import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
-import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
 import {
   win,
   match,
   record,
   playerHand,
+  matchError,
   matchStageTimeRecord
 } from '../../models'
 
@@ -310,6 +311,14 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         playersCount: texas.dealer.count,
         lowestBetAmount: texas.room.lowestBetAmount
       }
+    })
+    texas.onError(async (error) => {
+      await matchError.create({
+        data: {
+          matchId: matchInfo.id,
+          info: `${error.name}: $${error.message}\n${error.stack}`
+        }
+      })
     })
     texas.start()
 

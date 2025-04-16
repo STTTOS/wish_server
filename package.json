@@ -34,7 +34,7 @@
     "ramda": "^0.28.0",
     "sharp": "^0.33.3",
     "socket.io": "^4.8.1",
-    "texas-poker-core": "1.1.44",
+    "texas-poker-core": "1.1.46",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

@@ -1,14 +1,14 @@
 import { isNil } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
-import { Player, initialGame } from 'texas-poker-core'
+import { Texas, Player } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
+import { rooms } from '../../gameCenter'
 import { room, user } from '../../models'
 import response from '../../utils/response'
-import { rooms, Texas } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
 
 const roomApi = combinePath(apiPrefix)('/room')
@@ -79,7 +79,7 @@ router.post(roomApi('/create'), async (ctx) => {
       maximumCountOfPlayers
     }
   })
-  const texas = initialGame({
+  const texas = new Texas({
     lowestBetAmount,
     maximumCountOfPlayers,
     allowPlayersToWatch,
