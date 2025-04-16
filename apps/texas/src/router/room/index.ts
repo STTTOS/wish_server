@@ -151,67 +151,47 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '游戏正在进行中, 不可退出')
     return
   }
-  try {
-    const userId = ctx.state.user!.id
-    const ownerId = texas.room.removeById(userId)
-    if (ownerId) {
-      // await room.update({
-      //   where: {
-      //     uuid: roomId
-      //   },
-      //   data: {
-      //     ownerId
-      //   }
-      // })
-      response.success(ctx, { ownerId })
-    }
-    // 最后一位玩家离开房间
-    else {
-      // await room.delete({
-      //   where: {
-      //     uuid: roomId
-      //   }
-      // })
-      rooms.delete(roomId)
-      response.success(ctx)
-    }
-
-    // 离开房间需要
-    ws.remove(userId)
-
-    logger.info('向客户端推送player-leave事件')
-    ws.broadcast({
-      type: 'player-leave',
-      data: {
-        userId,
-        // TODO: 当前玩家之后的角色才会改变
-        roleChangesList: texas.dealer.map((player) => {
-          return {
-            userId: player.getUserInfo().id,
-            role: player.getRole()
-          }
-        })
-      }
-    })
-    // clients.forEach((ws) => {
-    //   ws.send({
-    //     type: 'player-leave',
-    //     data: {
-    //       userId,
-    //       // TODO: 当前玩家之后的角色才会改变
-    //       roleChangesList: texas.dealer.map((player) => {
-    //         return {
-    //           userId: player.getUserInfo().id,
-    //           role: player.getRole()
-    //         }
-    //       })
-    //     }
-    //   })
+  const userId = ctx.state.user!.id
+  const ownerId = texas.room.removeById(userId)
+  if (ownerId) {
+    // await room.update({
+    //   where: {
+    //     uuid: roomId
+    //   },
+    //   data: {
+    //     ownerId
+    //   }
     // })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
+    response.success(ctx, { ownerId })
   }
+  // 最后一位玩家离开房间
+  else {
+    // await room.delete({
+    //   where: {
+    //     uuid: roomId
+    //   }
+    // })
+    rooms.delete(roomId)
+    response.success(ctx)
+  }
+
+  // 离开房间需要
+  ws.remove(userId)
+
+  logger.info('向客户端推送player-leave事件')
+  ws.broadcast({
+    type: 'player-leave',
+    data: {
+      userId,
+      // TODO: 当前玩家之后的角色才会改变
+      roleChangesList: texas.dealer.map((player) => {
+        return {
+          userId: player.getUserInfo().id,
+          role: player.getRole()
+        }
+      })
+    }
+  })
 })
 
 function broadCastPlayerOnSeat(player: Player, selfId: number) {
@@ -222,19 +202,6 @@ function broadCastPlayerOnSeat(player: Player, selfId: number) {
       role: player.getRole()
     }
   })
-  // clients.forEach((ws, id) => {
-  //   // 向其他玩家推送
-  //   if (id === selfId) return
-
-  //   logger.info('向客户端推送player-on-seat事件')
-  //   ws.send({
-  //     type: 'player-on-seat',
-  //     data: {
-  //       userInfo: player.getUserInfo(),
-  //       role: player.getRole()
-  //     }
-  //   })
-  // })
 }
 
 function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
