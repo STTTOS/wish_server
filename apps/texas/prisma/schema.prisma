@@ -32,7 +32,7 @@ model User {
 model MatchError {
   id Int @id @default(autoincrement())
 
-  info      String
+  info      String  @db.LongText
   createdAt DateTime @default(now())
 
   matchId Int
