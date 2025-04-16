@@ -6,7 +6,7 @@ import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '../../utils/response'
-import { win, match, record, playerHand } from '../../models'
+import { win, match, record, playerHand, matchError } from '../../models'
 
 const analysisApi = combinePath(apiPrefix)('/analysis')
 router.post(analysisApi('/match/list'), async (ctx) => {
@@ -127,6 +127,19 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
   })
 })
 
+router.post(analysisApi('/match/error/:id'), async (ctx) => {
+  const id = Number(ctx.params.id)
+  if (isNaN(id)) {
+    response.error(ctx, 400, '参数错误')
+    return
+  }
+  const list = await matchError.findMany({
+    where: {
+      matchId: id
+    }
+  })
+  response.success(ctx, { list })
+})
 router.post(analysisApi('/records/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
 
