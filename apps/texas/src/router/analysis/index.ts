@@ -36,7 +36,12 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       playersCount: true,
       lowestBetAmount: true,
       endedAt: true,
-      endStage: true
+      endStage: true,
+      MatchError: {
+        select: {
+          id: true
+        }
+      }
     },
     orderBy: {
       startedAt: 'desc'
@@ -49,7 +54,8 @@ router.post(analysisApi('/match/list'), async (ctx) => {
         return {
           ...item,
           startedAt: dayjs(item.startedAt).format(timeFormat),
-          endAt: dayjs(item.endedAt).format(timeFormat)
+          endAt: dayjs(item.endedAt).format(timeFormat),
+          errorCounts: item.MatchError.length
         }
       }),
       total
