@@ -301,6 +301,12 @@ router.post(roomApi('/delete/:roomId'), async (ctx) => {
   //     uuid: roomId
   //   }
   // })
+  try {
+    // 强制结束游戏
+    texas.end()
+  } catch (error) {
+    // nothing to do
+  }
   rooms.delete(roomId)
   response.success(ctx, null, '删除成功')
 })
