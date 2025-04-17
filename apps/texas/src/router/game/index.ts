@@ -251,7 +251,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     await matchError.create({
       data: {
         matchId: matchInfo.id,
-        info: `${error.name}: $${error.message}\n${error.stack}`
+        info: error.stack || `${error.name}: ${error.message}`
       }
     })
   })
