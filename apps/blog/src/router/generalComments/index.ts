@@ -13,29 +13,29 @@ const generalCommentApi = combinePath(apiPrefix)('/generalComment')
 
 router.post(generalCommentApi('/add'), async (ctx) => {
   const {
-    content,
     type,
-    userId,
-    replyToUserId,
+    content,
     moduleId,
+    replyToUserId,
     parentCommentId
   }: Prisma.GeneralCommentUncheckedCreateInput = ctx.request.body
 
-  if ([content, type, userId, moduleId].some(anyPass([isEmpty, isNil]))) {
+  if ([content, type, moduleId].some(anyPass([isEmpty, isNil]))) {
     response.error(ctx, 400, '参数错误')
     return
   }
+  const user = ctx.state.user
+  const userId = user.id
   await generalComment.create({
     data: {
       type,
-      content,
       userId,
-      replyToUserId,
+      content,
       moduleId,
+      replyToUserId,
       parentCommentId
     }
   })
-  const user = ctx.state.user
   const momentDetail = await momentModel.findUnique({
     where: {
       id: moduleId
@@ -44,10 +44,12 @@ router.post(generalCommentApi('/add'), async (ctx) => {
       timeline: true
     }
   })
-  // 回复自己的评论
-  const isSelfReply = momentDetail?.ownerId === user?.id
+  if (!momentDetail) {
+    response.error(ctx, 404, 'moment不存在')
+    return
+  }
 
-  if (momentDetail && !isSelfReply) {
+  if (replyToUserId !== userId)
     await message.create({
       data: {
         senderId: user?.id,
@@ -61,7 +63,6 @@ router.post(generalCommentApi('/add'), async (ctx) => {
         }
       }
     })
-  }
   response.success(ctx)
 })
 
