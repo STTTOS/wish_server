@@ -25,7 +25,7 @@ router.post(generalCommentApi('/add'), async (ctx) => {
     return
   }
   const user = ctx.state.user
-  const userId = user.id
+  const userId = user!.id
   await generalComment.create({
     data: {
       type,
