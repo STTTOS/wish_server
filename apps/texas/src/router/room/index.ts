@@ -129,9 +129,9 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     const player = texas.createPlayer(userInfo)
     texas.room.join(player)
     if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
-      broadCastPlayerOnSeat(player, userId)
+      broadCastPlayerOnSeat(roomId, player, userId)
     } else {
-      broadCastPlayerOnWatch(player, texas, userId)
+      broadCastPlayerOnWatch(roomId, player, texas, userId)
     }
     response.success(ctx)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -171,15 +171,15 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     //     uuid: roomId
     //   }
     // })
+
+    // when the last player leave room
+    // need to clear the texas instance
     rooms.delete(roomId)
     response.success(ctx)
   }
 
-  // 离开房间需要
-  ws.remove(userId)
-
   logger.info('向客户端推送player-leave事件')
-  ws.broadcast({
+  ws.broadcast(roomId, {
     type: 'player-leave',
     data: {
       userId,
@@ -194,8 +194,8 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
   })
 })
 
-function broadCastPlayerOnSeat(player: Player, selfId: number) {
-  ws.broadcastExcept(selfId, {
+function broadCastPlayerOnSeat(roomId: string, player: Player, selfId: number) {
+  ws.broadcastExcept(roomId, selfId, {
     type: 'player-on-seat',
     data: {
       userInfo: player.getUserInfo(),
@@ -204,9 +204,14 @@ function broadCastPlayerOnSeat(player: Player, selfId: number) {
   })
 }
 
-function broadCastPlayerOnWatch(player: Player, texas: Texas, selfId: number) {
+function broadCastPlayerOnWatch(
+  roomId: string,
+  player: Player,
+  texas: Texas,
+  selfId: number
+) {
   logger.info('向客户端推送player-on-watch事件')
-  ws.broadcastExcept(selfId, {
+  ws.broadcastExcept(roomId, selfId, {
     type: 'player-on-watch',
     data: {
       userId: player.getUserInfo().id,
@@ -233,7 +238,7 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
   }
   texas?.room.seatById(userId)
   const player = texas.room.getPlayerById(userId)!
-  broadCastPlayerOnSeat(player, userId)
+  broadCastPlayerOnSeat(roomId, player, userId)
   response.success(ctx)
 })
 // 从坐席到观战席
@@ -249,7 +254,7 @@ router.post(roomApi('/watch/:roomId'), async (ctx) => {
   }
   texas?.room.watchById(userId)
   const player = texas.room.getPlayerById(userId)!
-  broadCastPlayerOnWatch(player, texas, userId)
+  broadCastPlayerOnWatch(roomId, player, texas, userId)
   response.success(ctx)
 })
 

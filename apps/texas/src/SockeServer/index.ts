@@ -5,7 +5,7 @@ import { logger } from '../logger'
 
 class SocketServer {
   #io: Server
-  #clients: Map<number, Socket> = new Map()
+  #userIdToSocketIdMap: Map<number, string> = new Map()
 
   constructor() {
     this.#io = new Server(server, {
@@ -39,30 +39,32 @@ class SocketServer {
       logger.info('新的客户端连接, url', socket.handshake.url)
 
       const queryParams = socket.handshake.query
-      const [userId] = [
+      const [userId, roomId] = [
         Number(queryParams.userId),
         queryParams.roomId as string
       ]
 
-      // 将用户ID与连接关联
-      this.#clients.set(userId, socket)
+      socket.join(roomId)
+      // store userId on socket.data
+      socket.data.userId = userId
+
+      // map userId to socketId
+      this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
-      // 向客户端发送欢迎消息
-      // ws.readyState === WebSocket.OPEN
 
       // 处理连接关闭
       socket.on('disconnect', (reason) => {
         // 玩家离开房间, 玩家离线等
         // 需要向其他客户端推送消息
-        this.#clients.delete(userId)
-        logger.info('客户端断开连接, id:', socket.id, '原因', reason)
+        this.remove(roomId, userId)
+        logger.info('client disconnect, id:', socket.id, 'reason', reason)
       })
 
       // 处理错误
       socket.on('error', (error) => {
         // 连接出现异常, 则无法正常加入房间
-        this.#clients.delete(userId)
-        logger.error('WebSocket 错误:', error)
+        this.remove(roomId, userId)
+        logger.error('WebSocket connect error:', error)
       })
     })
   }
@@ -71,60 +73,106 @@ class SocketServer {
     return this.#io
   }
 
-  get clients() {
-    return this.#clients
+  /**
+   * @description 通过socketId获取对应的socket实例
+   * @param socketId
+   * @returns
+   */
+  #getSocketById(socketId: string) {
+    return this.#io.sockets.sockets.get(socketId) as Socket
   }
 
-  get userIds() {
-    return [...this.#clients.keys()]
+  /**
+   * @description 获取房间内的所有socket实例
+   * @param roomId
+   * @returns
+   */
+  #getSocketsInRoom(roomId: string) {
+    const socketIds = Array.from(
+      this.#io.sockets.adapter.rooms.get(roomId) || []
+    )
+    return socketIds.map((socketId) => this.#getSocketById(socketId))
   }
+
+  /**
+   * @description 获取指定room下的所有用户id
+   * @param roomId
+   * @returns
+   */
+  #getUserIdsInRoom(roomId: string) {
+    return this.#getSocketsInRoom(roomId).map(
+      (socket) => socket.data.userId as number
+    )
+  }
+
   /**
    * @description 向所有端广播
    */
-  broadcast(data: Parameters<Socket['send']>[0]) {
-    logger.info(`broadcast, ${this.userIds}, data: ${JSON.stringify(data)}`)
-    this.#clients.forEach((client) => {
-      client.send(data)
-    })
+  broadcast(roomId: string, data: Parameters<Socket['send']>[0]) {
+    logger.info(
+      `broadcast, ${this.#getUserIdsInRoom(roomId)}, data: ${JSON.stringify(
+        data
+      )}`
+    )
+    this.#io.to(roomId).emit('message', data)
   }
+
   /**
    * @description 向除了目标userId的所有端广播
    */
-  broadcastExcept(userId: number, data: Parameters<Socket['send']>[0]) {
+  broadcastExcept(
+    roomId: string,
+    userId: number,
+    data: Parameters<Socket['send']>[0]
+  ) {
     logger.info(
-      `broadcastExcept, ${this.userIds.filter(
+      `broadcastExcept, ${this.#getUserIdsInRoom(roomId).filter(
         (id) => id !== userId
       )}, data: ${JSON.stringify(data)}`
     )
-    this.#clients.forEach((client, id) => {
-      if (id !== userId) {
-        client.send(data)
-      }
-    })
+    const sockets = this.#getSocketsInRoom(roomId)
+    const except = sockets.find((socket) => socket.data.userId === userId)
+    except?.to(roomId).emit('message', data)
   }
+
   /**
    * @description 向指定的端推送消息
    */
   broadcastTo(userId: number, data: Parameters<Socket['send']>[0]) {
     logger.info(`broadcastTo, ${userId}, data: ${JSON.stringify(data)}`)
-    this.#clients.get(userId)?.send(data)
+    const socketId = this.#userIdToSocketIdMap.get(userId)
+    if (!socketId) throw new Error('client does not exist')
+
+    this.#io.to(socketId).emit('message', data)
   }
 
   /**
    * @description 自定义广播方式, 用于向所有端广播时, 每个端的数据有差异时
    */
-  broadcastEach(callback: (userId: number) => Parameters<Socket['send']>[0]) {
-    logger.info(`broadcastEach, ${this.userIds}`)
-    this.#clients.forEach((client, id) => {
-      client.send(callback(id))
+  broadcastEach(
+    roomId: string,
+    callback: (userId: number) => Parameters<Socket['send']>[0]
+  ) {
+    logger.info(`broadcastEach, ${this.#getUserIdsInRoom(roomId)}`)
+
+    this.#getSocketsInRoom(roomId).forEach((socket) => {
+      const userId = socket.data.userId
+      if (!userId) throw new Error('userId doest not exist on socket.data')
+
+      this.#io.to(socket.id).emit('message', callback(userId))
     })
   }
 
   /**
    * @description 移除ws客户端
    */
-  remove(userId: number) {
-    this.#clients.delete(userId)
+  remove(roomId: string, userId: number) {
+    const socketId = this.#userIdToSocketIdMap.get(userId)
+    if (!socketId) return
+
+    const socket = this.#getSocketById(socketId)
+    socket.leave(roomId)
+    this.#userIdToSocketIdMap.delete(userId)
   }
 }
 

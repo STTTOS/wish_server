@@ -51,7 +51,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         allowedActions
       }
     })
-    ws.broadcastExcept(userId, {
+    ws.broadcastExcept(roomId, userId, {
       type: 'player-action',
       data: {
         userInfo: {
@@ -70,7 +70,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     })
     logger.info('向客户端推送game-start事件')
 
-    ws.broadcastEach((id) => {
+    ws.broadcastEach(roomId, (id) => {
       return {
         type: 'game-start',
         data: {
@@ -112,7 +112,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       }
     })
     logger.info('向客户端推送stage-change事件')
-    ws.broadcast({
+    ws.broadcast(roomId, {
       type: 'stage-change',
       data: {
         stage,
@@ -122,11 +122,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   })
 
   texas.onGameEnd(async ({ restCommonPokes, currentStage, showHandPokes }) => {
-    // 这里也需要更新matchStageTimeRecord表
-    // 首先需要当前在哪个阶段
-    // 然后需要设置当前阶段的结束时间
-    // 如果是all-in直接推进到游戏结束
-    // 那么游戏则视为只进行到当前所处的阶段
+    // 这时候游戏状态为end
     await texas.settle()
     await matchStageTimeRecord.update({
       where: {
@@ -182,8 +178,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     })
 
-    logger.info('向客户端推送game-end事件')
-
     const handPokes = (() => {
       if (showHandPokes)
         return texas.dealer.map((player) => {
@@ -196,7 +190,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         })
       return []
     })()
-    ws.broadcast({
+    logger.info('向客户端推送game-end事件')
+    ws.broadcast(roomId, {
       type: 'game-end',
       data: {
         handPokes,
@@ -212,11 +207,15 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         })
       }
     })
+
     // 游戏结束后轮换角色
     texas.dealer.changeButtonToNextPlayer()
     texas.dealer.setOthers()
+    broadCastRoles(roomId, texas)
+
+    // 重置对局信息
+    // 这时候游戏状态为waiting
     texas.reset()
-    broadCastRoles(texas)
   })
 
   texas.onAction(async (player, isPreFlop) => {
@@ -224,7 +223,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     // 默认下注行为不推送
     if (!isPreFlop) {
       logger.info('向客户端推送player-take-action事件')
-      ws.broadcast({
+      ws.broadcast(roomId, {
         type: 'player-take-action',
         data: {
           actionType: action?.type,
@@ -266,9 +265,10 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   response.success(ctx, { matchId: matchInfo.id })
 })
 
-export function broadCastRoles(texas: Texas) {
+export function broadCastRoles(roomId: string, texas: Texas) {
   logger.info('向客户端推送set-role事件')
-  ws.broadcast({
+  // const roomId = texas.room
+  ws.broadcast(roomId, {
     type: 'set-role',
     data: texas.dealer.map((player) => {
       return {
@@ -300,9 +300,10 @@ router.post(toolsApi('/ready/:roomId'), async (ctx) => {
   }
   texas.ready()
   response.success(ctx)
-  broadCastRoles(texas)
+  broadCastRoles(roomId, texas)
 })
 
+// 手动结束游戏进程
 router.post(toolsApi('/end/:roomId'), async (ctx) => {
   const roomId = ctx.params.roomId
   if (!roomId) {
