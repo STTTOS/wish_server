@@ -111,34 +111,29 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '用户不存在')
     return
   }
-  try {
-    if (texas.room.has(userId)) {
-      response.error(ctx, 2000, '你已经在房间中, 不可重复加入')
-      return
-    }
-
-    // 如果当前人正在别的房间里, 则不可再加入新的房间
-    if (
-      Array.from(rooms.entries())
-        .filter(([id]) => id !== roomId)
-        .some(([, texas]) => texas.room.has(userId))
-    ) {
-      response.error(ctx, 2000, '你已经在别的房间中, 请先退出再加入')
-      return
-    }
-
-    const player = texas.createPlayer(userInfo)
-    texas.room.join(player)
-    if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
-      broadCastPlayerOnSeat(roomId, player, userId)
-    } else {
-      broadCastPlayerOnWatch(roomId, player, texas, userId)
-    }
-    response.success(ctx)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    response.error(ctx, 2000, error.message)
+  if (texas.room.has(userId)) {
+    response.error(ctx, 2000, '你已经在房间中, 不可重复加入')
+    return
   }
+
+  // 如果当前人正在别的房间里, 则不可再加入新的房间
+  if (
+    Array.from(rooms.entries())
+      .filter(([id]) => id !== roomId)
+      .some(([, texas]) => texas.room.has(userId))
+  ) {
+    response.error(ctx, 2000, '你已经在别的房间中, 请先退出再加入')
+    return
+  }
+
+  const player = texas.createPlayer(userInfo)
+  texas.room.join(player)
+  if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
+    broadCastPlayerOnSeat(roomId, player, userId)
+  } else {
+    broadCastPlayerOnWatch(roomId, player, texas, userId)
+  }
+  response.success(ctx)
 })
 
 router.post(roomApi('/quit/:roomId'), async (ctx) => {
