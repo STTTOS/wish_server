@@ -7,9 +7,9 @@ import { ws } from '../../server'
 import { user } from '../../models'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
-import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { rooms, leaveRoom, createRoom } from '../../gameCenter'
 
 const roomApi = combinePath(apiPrefix)('/room')
 
@@ -62,7 +62,7 @@ router.post(roomApi('/create'), async (ctx) => {
 
   if (
     Array.from(rooms.values())
-      .map((texas) => texas.room.owner?.getUserInfo().id)
+      .map((texas) => texas.room.owner.id)
       .includes(userId)
   ) {
     response.error(ctx, 2100, '不可重复创建房间')
@@ -86,7 +86,8 @@ router.post(roomApi('/create'), async (ctx) => {
     user: userInfo,
     thinkingTime
   })
-  rooms.set(uuid, texas)
+  // rooms.set(uuid, texas)
+  createRoom(uuid, userId, texas)
   response.success(ctx, { roomId: uuid }, '房间创建成功')
 })
 
@@ -112,7 +113,7 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
   }
   try {
     if (texas.room.has(userId)) {
-      response.error(ctx, 2000, '用户已经在房间中, 不可重复加入')
+      response.error(ctx, 2000, '你已经在房间中, 不可重复加入')
       return
     }
 
@@ -152,7 +153,13 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     return
   }
   const userId = ctx.state.user!.id
+  if (!texas.room.has(userId)) {
+    response.error(ctx, 2000, '你不在当前房间中')
+    return
+  }
+
   const ownerId = texas.room.removeById(userId)
+  leaveRoom(roomId, userId)
   if (ownerId) {
     // await room.update({
     //   where: {
@@ -162,7 +169,22 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     //     ownerId
     //   }
     // })
-    response.success(ctx, { ownerId })
+    logger.info('向客户端推送player-leave事件')
+    ws.broadcast(roomId, {
+      type: 'player-leave',
+      data: {
+        userId,
+        ownerId,
+        // TODO: 当前玩家之后的角色才会改变
+        roleChangesList: texas.dealer.map((player) => {
+          return {
+            userId: player.id,
+            role: player.getRole()
+          }
+        })
+      }
+    })
+    response.success(ctx)
   }
   // 最后一位玩家离开房间
   else {
@@ -174,24 +196,10 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
 
     // when the last player leave room
     // need to clear the texas instance
+    texas.reset()
     rooms.delete(roomId)
     response.success(ctx)
   }
-
-  logger.info('向客户端推送player-leave事件')
-  ws.broadcast(roomId, {
-    type: 'player-leave',
-    data: {
-      userId,
-      // TODO: 当前玩家之后的角色才会改变
-      roleChangesList: texas.dealer.map((player) => {
-        return {
-          userId: player.getUserInfo().id,
-          role: player.getRole()
-        }
-      })
-    }
-  })
 })
 
 function broadCastPlayerOnSeat(roomId: string, player: Player, selfId: number) {
@@ -237,6 +245,7 @@ router.post(roomApi('/seat/:roomId'), async (ctx) => {
     return
   }
   texas?.room.seatById(userId)
+
   const player = texas.room.getPlayerById(userId)!
   broadCastPlayerOnSeat(roomId, player, userId)
   response.success(ctx)

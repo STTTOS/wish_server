@@ -5,9 +5,9 @@ import router from '../instance'
 import { ws } from '../../server'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
-import { rooms } from '../../gameCenter'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { rooms, getRoomId } from '../../gameCenter'
 import {
   win,
   match,
@@ -329,4 +329,64 @@ router.post(toolsApi('/settle/:roomId'), async (ctx) => {
     return
   }
   await texas.settle()
+})
+
+// 用户重连后获取当前对局的状态
+router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const roomId = getRoomId(userId)
+  let texas: Texas | undefined
+  if (!roomId || !(texas = rooms.get(roomId))) {
+    response.success(ctx, 2100, '对局不存在')
+    return
+  }
+
+  const gameStatus = texas.controller.status
+  if (gameStatus !== 'on') {
+    response.success(ctx, 2100, '游戏已经结束')
+    return
+  }
+  // 需要获取当前对局的信息
+  // 包括所有玩家的信息
+  // 当前行动的用户的相关信息
+  // 当前的阶段, 总奖池
+
+  // 所有玩家的信息
+  const playersOnSeat = texas.room
+    .getPlayersBySeatStatus('on-set')
+    .map((player) => {
+      return {
+        role: player.getRole(),
+        action: player.getAction(),
+        userInfo: player.getUserInfo(),
+        currentStageTotalAmount: player.currentStageTotalAmount
+      }
+    })
+  const playersOnWatch = texas.room
+    .getPlayersBySeatStatus('hang')
+    .map((player) => {
+      return {
+        userInfo: player.getUserInfo()
+      }
+    })
+
+  const activePlayer = texas.controller.activePlayer
+  // 当前行动玩家的信息
+  const activePlayerInfo = {
+    userInfo: activePlayer?.getUserInfo(),
+    remainThinkTime: activePlayer?.getRemainThinkTime()
+  }
+
+  // 对局信息
+  const matchInfo = {
+    status: gameStatus,
+    stage: texas.controller.stage,
+    pool: texas.pool.totalAmount
+  }
+  response.success(ctx, {
+    playersOnSeat,
+    playersOnWatch,
+    matchInfo,
+    activePlayerInfo
+  })
 })
