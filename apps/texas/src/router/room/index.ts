@@ -202,7 +202,8 @@ function broadCastPlayerOnSeat(roomId: string, player: Player, selfId: number) {
     type: 'player-on-seat',
     data: {
       userInfo: player.getUserInfo(),
-      role: player.getRole()
+      role: player.getRole(),
+      status: 'online'
     }
   })
 }

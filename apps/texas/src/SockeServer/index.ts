@@ -1,4 +1,5 @@
 import { Server, Socket } from 'socket.io'
+import { OnlineStatus } from 'texas-poker-core'
 
 import { server } from '../server'
 import { logger } from '../logger'
@@ -9,7 +10,12 @@ class SocketServer {
 
   constructor() {
     this.#io = new Server(server, {
-      cors: { origin: 'https://texas.wishufree.com' }
+      cors: { origin: 'https://texas.wishufree.com' },
+      // TODO: may be pingTimeOut and pingInterval need to be set to a smaller one
+      // how many ms without a pong packet to consider the connection closed
+      pingTimeout: 2000,
+      // how many ms before sending a new ping packet
+      pingInterval: 5000
       // cors: { origin: '*' }
     })
 
@@ -57,6 +63,10 @@ class SocketServer {
         // 玩家离开房间, 玩家离线等
         // 需要向其他客户端推送消息
         this.remove(roomId, userId)
+        this.broadcast(roomId, {
+          type: 'player-status-change',
+          data: { user: { id: userId }, status: 'offline' as OnlineStatus }
+        })
         logger.info('client disconnect, id:', socket.id, 'reason', reason)
       })
 
