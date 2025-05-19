@@ -3,6 +3,7 @@ import { OnlineStatus } from 'texas-poker-core'
 
 import { server } from '../server'
 import { logger } from '../logger'
+import { rooms } from '../gameCenter'
 
 class SocketServer {
   #io: Server
@@ -15,7 +16,7 @@ class SocketServer {
       // how many ms without a pong packet to consider the connection closed
       pingTimeout: 2000,
       // how many ms before sending a new ping packet
-      pingInterval: 5000
+      pingInterval: 3000
       // cors: { origin: '*' }
     })
 
@@ -31,8 +32,14 @@ class SocketServer {
       // 验证参数
       if (!userId || !roomId) {
         // 传递错误，拒绝连接
-        logger.error(`ws连接url:${socket.handshake.url}(参数异常), 拒绝连接`)
-        return next(new Error('无效的连接参数, 拒绝连接'))
+        logger.error(
+          `websocket conentct url:${socket.handshake.url}(parameters error), connection refused`
+        )
+        return next(
+          new Error(
+            'parameters to establish connection are invalid, connection refused'
+          )
+        )
       }
 
       // 允许连接
@@ -67,6 +74,10 @@ class SocketServer {
           type: 'player-status-change',
           data: { user: { id: userId }, status: 'offline' as OnlineStatus }
         })
+        const texas = rooms.get(roomId)
+        const player = texas?.room.getPlayerById(userId)
+        if (player) player.onlineStatus = 'online'
+
         logger.info('client disconnect, id:', socket.id, 'reason', reason)
       })
 
