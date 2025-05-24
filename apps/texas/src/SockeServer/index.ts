@@ -100,7 +100,7 @@ class SocketServer {
    * @returns
    */
   #getSocketById(socketId: string) {
-    return this.#io.sockets.sockets.get(socketId) as Socket
+    return this.#io.sockets.sockets.get(socketId) as Socket | undefined
   }
 
   /**
@@ -112,7 +112,9 @@ class SocketServer {
     const socketIds = Array.from(
       this.#io.sockets.adapter.rooms.get(roomId) || []
     )
-    return socketIds.map((socketId) => this.#getSocketById(socketId))
+    return socketIds
+      .map((socketId) => this.#getSocketById(socketId))
+      .filter((socket) => !!socket)
   }
 
   /**
@@ -121,9 +123,9 @@ class SocketServer {
    * @returns
    */
   #getUserIdsInRoom(roomId: string) {
-    return this.#getSocketsInRoom(roomId).map(
-      (socket) => socket.data.userId as number
-    )
+    return this.#getSocketsInRoom(roomId)
+      .map((socket) => socket?.data.userId as number)
+      .filter((userId) => !!userId)
   }
 
   /**
@@ -192,7 +194,7 @@ class SocketServer {
     if (!socketId) return
 
     const socket = this.#getSocketById(socketId)
-    socket.leave(roomId)
+    socket?.leave(roomId)
     this.#userIdToSocketIdMap.delete(userId)
   }
 }
