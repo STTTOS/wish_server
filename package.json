@@ -12,7 +12,7 @@
     "pre-commit": "pnpm lint-staged",
     "prepare": "husky",
     "commit-msg": "commitlint -e -V",
-    "ncu": "ncu -u texas-poker-core"
+    "ncu": "npx ncu -u texas-poker-core"
   },
   "dependencies": {
     "@koa/cors": "^5.0.0",
@@ -35,7 +35,7 @@
     "ramda": "^0.28.0",
     "sharp": "^0.33.3",
     "socket.io": "^4.8.1",
-    "texas-poker-core": "1.2.3",
+    "texas-poker-core": "1.2.5",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
@@ -58,6 +58,7 @@
     "husky": "^9.0.10",
     "lint-staged": "^13.0.3",
     "nodemon": "^3.1.0",
+    "npm-check-updates": "^18.0.1",
     "pre-commit": "^1.2.2",
     "prettier": "^2.7.1",
     "prettier-plugin-classify-imports": "^0.0.2",
