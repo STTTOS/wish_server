@@ -114,7 +114,7 @@ class SocketServer {
     )
     return socketIds
       .map((socketId) => this.#getSocketById(socketId))
-      .filter((socket) => !!socket)
+      .filter((socket) => !!socket) as Socket[]
   }
 
   /**
@@ -125,7 +125,7 @@ class SocketServer {
   #getUserIdsInRoom(roomId: string) {
     return this.#getSocketsInRoom(roomId)
       .map((socket) => socket?.data.userId as number)
-      .filter((userId) => !!userId)
+      .filter((userId) => !!userId) as number[]
   }
 
   /**

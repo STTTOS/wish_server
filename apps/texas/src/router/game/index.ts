@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import { Texas, ActionWithPayload } from 'texas-poker-core'
+import { Texas } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
@@ -219,7 +219,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   })
 
   texas.onAction(async (player, isPreFlop) => {
-    const action = player.getAction() as ActionWithPayload
+    const action = player.getAction()
     // 默认下注行为不推送
     if (!isPreFlop) {
       logger.info('向客户端推送player-take-action事件')
@@ -229,7 +229,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
           actionType: action?.type,
           pool: texas.pool.totalAmount,
           userInfo: player.getUserInfo(),
-          amount: action.payload?.value ?? 0,
+          amount: action?.payload?.value ?? 0,
           currentStageBetAmount: player.currentStageTotalAmount
         }
       })
@@ -240,7 +240,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         playerId: player.getUserInfo().id,
         stage: texas.controller.stage,
         action: action!.type,
-        amount: action.payload?.value,
+        amount: action?.payload?.value,
         matchId: matchInfo.id
       }
     })
