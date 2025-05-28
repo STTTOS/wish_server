@@ -508,24 +508,9 @@ router.post(timelineApi('/currentUser/all'), async (ctx) => {
 router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
   const timelineId = Number(ctx.params.id)
 
-  const {
-    content,
-    cover,
-    createdAt,
-    images,
-    momentId
-  }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Prisma.MomentCreateInput & { images: any[]; momentId: number } =
-    ctx.request.body
+  const { momentId }: { momentId: number } = ctx.request.body
   const userId = ctx.state.user?.id
-  if (
-    !content ||
-    !userId ||
-    !createdAt ||
-    !timelineId ||
-    !momentId ||
-    [!content, images.length === 0].every(equals(true))
-  ) {
+  if (!timelineId || !momentId) {
     response.error(ctx, 400, '参数错误')
     return
   }
@@ -544,33 +529,16 @@ router.post(timelineApi('/moment/migrate/:id'), async (ctx) => {
     response.error(ctx, 403, '非法操作')
     return
   }
-
-  await timeline.update({
-    where: { id: timelineId },
+  await moment.update({
+    where: {
+      id: momentId
+    },
     data: {
-      updatedAt: new Date()
-    }
-  })
-  const { id } = await moment.create({
-    data: {
-      content,
-      cover,
-      createdAt,
-      images: {
-        createMany: {
-          data: images?.map(({ sort, src }) => ({ sort, src }))
-        }
-      },
       timelineId
     }
   })
-  await moment.delete({
-    where: {
-      id: Number(momentId)
-    }
-  })
 
-  response.success(ctx, { id })
+  response.success(ctx)
 })
 
 // 获取所有的moments, 按照创建时间倒序
