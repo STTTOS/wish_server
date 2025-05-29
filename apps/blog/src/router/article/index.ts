@@ -1,8 +1,8 @@
 import type { Identity } from '../interface'
 import type { GetArticleByPaginationReq } from './interface'
 
-import dayjs from 'dayjs'
 import moment from 'moment'
+import { MD5 } from 'crypto-js'
 import { Prisma } from '@prisma/blog-client'
 import { omit, prop, isNil, complement } from 'ramda'
 
@@ -114,8 +114,8 @@ router.post(articleApi('/physicalDelete'), async (ctx) => {
 
 router.post(articleApi('/update'), async (ctx) => {
   const { body } = ctx.request
-  const { id, tagIds, content, coAuthorIds, secure, updateAt, ...data } = omit(
-    ['createdAt'],
+  const { id, tagIds, content, coAuthorIds, secure, hash, ...data } = omit(
+    ['createdAt', 'updatedAt'],
     body
   )
 
@@ -138,7 +138,7 @@ router.post(articleApi('/update'), async (ctx) => {
   }
 
   // 修过过期的内容
-  if (!dayjs(thisOne.updatedAt).isSame(updateAt)) {
+  if (hash !== MD5(thisOne.content)) {
     response.error(ctx, 2000, '内容滞后,刷新页面后重新提交')
     return
   }
