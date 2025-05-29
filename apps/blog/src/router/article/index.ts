@@ -138,7 +138,7 @@ router.post(articleApi('/update'), async (ctx) => {
   }
 
   // 修过过期的内容
-  if (hash !== MD5(thisOne.content)) {
+  if (hash !== MD5(thisOne.content).toString()) {
     response.error(ctx, 2000, '内容滞后,刷新页面后重新提交')
     return
   }
