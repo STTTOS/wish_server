@@ -138,7 +138,7 @@ router.post(articleApi('/update'), async (ctx) => {
   }
 
   const originalContent = thisOne?.secure
-    ? cryptor.text.decrypt(content)
+    ? cryptor.text.decrypt(thisOne.content)
     : thisOne.content
   // 修过过期的内容
   if (hash !== MD5(originalContent).toString()) {
