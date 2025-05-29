@@ -1,6 +1,7 @@
 import type { Identity } from '../interface'
 import type { GetArticleByPaginationReq } from './interface'
 
+import dayjs from 'dayjs'
 import moment from 'moment'
 import { Prisma } from '@prisma/blog-client'
 import { omit, prop, isNil, complement } from 'ramda'
@@ -113,22 +114,32 @@ router.post(articleApi('/physicalDelete'), async (ctx) => {
 
 router.post(articleApi('/update'), async (ctx) => {
   const { body } = ctx.request
-  const { id, tagIds, content, coAuthorIds, secure, ...data } = omit(
-    ['createdAt', 'updatedAt'],
+  const { id, tagIds, content, coAuthorIds, secure, updateAt, ...data } = omit(
+    ['createdAt'],
     body
   )
 
   if (!id) throw new Error('参数不正确')
 
+  const thisOne = await article.findUnique({ where: { id } })
+  if (!thisOne) {
+    response.error(ctx, 404, '文章不存在')
+    return
+  }
+
   // 去除掉markdown标记
   const length = content.replace(/[\s#*-<>~]/g, '').length
   const readingTime = Math.ceil(length / wordsToMinuteBaseNumber)
 
-  const thisOne = await article.findUnique({ where: { id } })
-
   const allowedUserIds = [thisOne?.authorId].concat(coAuthorIds)
-  if (!allowedUserIds.includes(ctx.state.user?.id)) {
+  if (!allowedUserIds.includes(ctx.state.user!.id)) {
     response.success(ctx, null, '无操作权限', 403)
+    return
+  }
+
+  // 修过过期的内容
+  if (!dayjs(thisOne.updatedAt).isSame(updateAt)) {
+    response.error(ctx, 2000, '内容滞后,刷新页面后重新提交')
     return
   }
 
