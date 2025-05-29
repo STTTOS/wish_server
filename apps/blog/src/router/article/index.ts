@@ -137,8 +137,11 @@ router.post(articleApi('/update'), async (ctx) => {
     return
   }
 
+  const originalContent = thisOne?.secure
+    ? cryptor.text.decrypt(content)
+    : thisOne.content
   // 修过过期的内容
-  if (hash !== MD5(thisOne.content).toString()) {
+  if (hash !== MD5(originalContent).toString()) {
     response.error(ctx, 2000, '内容滞后,刷新页面后重新提交')
     return
   }
