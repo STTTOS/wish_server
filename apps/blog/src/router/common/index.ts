@@ -29,8 +29,10 @@ import {
 
 const commonApi = combinePath(apiPrefix)('/common')
 
-const covertCosToSafeUrl = (url: string) =>
-  `https://${cosDomain}/images/compressed/${basename(url)}`
+const covertCosToSafeUrl = (url: string, compressed = true) =>
+  `https://${cosDomain}/images/${
+    compressed ? 'compressed' : 'origin'
+  }/${basename(url)}`
 
 interface Args {
   newFilename: string
@@ -224,7 +226,8 @@ router.post(
     )
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const originWith = (await sharp(file.filepath).metadata()).width
+    // const originWith = (await sharp(file.filepath).metadata()).width
+    logger.info('upload_image:', 'start sharp image')
     // 压缩图片
     await sharp(file.filepath)
       .rotate()
@@ -232,14 +235,29 @@ router.post(
       .jpeg({ quality: imageCompressRatio * 100 })
       .toFile(compressFilePath)
 
+    const start = new Date()
+    logger.info('upload_image:', 'image sharped, upload to cos...')
     // 将图片 上传到cos
-    await uploadFileToCos('images/origin', file.newFilename, file.filepath)
+    const originalUrl = await uploadFileToCos(
+      'images/origin',
+      file.newFilename,
+      file.filepath
+    )
     const url = await uploadFileToCos(
       'images/compressed',
       file.newFilename,
       compressFilePath
     )
-    response.success(ctx, { url: covertCosToSafeUrl(url) })
+    logger.info(
+      'upload_image:',
+      'image uploaded to cos, cost ',
+      dayjs().diff(start, 'second'),
+      's'
+    )
+    response.success(ctx, {
+      url: covertCosToSafeUrl(url),
+      originalUrl: covertCosToSafeUrl(originalUrl, false)
+    })
   }
 )
 
