@@ -8,6 +8,7 @@ source
 encryptedImageData
 .env
 system.json
+.vscode
 
 # lock文件
 yarn.lock
