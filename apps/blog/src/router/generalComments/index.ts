@@ -44,9 +44,22 @@ router.post(generalCommentApi('/add'), async (ctx) => {
       timeline: true
     }
   })
+
   if (!momentDetail) {
     response.error(ctx, 404, 'moment不存在')
     return
+  }
+
+  if (parentCommentId) {
+    const parentComment = await generalComment.findUnique({
+      where: {
+        id: parentCommentId
+      }
+    })
+    if (!parentComment) {
+      response.error(ctx, 404, '回复的评论不存在')
+      return
+    }
   }
 
   // 1. 回复非自己的评论
