@@ -49,7 +49,12 @@ router.post(generalCommentApi('/add'), async (ctx) => {
     return
   }
 
-  if (replyToUserId !== userId)
+  // 1. 回复非自己的评论
+  // 2. 评论非自己的moment
+  // 以上这两种情况不推送消息
+  const replyToOthers = replyToUserId && replyToUserId !== userId
+  const replyCommentOfOthers = !replyToUserId && userId !== momentDetail.ownerId
+  if (replyToOthers || replyCommentOfOthers)
     await message.create({
       data: {
         senderId: user?.id,
