@@ -387,6 +387,12 @@ router.post(timelineApi('/moment/share/:id'), async (ctx) => {
     response.error(ctx, 404, '资源不存在')
     return
   }
+
+  const userId = ctx.state.user?.id
+  if (detail.isPrivate && detail.ownerId !== userId) {
+    response.error(ctx, 403, '无权限访问')
+    return
+  }
   response.success(ctx, {
     ...detail,
     createdAt: Moment(detail.createdAt).format(timeFormat)
