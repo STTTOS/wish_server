@@ -16,7 +16,7 @@ model User {
   // 用户通过weChat注册的话会关联weChatId
   weChatId String?
   // 游戏昵称, 需要唯一, 设置为非必填, 在注册时给一个随机的名字, 降低注册门槛
-  name     String?  @unique
+  name     String  @unique
   // 新增用户名和密码字段
   username String  @unique
   // the password of the user should be hashed

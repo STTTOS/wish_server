@@ -51,10 +51,14 @@ router.post(userApi('/sign'), async (ctx) => {
       response.error(ctx, 2100, '密码错误')
     }
   } else {
+    const ramdomName = `用户_${sessionId.slice(0, 6)}_${dayjs().format(
+      'yyyy-MM-DD'
+    )}`
     // 注册
     try {
       const target = await user.create({
         data: {
+          name: ramdomName,
           username,
           password,
           balance: 20_000,
