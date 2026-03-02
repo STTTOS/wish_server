@@ -12,6 +12,8 @@ export interface PrismaError {
   code: string
 }
 
+export type PrismaUniqueConstraintMeta = string[] | string | undefined
+
 export interface Identity {
   id?: number
 }
