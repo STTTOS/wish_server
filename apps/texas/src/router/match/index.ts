@@ -111,6 +111,68 @@ router.post(matchApi('/rooms'), async (ctx) => {
 })
 
 /**
+ * 战绩总览：当前用户总对局数、allIn 次数、弃牌次数
+ */
+router.post(matchApi('/overview'), async (ctx) => {
+  const userId = ctx.state.user!.id
+
+  const records = await playerMatchRecord.findMany({
+    where: { playerId: userId },
+    select: {
+      isAllIn: true,
+      isFold: true,
+      presentation: true,
+      wager: true,
+      totalBetAmount: true
+    }
+  })
+
+  const totalMatches = records.length
+
+  let allInCount = 0
+  let foldCount = 0
+  let royalFlushCount = 0
+  let straightFlushCount = 0
+  let fourOfKindCount = 0
+  let winMatchCount = 0
+  let loseMatchCount = 0
+  let tieMatchCount = 0
+  let totalBetAmount = 0
+  let totalWager = 0
+
+  records.forEach((r) => {
+    if (r.isAllIn) allInCount += 1
+    if (r.isFold) foldCount += 1
+
+    if (r.presentation === 'z') royalFlushCount += 1
+    if (r.presentation === 'y') straightFlushCount += 1
+    if (r.presentation === 'x') fourOfKindCount += 1
+
+    const wager = r.wager ?? 0
+    if (wager > 0) winMatchCount += 1
+    else if (wager < 0) loseMatchCount += 1
+    else tieMatchCount += 1
+
+    totalBetAmount += r.totalBetAmount ?? 0
+    totalWager += wager
+  })
+
+  response.success(ctx, {
+    totalMatches,
+    allInCount,
+    foldCount,
+    royalFlushCount,
+    straightFlushCount,
+    fourOfKindCount,
+    winMatchCount,
+    loseMatchCount,
+    tieMatchCount,
+    totalBetAmount,
+    totalWager
+  })
+})
+
+/**
  * 查询对局详情（当前用户必须参与过该对局）
  */
 router.post(matchApi('/detail'), async (ctx) => {
