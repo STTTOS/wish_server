@@ -14,7 +14,7 @@ class SocketServer {
       cors: { origin: 'https://texas.wishufree.com' },
       // TODO: may be pingTimeOut and pingInterval need to be set to a smaller one
       // how many ms without a pong packet to consider the connection closed
-      pingTimeout: 2000,
+      pingTimeout: 8000,
       // how many ms before sending a new ping packet
       pingInterval: 3000
       // cors: { origin: '*' }
@@ -65,6 +65,18 @@ class SocketServer {
       this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
 
+      // 玩家重连或首次连接到房间, 标记为 online 并通知其他客户端
+      const texasOnConnect = rooms.get(roomId)
+      const playerOnConnect = texasOnConnect?.room.getPlayerById(userId)
+      // 只有当玩家之前被标记为离线时(重连), 才更新为在线并广播
+      if (playerOnConnect && playerOnConnect.onlineStatus !== 'online') {
+        playerOnConnect.onlineStatus = 'online'
+        this.broadcast(roomId, {
+          type: 'player-status-change',
+          data: { user: { id: userId }, status: 'online' as OnlineStatus }
+        })
+      }
+
       // 处理连接关闭
       socket.on('disconnect', (reason) => {
         // 玩家离开房间, 玩家离线等
@@ -76,7 +88,7 @@ class SocketServer {
         })
         const texas = rooms.get(roomId)
         const player = texas?.room.getPlayerById(userId)
-        if (player) player.onlineStatus = 'online'
+        if (player) player.onlineStatus = 'offline'
 
         logger.info('client disconnect, id:', socket.id, 'reason', reason)
       })
