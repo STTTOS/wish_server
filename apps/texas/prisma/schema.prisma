@@ -145,9 +145,9 @@ model PlayerMatchRecord {
   // 记录用户角色
   role           String?
   // 输赢结果
-  wager          Float?
+  wager          Float @default(0)
   presentation   PresentationType
-  totalBetAmount Int
+  totalBetAmount Int @default(0)
   isFold         Boolean          @default(false)
   isAllIn        Boolean          @default(false)
 

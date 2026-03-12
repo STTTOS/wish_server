@@ -135,16 +135,16 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         endAt: new Date()
       }
     })
-
     // 记录玩家手牌以及奖池分配情况
     const playerHands = texas.dealer.map((player) => ({
       matchId: matchInfo.id,
       role: player.getRole(),
       hand: player.getHandPokes(),
+      wager: player.wager,
+      totalBetAmount: player.totalBetAmount,
       playerId: player.getUserInfo().id,
-      earn: texas.pool.bills.get(player.id),
       presentation: texas.dealer.getMaxPresentation(),
-      totalBetAmount: texas.pool.totalAmount
+      createdAt: matchInfo.startedAt
     }))
     await playerMatchRecord.createMany({ data: playerHands })
 
