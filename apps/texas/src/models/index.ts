@@ -10,6 +10,7 @@ export const {
   playerMatchRecord,
   room,
   roomMember,
+  userRoomStat,
   matchError
 } = prisma
 

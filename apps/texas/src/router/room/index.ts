@@ -91,7 +91,8 @@ router.post(roomApiClient('/create'), async (ctx) => {
 router.post(roomApiClient('/list'), async (ctx) => {
   const rooms = await room.findMany({
     where: {
-      isPrivate: false
+      isPrivate: false,
+      deletedAt: null
     },
     include: {
       owner: {
@@ -582,11 +583,7 @@ router.post(roomApi('/delete/:roomId'), async (ctx) => {
     return
   }
 
-  // await room.delete({
-  //   where: {
-  //     uuid: roomId
-  //   }
-  // })
+  // 客户端房间使用软删除, 这里不删除数据库中的 Room 记录
   try {
     // 强制结束游戏
     texas.end()
