@@ -10,9 +10,9 @@ import { user } from '../../models'
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
 import combinePath from '../../utils/combinePath'
-import { apiPrefix, timeFormat } from '../../config'
+import { timeFormat, apiPrefixClient } from '../../config'
 
-const userApi = combinePath(apiPrefix)('/user')
+const userClientApi = combinePath(apiPrefixClient)('/user')
 export const loginUsers = new Map<number, { sessionId: string; time: string }>()
 
 /**
@@ -20,7 +20,7 @@ export const loginUsers = new Map<number, { sessionId: string; time: string }>()
  * 目前测试只用输入昵称即可
  * 正式版本需要调用weChat实现登录注册
  */
-router.post(userApi('/sign'), async (ctx) => {
+router.post(userClientApi('/sign'), async (ctx) => {
   const {
     username,
     password
@@ -100,7 +100,7 @@ router.post(userApi('/sign'), async (ctx) => {
 })
 
 // 此接口会被middleware接管, 必定有用户信息
-router.post(userApi('/setName'), async (ctx) => {
+router.post(userClientApi('/setName'), async (ctx) => {
   const { name }: { name: Prisma.UserCreateInput['name'] } = ctx.request.body
   if (!name) {
     response.error(ctx, 400, '名称不可为空')
@@ -131,17 +131,50 @@ router.post(userApi('/setName'), async (ctx) => {
     throw error
   }
 })
-router.post(userApi('/info'), async (ctx) => {
+
+router.post(userClientApi('/info'), async (ctx) => {
   const userId = ctx.state.user!.id
 
   const userInfo = await user.findUnique({
     where: {
       id: userId
+    },
+    select: {
+      id: true,
+      name: true,
+      avatar: true,
+      createdAt: true
     }
   })
   if (!userInfo) {
     response.error(ctx, 2000, '用户不存在')
   } else {
-    response.success(ctx, omit(['password'], userInfo))
+    const { createdAt, ...rest } = userInfo
+    response.success(ctx, {
+      createdAt: dayjs(createdAt).format(timeFormat),
+      ...rest
+    })
   }
+})
+
+// 修改用户头像
+router.post(userClientApi('/setAvatar'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const {
+    avatar
+  }: {
+    avatar?: Prisma.UserCreateInput['avatar']
+  } = ctx.request.body ?? {}
+
+  if (!avatar || typeof avatar !== 'string') {
+    response.error(ctx, 400, '头像地址不可为空')
+    return
+  }
+
+  await user.update({
+    where: { id: userId },
+    data: { avatar }
+  })
+
+  response.success(ctx, null, '头像更新成功')
 })
