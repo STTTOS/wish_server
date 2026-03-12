@@ -9,11 +9,11 @@ import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { rooms, getRoomId } from '../../gameCenter'
 import {
-  win,
   match,
-  record,
-  playerHand,
+  betRecord,
   matchError,
+  userRoomStat,
+  playerMatchRecord,
   matchStageTimeRecord
 } from '../../models'
 
@@ -137,18 +137,49 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     })
 
     // 记录玩家手牌以及奖池分配情况
-    const playerHands = texas.dealer.map((player) => {
-      return {
-        matchId: matchInfo.id,
-        role: player.getRole(),
-        hand: player.getHandPokes(),
-        playerId: player.getUserInfo().id,
-        earn: texas.pool.bills.get(player.id)
-      }
-    })
-    await playerHand.createMany({
-      data: playerHands
-    })
+    const playerHands = texas.dealer.map((player) => ({
+      matchId: matchInfo.id,
+      role: player.getRole(),
+      hand: player.getHandPokes(),
+      playerId: player.getUserInfo().id,
+      earn: texas.pool.bills.get(player.id),
+      presentation: texas.dealer.getMaxPresentation(),
+      totalBetAmount: texas.pool.totalAmount
+    }))
+    await playerMatchRecord.createMany({ data: playerHands })
+
+    // 更新用户在房间内的对局统计
+    await Promise.all(
+      texas.dealer.map((player) => {
+        const userId = player.getUserInfo().id
+        const wager = texas.pool.bills.get(player.id) ?? 0
+
+        return userRoomStat.upsert({
+          where: {
+            userId_roomId: {
+              userId,
+              roomId: matchInfo.roomId
+            }
+          },
+          update: {
+            matchCount: {
+              increment: 1
+            },
+            lastMatchAt: new Date(),
+            totalWager: {
+              increment: wager
+            }
+          },
+          create: {
+            userId,
+            roomId: matchInfo.roomId,
+            matchCount: 1,
+            lastMatchAt: new Date(),
+            totalWager: wager
+          }
+        })
+      })
+    )
 
     // 更新对局信息
     await match.update({
@@ -166,16 +197,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         // 底牌
         commonPokes: texas.dealer.deck.getPokes().commonPokes
       }
-    })
-
-    // 记录赢家信息
-    await win.createMany({
-      data: texas.dealer.winners.map((winner) => {
-        return {
-          matchId: matchInfo.id,
-          playerId: winner.getUserInfo().id
-        }
-      })
     })
 
     const handPokes = (() => {
@@ -235,7 +256,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       })
     }
 
-    await record.create({
+    await betRecord.create({
       data: {
         playerId: player.getUserInfo().id,
         stage: texas.controller.stage,
@@ -258,7 +279,8 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   const matchInfo = await match.create({
     data: {
       playersCount: texas.dealer.count,
-      lowestBetAmount: texas.room.lowestBetAmount
+      lowestBetAmount: texas.room.lowestBetAmount,
+      roomId: Number(roomId)
     }
   })
   await texas.start()
