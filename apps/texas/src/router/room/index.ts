@@ -33,11 +33,6 @@ router.post(roomApiClient('/create'), async (ctx) => {
   const { lowestBetAmount, thinkingTime, isPrivate }: Prisma.RoomCreateInput =
     ctx.request.body
   const userId = ctx.state.user!.id
-
-  if (!userId) {
-    response.error(ctx, 401, '用户未登录')
-    return
-  }
   if ([lowestBetAmount, thinkingTime, isPrivate].some(isNil)) {
     response.error(ctx, 400, '参数异常')
     return
@@ -141,12 +136,7 @@ const CLIENT_ROOM_MAX_PLAYERS = 10
 // 客户端：通过房间代码加入房间
 router.post(roomApiClient('/join'), async (ctx) => {
   const { roomCode: code }: { roomCode?: string } = ctx.request.body
-  const userId = ctx.state.user?.id
-
-  if (!userId) {
-    response.error(ctx, 401, '用户未登录')
-    return
-  }
+  const userId = ctx.state.user!.id
   if (!code || typeof code !== 'string' || !code.trim()) {
     response.error(ctx, 400, '房间代码不能为空')
     return
@@ -228,12 +218,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
 // 客户端：退出房间
 router.post(roomApiClient('/quit'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body
-  const userId = ctx.state.user?.id
-
-  if (!userId) {
-    response.error(ctx, 401, '用户未登录')
-    return
-  }
+  const userId = ctx.state.user!.id
   if (roomId == null) {
     response.error(ctx, 400, '参数异常：需要 roomId')
     return
@@ -331,12 +316,7 @@ router.post(roomApiClient('/quit'), async (ctx) => {
 router.post(roomApiClient('/kick'), async (ctx) => {
   const { roomId, targetUserId }: { roomId?: number; targetUserId?: number } =
     ctx.request.body
-  const operatorId = ctx.state.user?.id
-
-  if (!operatorId) {
-    response.error(ctx, 401, '用户未登录')
-    return
-  }
+  const operatorId = ctx.state.user!.id
   if (roomId == null || targetUserId == null) {
     response.error(ctx, 400, '参数异常：需要 roomId 和 targetUserId')
     return
@@ -433,6 +413,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
 // 客户端：查询房间下所有成员
 router.post(roomApiClient('/members'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body
+  const userId = ctx.state.user!.id
 
   if (roomId == null) {
     response.error(ctx, 400, '参数异常：需要 roomId')
@@ -444,6 +425,21 @@ router.post(roomApiClient('/members'), async (ctx) => {
   })
   if (!roomInfo) {
     response.error(ctx, 2000, '房间不存在')
+    return
+  }
+
+  const selfMember = await roomMember.findUnique({
+    // Prisma 复合唯一键名为 roomId_userId，非 camelCase
+    where: {
+      // eslint-disable-next-line camelcase
+      roomId_userId: {
+        roomId,
+        userId
+      }
+    }
+  })
+  if (!selfMember) {
+    response.error(ctx, 403, '无权查看该房间成员')
     return
   }
 
