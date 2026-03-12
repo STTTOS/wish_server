@@ -3,13 +3,13 @@ import { PrismaClient } from '@prisma/texas-client'
 const prisma = new PrismaClient()
 
 export const {
-  record,
+  betRecord,
   user,
   match,
   matchStageTimeRecord,
-  win,
-  playerHand,
+  playerMatchRecord,
   room,
+  roomMember,
   matchError
 } = prisma
 

@@ -22,21 +22,21 @@ model User {
   // the password of the user should be hashed
   password String
 
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @default(now())
-  records    Record[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @default(now())
+  betRecords   BetRecord[]
   // matches    Match[]
-  deletedAt  DateTime?
-  win        Win[]
-  playerHand PlayerHand[]
+  deletedAt    DateTime?
+  matchRecords PlayerMatchRecord[]
 
-  Room Room[]
+  Room         Room[]
+  roomMembers  RoomMember[]
 }
 
 model MatchError {
   id Int @id @default(autoincrement())
 
-  info      String  @db.LongText
+  info      String   @db.LongText
   createdAt DateTime @default(now())
 
   matchId Int
@@ -45,21 +45,31 @@ model MatchError {
 
 model Room {
   id                    Int      @id @default(autoincrement())
-  // 房间uuid
-  uuid                  String   @unique
+  // 房间代码
+  code                  String   @unique
   // 大盲注
   lowestBetAmount       Int
-  // 是否允许观战
-  allowPlayersToWatch   Boolean
-  // 允许的最大人数
-  maximumCountOfPlayers Int
-  // 房间密码, 如果是私密房间, 则需要
-  privateKey            String?
   createdAt             DateTime @default(now())
-
+  thinkingTime          Int
+  isPrivate             Boolean
   // 房主
-  ownerId Int
-  owner   User @relation(fields: [ownerId], references: [id])
+  ownerId               Int
+  owner                 User     @relation(fields: [ownerId], references: [id])
+  Match                 Match[]
+  members               RoomMember[]
+}
+
+// 房间成员（加入/退出）
+model RoomMember {
+  id        Int      @id @default(autoincrement())
+  roomId    Int
+  userId    Int
+  joinedAt  DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
 }
 
 enum Action {
@@ -102,18 +112,22 @@ enum PresentationType {
 }
 
 // 记录玩家手牌
-model PlayerHand {
-  id       Int     @id @default(autoincrement())
+model PlayerMatchRecord {
+  id             Int              @id @default(autoincrement())
   // 对应的对局 ID
-  matchId  Int
+  matchId        Int
   // 对应的玩家 ID
-  playerId Int
+  playerId       Int
   // string[]
-  hand     Json
+  hand           Json
   // 记录用户角色
-  role     String?
-  // 分配奖池
-  earn     Float?
+  role           String?
+  // 输赢结果
+  wager          Float?
+  presentation   PresentationType
+  totalBetAmount Int
+  isFold         Boolean          @default(false)
+  isAllIn        Boolean          @default(false)
 
   match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   player User  @relation(fields: [playerId], references: [id])
@@ -140,10 +154,11 @@ model Match {
   // 大盲注
   lowestBetAmount Int               @default(0)
 
-  // players              User[]
-  winners              Win[]
-  records              Record[]
-  playerHands          PlayerHand[]
+  // 关联房间Id
+  roomId               Int
+  records              BetRecord[]
+  playerHands          PlayerMatchRecord[]
+  room                 Room                   @relation(fields: [roomId], references: [id])
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
 
@@ -163,7 +178,7 @@ model MatchStageTimeRecord {
 }
 
 // 用户的行为记录表
-model Record {
+model BetRecord {
   id     Int    @id @default(autoincrement())
   // 用户的行为
   action Action
@@ -181,11 +196,11 @@ model Record {
 }
 
 // 记录游戏胜利的玩家
-model Win {
-  id       Int @id @default(autoincrement())
-  matchId  Int // 对应的对局 ID
-  playerId Int // 对应的玩家 ID
+// model Win {
+//   id       Int @id @default(autoincrement())
+//   matchId  Int // 对应的对局 ID
+//   playerId Int // 对应的玩家 ID
 
-  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [playerId], references: [id])
-}
+//   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+//   user  User  @relation(fields: [playerId], references: [id])
+// }

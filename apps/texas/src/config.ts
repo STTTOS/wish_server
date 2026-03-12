@@ -3,6 +3,8 @@ export const port = '7501'
 
 export const apiPrefix = '/api'
 
+export const apiPrefixClient = '/api/client'
+
 export const timeFormat = 'YYYY-MM-DD HH:mm:ss'
 
 export const timeFormatWithoutSeconds = 'YYYY-MM-DD HH:mm'
