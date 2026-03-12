@@ -19,6 +19,9 @@ const roomApiClient = combinePath(apiPrefixClient)('/room')
 
 /** 客户端房间 WS 订阅通道前缀，前端连接时 roomId 传该字符串即可收到加入/退出推送 */
 const CLIENT_ROOM_WS_PREFIX = 'client-room:'
+/** 客户端房间列表订阅通道，用于增删房间列表 */
+const CLIENT_ROOM_LIST_CHANNEL = 'client-room-list'
+
 function getClientRoomChannel(roomId: number): string {
   return CLIENT_ROOM_WS_PREFIX + roomId
 }
@@ -57,6 +60,20 @@ router.post(roomApiClient('/create'), async (ctx) => {
 
   if (!Number.isInteger(lowestBetAmount) || lowestBetAmount <= 0) {
     response.error(ctx, 2100, '盲注金额必须为整数且大于0')
+    return
+  }
+
+  // 如果用户已经在其他房间中，则不可再创建房间
+  const joinedRoom = await roomMember.findFirst({
+    where: {
+      userId,
+      room: {
+        deletedAt: null
+      }
+    }
+  })
+  if (joinedRoom) {
+    response.error(ctx, 2100, '你已在房间中, 请先退出后再创建房间')
     return
   }
 
@@ -123,7 +140,7 @@ const CLIENT_ROOM_MAX_PLAYERS = 10
 
 // 客户端：通过房间代码加入房间
 router.post(roomApiClient('/join'), async (ctx) => {
-  const { code }: { code?: string } = ctx.request.body
+  const { roomCode: code }: { roomCode?: string } = ctx.request.body
   const userId = ctx.state.user?.id
 
   if (!userId) {
@@ -191,21 +208,21 @@ router.post(roomApiClient('/join'), async (ctx) => {
     data: memberPayload
   })
 
-  response.success(
-    ctx,
-    {
+  // 更新房间列表中的实时人数
+  const memberCount = await roomMember.count({
+    where: {
+      roomId: roomInfo.id
+    }
+  })
+  ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+    type: 'client-room-member-count-changed',
+    data: {
       roomId: roomInfo.id,
-      code: roomInfo.code,
-      lowestBetAmount: roomInfo.lowestBetAmount,
-      thinkingTime: roomInfo.thinkingTime,
-      owner: {
-        id: roomInfo.owner.id,
-        name: roomInfo.owner.name,
-        avatar: roomInfo.owner.avatar
-      }
-    },
-    '加入成功'
-  )
+      memberCount
+    }
+  })
+
+  response.success(ctx, null, '加入成功')
 })
 
 // 客户端：退出房间
@@ -233,14 +250,79 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     return
   }
 
+  // 当前房间总成员数（退出前）
+  const memberCount = await roomMember.count({
+    where: {
+      roomId
+    }
+  })
+
+  // 如果退出的是房主，且房间内还有其他成员，则将房主移交给最早加入的其他成员
+  if (member.room.ownerId === userId && memberCount > 1) {
+    const nextOwnerMember = await roomMember.findFirst({
+      where: {
+        roomId,
+        userId: {
+          not: userId
+        }
+      },
+      orderBy: {
+        joinedAt: 'asc'
+      }
+    })
+
+    if (nextOwnerMember) {
+      await room.update({
+        where: { id: roomId },
+        data: {
+          ownerId: nextOwnerMember.userId
+        }
+      })
+
+      // 通知房间内所有客户端：房主变更
+      ws.broadcast(getClientRoomChannel(roomId), {
+        type: 'client-room-owner-changed',
+        data: {
+          oldOwnerId: userId,
+          newOwnerId: nextOwnerMember.userId
+        }
+      })
+    }
+  }
+
   await roomMember.delete({
     where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
   })
-
   ws.broadcast(getClientRoomChannel(roomId), {
     type: 'client-room-member-left',
     data: { userId }
   })
+
+  // 如果这是房间内最后一名玩家，软删除房间
+  const restCount = memberCount - 1
+  if (restCount === 0) {
+    await room.update({
+      where: { id: roomId },
+      data: {
+        deletedAt: new Date()
+      }
+    })
+
+    // 通知房间列表订阅者：房间被删除，从列表中移除
+    ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+      type: 'client-room-deleted',
+      data: { roomId }
+    })
+  } else {
+    // 非最后一人退出时，更新房间列表中的实时人数
+    ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+      type: 'client-room-member-count-changed',
+      data: {
+        roomId,
+        memberCount: restCount
+      }
+    })
+  }
 
   response.success(ctx, null, '已退出房间')
 })
@@ -292,6 +374,20 @@ router.post(roomApiClient('/kick'), async (ctx) => {
   ws.broadcast(getClientRoomChannel(roomId), {
     type: 'client-room-member-left',
     data: { userId: targetUserId }
+  })
+
+  // 更新房间列表中的实时人数
+  const memberCount = await roomMember.count({
+    where: {
+      roomId
+    }
+  })
+  ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+    type: 'client-room-member-count-changed',
+    data: {
+      roomId,
+      memberCount
+    }
   })
 
   response.success(ctx, null, '已踢出该玩家')
