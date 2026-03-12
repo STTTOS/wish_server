@@ -6,7 +6,7 @@ import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { apiPrefix, timeFormat } from '../../config'
 import response, { withList } from '../../utils/response'
-import { win, match, record, playerHand, matchError } from '../../models'
+import { match, betRecord, matchError, playerMatchRecord } from '../../models'
 
 const analysisApi = combinePath(apiPrefix)('/analysis')
 router.post(analysisApi('/match/list'), async (ctx) => {
@@ -70,9 +70,15 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     return
   }
 
-  const winners = await win.findMany({
+  const winners = await playerMatchRecord.findMany({
     where: {
-      matchId: id
+      matchId: id,
+      wager: {
+        gt: 0
+      }
+    },
+    select: {
+      playerId: true
     }
   })
   const detail = await match.findUnique({
@@ -89,7 +95,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
           }
         }
       },
-      playerHands: {
+      playerMatchRecords: {
         include: {
           player: {
             select: {
@@ -124,7 +130,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
         startAt: formatTime(record.startAt)
       }
     }),
-    playerHands: detail.playerHands.map((playerHand) => {
+    playerHands: detail.playerMatchRecords.map((playerHand) => {
       return {
         ...playerHand,
         win: !!winners.find((winner) => winner.playerId === playerHand.playerId)
@@ -160,7 +166,7 @@ router.post(analysisApi('/records/:matchId'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  const list = await record.findMany({
+  const list = await betRecord.findMany({
     where: {
       matchId
     }
@@ -174,7 +180,7 @@ router.post(analysisApi('/players/:matchId'), async (ctx) => {
     response.error(ctx, 400, '参数错误')
     return
   }
-  const list = await playerHand.findMany({
+  const list = await playerMatchRecord.findMany({
     where: {
       matchId
     },
