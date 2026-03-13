@@ -20,20 +20,16 @@ class SocketServer {
       // cors: { origin: '*' }
     })
 
-    // socket.io中间件
-    // 检查userId与roomId参数是否传递
-    // 否则不予链接
+    // socket.io 中间件：校验 userId 与 channel（订阅的频道名）
+    // channel 示例：client-room:123（某房间）、client-room-list（房间列表）
     this.#io.use((socket, next) => {
       const queryParams = socket.handshake.query
-      const [userId, roomId] = [
-        Number(queryParams.userId),
-        queryParams.roomId as string
-      ]
-      // 验证参数
-      if (!userId || !roomId) {
-        // 传递错误，拒绝连接
+      const userId = Number(queryParams.userId)
+      const channel =
+        (queryParams.channel as string) ?? (queryParams.roomId as string)
+      if (!userId || !channel) {
         logger.error(
-          `websocket conentct url:${socket.handshake.url}(parameters error), connection refused`
+          `websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
         return next(
           new Error(
@@ -41,62 +37,37 @@ class SocketServer {
           )
         )
       }
-
-      // 允许连接
       next()
     })
 
-    // 只有当玩家加入房间时, 才开启ws连接
-    // 退出房间时, 需要关闭连接
     this.#io.on('connection', (socket) => {
       logger.info('新的客户端连接, url', socket.handshake.url)
 
       const queryParams = socket.handshake.query
-      const [userId, roomId] = [
-        Number(queryParams.userId),
-        queryParams.roomId as string
-      ]
+      const userId = Number(queryParams.userId)
+      const channel =
+        (queryParams.channel as string) ?? (queryParams.roomId as string)
 
-      socket.join(roomId)
-      // store userId on socket.data
+      socket.join(channel)
       socket.data.userId = userId
+      socket.data.channel = channel
 
-      // map userId to socketId
       this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
 
-      // 玩家重连或首次连接到房间, 标记为 online 并通知其他客户端
-      const texasOnConnect = rooms.get(roomId)
-      const playerOnConnect = texasOnConnect?.room.getPlayerById(userId)
-      // 只有当玩家之前被标记为离线时(重连), 才更新为在线并广播
-      if (playerOnConnect && playerOnConnect.onlineStatus !== 'online') {
-        playerOnConnect.onlineStatus = 'online'
-        this.broadcast(roomId, {
-          type: 'player-status-change',
-          data: { user: { id: userId }, status: 'online' as OnlineStatus }
-        })
-      }
+      // 仅当 channel 对应游戏进程时：维护 Texas 玩家在线状态并广播
+      // （client-room:* / client-room-list 等不会进入此分支）
+      this.#handleGameRoomConnect(channel, userId)
 
-      // 处理连接关闭
       socket.on('disconnect', (reason) => {
-        // 玩家离开房间, 玩家离线等
-        // 需要向其他客户端推送消息
-        this.remove(roomId, userId)
-        this.broadcast(roomId, {
-          type: 'player-status-change',
-          data: { user: { id: userId }, status: 'offline' as OnlineStatus }
-        })
-        const texas = rooms.get(roomId)
-        const player = texas?.room.getPlayerById(userId)
-        if (player) player.onlineStatus = 'offline'
-
+        this.remove(channel, userId)
+        this.#handleGameRoomDisconnect(channel, userId)
         logger.info('client disconnect, id:', socket.id, 'reason', reason)
       })
 
-      // 处理错误
       socket.on('error', (error) => {
-        // 连接出现异常, 则无法正常加入房间
-        this.remove(roomId, userId)
+        this.remove(channel, userId)
+        this.#handleGameRoomDisconnect(channel, userId)
         logger.error('WebSocket connect error:', error)
       })
     })
@@ -104,6 +75,35 @@ class SocketServer {
 
   get io() {
     return this.#io
+  }
+
+  /**
+   * 仅当 channel 为游戏房间（gameCenter 中存在）时：标记玩家在线并广播
+   */
+  #handleGameRoomConnect(channel: string, userId: number) {
+    const texas = rooms.get(channel)
+    const player = texas?.room.getPlayerById(userId)
+    if (player && player.onlineStatus !== 'online') {
+      player.onlineStatus = 'online'
+      this.broadcast(channel, {
+        type: 'player-status-change',
+        data: { user: { id: userId }, status: 'online' as OnlineStatus }
+      })
+    }
+  }
+
+  /**
+   * 仅当 channel 为游戏房间时：广播玩家离线并更新 Texas 内状态
+   */
+  #handleGameRoomDisconnect(channel: string, userId: number) {
+    if (!rooms.has(channel)) return
+    this.broadcast(channel, {
+      type: 'player-status-change',
+      data: { user: { id: userId }, status: 'offline' as OnlineStatus }
+    })
+    const texas = rooms.get(channel)
+    const player = texas?.room.getPlayerById(userId)
+    if (player) player.onlineStatus = 'offline'
   }
 
   /**
