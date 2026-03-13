@@ -1,5 +1,5 @@
-import { Server, Socket } from 'socket.io'
 import { OnlineStatus } from 'texas-poker-core'
+import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
@@ -7,6 +7,9 @@ import { rooms } from '../gameCenter'
 
 class SocketServer {
   #io: Server
+  #gameNs: Namespace
+  #roomListNs: Namespace
+  #waitingRoomNs: Namespace
   #userIdToSocketIdMap: Map<number, string> = new Map()
 
   constructor() {
@@ -20,16 +23,39 @@ class SocketServer {
       // cors: { origin: '*' }
     })
 
-    // socket.io 中间件：校验 userId 与 channel（订阅的频道名）
-    // channel 示例：client-room:123（某房间）、client-room-list（房间列表）
-    this.#io.use((socket, next) => {
-      const queryParams = socket.handshake.query
-      const userId = Number(queryParams.userId)
-      const channel =
-        (queryParams.channel as string) ?? (queryParams.roomId as string)
-      if (!userId || !channel) {
+    /**
+     * 命名空间：
+     * - /game        ：游戏进程 WS，使用 gameCenter.rooms 的 roomId 作为房间名
+     * - /room-list   ：房间列表 WS，所有连接 join 'client-room-list'
+     * - /waiting-room：等待房间/客户端房间 WS，默认 join `client-room:{roomId}`
+     */
+    this.#gameNs = this.#io.of('/game')
+    this.#roomListNs = this.#io.of('/room-list')
+    this.#waitingRoomNs = this.#io.of('/waiting-room')
+
+    this.#setupGameNamespace()
+    this.#setupRoomListNamespace()
+    this.#setupWaitingRoomNamespace()
+  }
+
+  get io() {
+    return this.#io
+  }
+
+  /**
+   * /game 命名空间：与德州扑克对局相关的 WS 连接
+   * 约定：
+   * - query.userId: number
+   * - query.roomId: string（gameCenter.rooms 的 key）
+   */
+  #setupGameNamespace() {
+    this.#gameNs.use((socket, next) => {
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+      const roomId = query.roomId as string
+      if (!userId || !roomId) {
         logger.error(
-          `websocket connect url:${socket.handshake.url}(parameters error), connection refused`
+          `[/game] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
         return next(
           new Error(
@@ -40,41 +66,139 @@ class SocketServer {
       next()
     })
 
-    this.#io.on('connection', (socket) => {
-      logger.info('新的客户端连接, url', socket.handshake.url)
+    this.#gameNs.on('connection', (socket) => {
+      logger.info('[/game] 新的客户端连接, url', socket.handshake.url)
 
-      const queryParams = socket.handshake.query
-      const userId = Number(queryParams.userId)
-      const channel =
-        (queryParams.channel as string) ?? (queryParams.roomId as string)
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+      const roomId = query.roomId as string
 
-      socket.join(channel)
+      socket.join(roomId)
       socket.data.userId = userId
-      socket.data.channel = channel
+      socket.data.roomId = roomId
 
+      // 一个 userId 只保留最后一次游戏连接
       this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
 
-      // 仅当 channel 对应游戏进程时：维护 Texas 玩家在线状态并广播
-      // （client-room:* / client-room-list 等不会进入此分支）
-      this.#handleGameRoomConnect(channel, userId)
+      this.#handleGameRoomConnect(roomId, userId)
 
       socket.on('disconnect', (reason) => {
-        this.remove(channel, userId)
-        this.#handleGameRoomDisconnect(channel, userId)
-        logger.info('client disconnect, id:', socket.id, 'reason', reason)
+        this.remove(roomId, userId)
+        this.#handleGameRoomDisconnect(roomId, userId)
+        logger.info(
+          '[/game] client disconnect, id:',
+          socket.id,
+          'reason',
+          reason
+        )
       })
 
       socket.on('error', (error) => {
-        this.remove(channel, userId)
-        this.#handleGameRoomDisconnect(channel, userId)
-        logger.error('WebSocket connect error:', error)
+        this.remove(roomId, userId)
+        this.#handleGameRoomDisconnect(roomId, userId)
+        logger.error('[/game] WebSocket connect error:', error)
       })
     })
   }
 
-  get io() {
-    return this.#io
+  /**
+   * /room-list 命名空间：房间列表订阅
+   * 约定：
+   * - query.userId: number
+   * - 所有连接 join 同一个房间 'client-room-list'
+   */
+  #setupRoomListNamespace() {
+    this.#roomListNs.use((socket, next) => {
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+      if (!userId) {
+        logger.error(
+          `[/room-list] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
+        )
+        return next(
+          new Error(
+            'parameters to establish connection are invalid, connection refused'
+          )
+        )
+      }
+      next()
+    })
+
+    this.#roomListNs.on('connection', (socket) => {
+      logger.info('[/room-list] 新的客户端连接, url', socket.handshake.url)
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+
+      socket.data.userId = userId
+      socket.join('client-room-list')
+      socket.send({ type: 'initial connect', data: null })
+
+      socket.on('disconnect', (reason) => {
+        logger.info(
+          '[/room-list] client disconnect, id:',
+          socket.id,
+          'reason',
+          reason
+        )
+      })
+
+      socket.on('error', (error) => {
+        logger.error('[/room-list] WebSocket connect error:', error)
+      })
+    })
+  }
+
+  /**
+   * /waiting-room 命名空间：客户端房间/等待房间订阅
+   * 约定：
+   * - query.userId: number
+   * - query.roomId: string | number（客户端房间 id）
+   * - 实际 join 的房间名默认 `client-room:{roomId}`
+   */
+  #setupWaitingRoomNamespace() {
+    this.#waitingRoomNs.use((socket, next) => {
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+      const roomId = query.roomId as string
+      if (!userId || !roomId) {
+        logger.error(
+          `[/waiting-room] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
+        )
+        return next(
+          new Error(
+            'parameters to establish connection are invalid, connection refused'
+          )
+        )
+      }
+      next()
+    })
+
+    this.#waitingRoomNs.on('connection', (socket) => {
+      logger.info('[/waiting-room] 新的客户端连接, url', socket.handshake.url)
+      const query = socket.handshake.query
+      const userId = Number(query.userId)
+      const roomId = String(query.roomId)
+
+      const channel = `client-room:${roomId}`
+      socket.data.userId = userId
+      socket.data.roomId = roomId
+      socket.join(channel)
+      socket.send({ type: 'initial connect', data: null })
+
+      socket.on('disconnect', (reason) => {
+        logger.info(
+          '[/waiting-room] client disconnect, id:',
+          socket.id,
+          'reason',
+          reason
+        )
+      })
+
+      socket.on('error', (error) => {
+        logger.error('[/waiting-room] WebSocket connect error:', error)
+      })
+    })
   }
 
   /**
@@ -121,9 +245,7 @@ class SocketServer {
    * @returns
    */
   #getSocketsInRoom(roomId: string) {
-    const socketIds = Array.from(
-      this.#io.sockets.adapter.rooms.get(roomId) || []
-    )
+    const socketIds = Array.from(this.#gameNs.adapter.rooms.get(roomId) || [])
     return socketIds
       .map((socketId) => this.#getSocketById(socketId))
       .filter((socket) => !!socket) as Socket[]
@@ -149,7 +271,7 @@ class SocketServer {
         data
       )}`
     )
-    this.#io.to(roomId).emit('message', data)
+    this.#gameNs.to(roomId).emit('message', data)
   }
 
   /**
@@ -208,6 +330,25 @@ class SocketServer {
     const socket = this.#getSocketById(socketId)
     socket?.leave(roomId)
     this.#userIdToSocketIdMap.delete(userId)
+  }
+
+  /**
+   * 房间列表广播（/room-list 命名空间）
+   */
+  broadcastRoomList(data: Parameters<Socket['send']>[0]) {
+    logger.info(`broadcastRoomList, data: ${JSON.stringify(data)}`)
+    this.#roomListNs.to('client-room-list').emit('message', data)
+  }
+
+  /**
+   * 等待房间广播（/waiting-room 命名空间）
+   * @param channel 等待房间 channel，例如 client-room:{roomId}
+   */
+  broadcastWaitingRoom(channel: string, data: Parameters<Socket['send']>[0]) {
+    logger.info(
+      `broadcastWaitingRoom, channel: ${channel}, data: ${JSON.stringify(data)}`
+    )
+    this.#waitingRoomNs.to(channel).emit('message', data)
   }
 }
 
