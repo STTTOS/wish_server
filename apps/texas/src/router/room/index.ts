@@ -136,6 +136,11 @@ router.post(roomApiClient('/list'), async (ctx) => {
           name: true,
           avatar: true
         }
+      },
+      members: {
+        select: {
+          id: true
+        }
       }
     }
   })
@@ -147,7 +152,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
       thinkingTime,
       createdAt,
       owner,
-      initialChips
+      initialChips,
+      members
     }) => {
       return {
         id,
@@ -156,7 +162,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
         initialChips,
         thinkingTime,
         lowestBetAmount,
-        createdAt: dayjs(createdAt).format(timeFormat)
+        createdAt: dayjs(createdAt).format(timeFormat),
+        memberCount: members.length
       }
     }
   )
