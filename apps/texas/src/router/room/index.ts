@@ -24,9 +24,6 @@ const roomApiClient = combinePath(apiPrefixClient)('/room')
 
 /** 客户端房间 WS 订阅通道前缀，前端连接时 roomId 传该字符串即可收到加入/退出推送 */
 const CLIENT_ROOM_WS_PREFIX = 'client-room:'
-/** 客户端房间列表订阅通道，用于增删房间列表 */
-const CLIENT_ROOM_LIST_CHANNEL = 'client-room-list'
-
 function getClientRoomChannel(roomId: number): string {
   return CLIENT_ROOM_WS_PREFIX + roomId
 }
@@ -243,7 +240,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
       roomId: roomInfo.id
     }
   })
-  ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+  ws.broadcastRoomList({
     type: 'client-room-member-count-changed',
     data: {
       roomId: roomInfo.id,
@@ -344,13 +341,13 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     })
 
     // 通知房间列表订阅者：房间被删除，从列表中移除
-    ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+    ws.broadcastRoomList({
       type: 'client-room-deleted',
       data: { roomId }
     })
   } else {
     // 非最后一人退出时，更新房间列表中的实时人数
-    ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+    ws.broadcastRoomList({
       type: 'client-room-member-count-changed',
       data: {
         roomId,
@@ -409,7 +406,7 @@ router.post(roomApiClient('/kick'), async (ctx) => {
     where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
   })
 
-  ws.broadcast(getClientRoomChannel(roomId), {
+  ws.broadcastWaitingRoom(getClientRoomChannel(roomId), {
     type: 'client-room-member-left',
     data: { userId: targetUserId }
   })
@@ -420,7 +417,7 @@ router.post(roomApiClient('/kick'), async (ctx) => {
       roomId
     }
   })
-  ws.broadcast(CLIENT_ROOM_LIST_CHANNEL, {
+  ws.broadcastRoomList({
     type: 'client-room-member-count-changed',
     data: {
       roomId,
