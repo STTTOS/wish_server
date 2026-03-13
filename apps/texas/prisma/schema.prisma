@@ -29,8 +29,8 @@ model User {
   deletedAt    DateTime?
   matchRecords PlayerMatchRecord[]
 
-  Room         Room[]
-  roomMembers  RoomMember[]
+  Room          Room[]
+  roomMembers   RoomMember[]
   userRoomStats UserRoomStat[]
 }
 
@@ -45,29 +45,31 @@ model MatchError {
 }
 
 model Room {
-  id                    Int      @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   // 房间代码
-  code                  String   @unique
+  code            String         @unique
   // 大盲注
-  lowestBetAmount       Int
-  createdAt             DateTime @default(now())
-  deletedAt             DateTime?
-  thinkingTime          Int
-  isPrivate             Boolean
+  lowestBetAmount Int
+  // 初始筹码
+  initialChips    Int            @default(0)
+  createdAt       DateTime       @default(now())
+  deletedAt       DateTime?
+  thinkingTime    Int
+  isPrivate       Boolean
   // 房主
-  ownerId               Int
-  owner                 User     @relation(fields: [ownerId], references: [id])
-  Match         Match[]
-  members       RoomMember[]
-  userRoomStats UserRoomStat[]
+  ownerId         Int
+  owner           User           @relation(fields: [ownerId], references: [id])
+  Match           Match[]
+  members         RoomMember[]
+  userRoomStats   UserRoomStat[]
 }
 
 // 房间成员（加入/退出）
 model RoomMember {
-  id        Int      @id @default(autoincrement())
-  roomId    Int
-  userId    Int
-  joinedAt  DateTime @default(now())
+  id       Int      @id @default(autoincrement())
+  roomId   Int
+  userId   Int
+  joinedAt DateTime @default(now())
 
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -77,16 +79,16 @@ model RoomMember {
 
 // 用户在房间内的对局统计
 model UserRoomStat {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  roomId       Int
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  roomId         Int
   // 在房间内参与的对局次数
-  matchCount   Int      @default(0)
-  lastMatchAt  DateTime @default(now())
+  matchCount     Int      @default(0)
+  lastMatchAt    DateTime @default(now())
   // 胜负情况, 赢/输的筹码
-  totalWager   Float    @default(0)
+  totalWager     Float    @default(0)
   // 总下注额
-  totalBetAmount Float  @default(0)
+  totalBetAmount Float    @default(0)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
@@ -145,9 +147,9 @@ model PlayerMatchRecord {
   // 记录用户角色
   role           String?
   // 输赢结果
-  wager          Float @default(0)
+  wager          Float            @default(0)
   presentation   PresentationType
-  totalBetAmount Int @default(0)
+  totalBetAmount Int              @default(0)
   isFold         Boolean          @default(false)
   isAllIn        Boolean          @default(false)
 
@@ -179,7 +181,7 @@ model Match {
   // 关联房间Id
   roomId               Int
   records              BetRecord[]
-  playerMatchRecords          PlayerMatchRecord[]
+  playerMatchRecords   PlayerMatchRecord[]
   room                 Room                   @relation(fields: [roomId], references: [id])
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
