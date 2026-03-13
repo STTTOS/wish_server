@@ -95,7 +95,8 @@ router.post(roomApiClient('/create'), async (ctx) => {
 
   const roomExisted = await room.findFirst({
     where: {
-      ownerId: userId
+      ownerId: userId,
+      deletedAt: null
     }
   })
   if (roomExisted) {
@@ -190,7 +191,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
   const inOtherRoom = await roomMember.findFirst({
     where: {
       userId,
-      room: { id: { not: roomInfo.id } }
+      room: { id: { not: roomInfo.id }, deletedAt: null }
     }
   })
   if (inOtherRoom) {
