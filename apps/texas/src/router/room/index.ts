@@ -256,13 +256,24 @@ router.post(roomApiClient('/join'), async (ctx) => {
 
 // 客户端：退出房间
 router.post(roomApiClient('/quit'), async (ctx) => {
-  const { roomId }: { roomId?: number } = ctx.request.body
+  const { roomCode }: { roomCode?: string } = ctx.request.body
   const userId = ctx.state.user!.id
-  if (roomId == null) {
-    response.error(ctx, 400, '参数异常：需要 roomId')
+  if (!roomCode || !roomCode.trim()) {
+    response.error(ctx, 400, '参数异常：需要 roomCode')
     return
   }
 
+  const roomInfo = await room.findUnique({
+    where: {
+      code: roomCode.trim().toUpperCase()
+    }
+  })
+  if (!roomInfo || roomInfo.deletedAt) {
+    response.error(ctx, 2000, '房间不存在')
+    return
+  }
+
+  const roomId = roomInfo.id
   const compoundKey = { roomId, userId }
   // Prisma 复合唯一键名为 roomId_userId，非 camelCase
   const member = await roomMember.findUnique({
@@ -353,21 +364,29 @@ router.post(roomApiClient('/quit'), async (ctx) => {
 
 // 客户端：房主踢人
 router.post(roomApiClient('/kick'), async (ctx) => {
-  const { roomId, targetUserId }: { roomId?: number; targetUserId?: number } =
-    ctx.request.body
+  const {
+    roomCode,
+    targetUserId
+  }: {
+    roomCode?: string
+    targetUserId?: number
+  } = ctx.request.body
   const operatorId = ctx.state.user!.id
-  if (roomId == null || targetUserId == null) {
-    response.error(ctx, 400, '参数异常：需要 roomId 和 targetUserId')
+  if (!roomCode || !roomCode.trim() || targetUserId == null) {
+    response.error(ctx, 400, '参数异常：需要 roomCode 和 targetUserId')
     return
   }
 
   const roomInfo = await room.findUnique({
-    where: { id: roomId }
+    where: {
+      code: roomCode.trim().toUpperCase()
+    }
   })
-  if (!roomInfo) {
+  if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在')
     return
   }
+  const roomId = roomInfo.id
   if (roomInfo.ownerId !== operatorId) {
     response.error(ctx, 403, '仅房主可以踢人')
     return
@@ -414,24 +433,17 @@ router.post(roomApiClient('/kick'), async (ctx) => {
 
 // 客户端：查询房间详情（思考时间、是否公开、大盲注）
 router.post(roomApiClient('/detail'), async (ctx) => {
-  const {
-    roomId,
-    roomCode
-  }: {
-    roomId?: number
-    roomCode?: string
-  } = ctx.request.body
+  const { roomCode }: { roomCode?: string } = ctx.request.body
 
-  if (roomId == null && (!roomCode || !roomCode.trim())) {
-    response.error(ctx, 400, '参数异常：需要 roomId 或 roomCode')
+  if (!roomCode || !roomCode.trim()) {
+    response.error(ctx, 400, '参数异常：需要 roomCode')
     return
   }
 
-  const where =
-    roomId != null ? { id: roomId } : { code: roomCode!.trim().toUpperCase() }
-
   const roomInfo = await room.findUnique({
-    where,
+    where: {
+      code: roomCode.trim().toUpperCase()
+    },
     include: {
       owner: {
         select: {
@@ -442,11 +454,19 @@ router.post(roomApiClient('/detail'), async (ctx) => {
       }
     }
   })
-  if (!roomInfo) {
+  if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  const { id, code, isPrivate, thinkingTime, lowestBetAmount, owner } = roomInfo
+  const {
+    id,
+    code,
+    isPrivate,
+    thinkingTime,
+    lowestBetAmount,
+    owner,
+    initialChips
+  } = roomInfo
 
   response.success(ctx, {
     id,
@@ -454,27 +474,32 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     owner,
     isPrivate,
     thinkingTime,
+    initialChips,
     lowestBetAmount
   })
 })
 
 // 客户端：查询房间下所有成员
 router.post(roomApiClient('/members'), async (ctx) => {
-  const { roomId }: { roomId?: number } = ctx.request.body
+  const { roomCode }: { roomCode?: string } = ctx.request.body
   const userId = ctx.state.user!.id
 
-  if (roomId == null) {
-    response.error(ctx, 400, '参数异常：需要 roomId')
+  if (!roomCode || !roomCode.trim()) {
+    response.error(ctx, 400, '参数异常：需要 roomCode')
     return
   }
 
   const roomInfo = await room.findUnique({
-    where: { id: roomId }
+    where: {
+      code: roomCode.trim().toUpperCase()
+    }
   })
-  if (!roomInfo) {
+  if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在')
     return
   }
+
+  const roomId = roomInfo.id
 
   const selfMember = await roomMember.findUnique({
     // Prisma 复合唯一键名为 roomId_userId，非 camelCase
