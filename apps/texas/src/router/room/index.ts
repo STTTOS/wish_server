@@ -414,15 +414,24 @@ router.post(roomApiClient('/kick'), async (ctx) => {
 
 // 客户端：查询房间详情（思考时间、是否公开、大盲注）
 router.post(roomApiClient('/detail'), async (ctx) => {
-  const { roomId }: { roomId?: number } = ctx.request.body
+  const {
+    roomId,
+    roomCode
+  }: {
+    roomId?: number
+    roomCode?: string
+  } = ctx.request.body
 
-  if (roomId == null) {
-    response.error(ctx, 400, '参数异常：需要 roomId')
+  if (roomId == null && (!roomCode || !roomCode.trim())) {
+    response.error(ctx, 400, '参数异常：需要 roomId 或 roomCode')
     return
   }
 
+  const where =
+    roomId != null ? { id: roomId } : { code: roomCode!.trim().toUpperCase() }
+
   const roomInfo = await room.findUnique({
-    where: { id: roomId },
+    where,
     include: {
       owner: {
         select: {
