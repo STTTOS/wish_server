@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Room` ADD COLUMN `initialChips` INTEGER NOT NULL DEFAULT 0;

@@ -45,7 +45,12 @@ app.use(async (ctx, next) => {
 // 配合history模式
 // 放在静态资源服务中间件前面加载
 // 404  重定向到 /public/index.html
-app.use(historyApiFallback({ index: '/public/index.html' }))
+app.use(
+  historyApiFallback({
+    index: '/public/index.html',
+    whiteList: ['/api/client/game/config']
+  })
+)
 
 // 跨域设置
 app.use(

@@ -7,7 +7,11 @@ import { DefaultState } from '../router/instance'
 const loginUsers = new Map<number, { sessionId: string; time: string }>()
 
 // 如下的接口, 即使解析不到用户数据, 也不做401跳转
-const paths = [/^\/api\/client\/user\/sign$/, /^\/api\/client\/analysis/]
+const paths = [
+  /^\/api\/client\/user\/sign$/,
+  /^\/api\/client\/analysis/,
+  /^\/api\/client\/game\/config$/
+]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>

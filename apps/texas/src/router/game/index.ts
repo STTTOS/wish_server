@@ -4,10 +4,16 @@ import { Texas } from 'texas-poker-core'
 import router from '../instance'
 import { ws } from '../../server'
 import { logger } from '../../logger'
-import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { rooms, getRoomId } from '../../gameCenter'
+import { apiPrefix, apiPrefixClient } from '../../config'
+import {
+  MIN_BB,
+  MAX_PLAYERS_COUNT,
+  MIN_THINKING_TIME,
+  INITIAL_CHIPS_MIN_BB_MULTIPLIER
+} from '../../constants/game'
 import {
   match,
   betRecord,
@@ -18,6 +24,17 @@ import {
 } from '../../models'
 
 const toolsApi = combinePath(apiPrefix)('/game')
+const gameClientApi = combinePath(apiPrefixClient)('/game')
+
+// 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
+router.get(gameClientApi('/config'), async (ctx) => {
+  response.success(ctx, {
+    minThinkingTime: MIN_THINKING_TIME,
+    initialChipsMinBigBlindMultiplier: INITIAL_CHIPS_MIN_BB_MULTIPLIER,
+    maxPlayersCount: MAX_PLAYERS_COUNT,
+    minBB: MIN_BB
+  })
+})
 
 // 由庄家发牌
 router.post(toolsApi('/start/:roomId'), async (ctx) => {

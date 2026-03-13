@@ -12,6 +12,11 @@ import { rooms, leaveRoom } from '../../gameCenter'
 import { room, user, roomMember } from '../../models'
 import { generateRoomCode } from '../../utils/roomCode'
 import { apiPrefix, timeFormat, apiPrefixClient } from '../../config'
+import {
+  MIN_BB,
+  MIN_THINKING_TIME,
+  INITIAL_CHIPS_MIN_BB_MULTIPLIER
+} from '../../constants/game'
 
 const roomApi = combinePath(apiPrefix)('/room')
 
@@ -30,10 +35,14 @@ function getClientRoomChannel(roomId: number): string {
  * 客户端创建房间
  */
 router.post(roomApiClient('/create'), async (ctx) => {
-  const { lowestBetAmount, thinkingTime, isPrivate }: Prisma.RoomCreateInput =
-    ctx.request.body
+  const {
+    lowestBetAmount,
+    thinkingTime,
+    isPrivate,
+    initialChips
+  }: Prisma.RoomCreateInput = ctx.request.body
   const userId = ctx.state.user!.id
-  if ([lowestBetAmount, thinkingTime, isPrivate].some(isNil)) {
+  if ([lowestBetAmount, thinkingTime, isPrivate, initialChips].some(isNil)) {
     response.error(ctx, 400, '参数异常')
     return
   }
@@ -48,13 +57,25 @@ router.post(roomApiClient('/create'), async (ctx) => {
     return
   }
 
-  if (thinkingTime < 10) {
-    response.error(ctx, 2100, '思考时间不可小于10s')
+  if (thinkingTime < MIN_THINKING_TIME) {
+    response.error(ctx, 2100, `思考时间不可小于${MIN_THINKING_TIME}s`)
     return
   }
 
-  if (!Number.isInteger(lowestBetAmount) || lowestBetAmount <= 0) {
-    response.error(ctx, 2100, '盲注金额必须为整数且大于0')
+  if (!Number.isInteger(lowestBetAmount) || lowestBetAmount < MIN_BB) {
+    response.error(ctx, 2100, '盲注金额异常')
+    return
+  }
+
+  if (
+    !Number.isInteger(initialChips) ||
+    initialChips! < lowestBetAmount * INITIAL_CHIPS_MIN_BB_MULTIPLIER
+  ) {
+    response.error(
+      ctx,
+      2100,
+      `初始筹码必须为整数且大于等于大盲注的${INITIAL_CHIPS_MIN_BB_MULTIPLIER}倍`
+    )
     return
   }
 
@@ -89,6 +110,7 @@ router.post(roomApiClient('/create'), async (ctx) => {
       isPrivate,
       thinkingTime,
       lowestBetAmount,
+      initialChips,
       ownerId: userInfo.id
     }
   })
