@@ -140,11 +140,20 @@ router.post(roomApiClient('/list'), async (ctx) => {
     }
   })
   const result = rooms.map(
-    ({ id, code, lowestBetAmount, thinkingTime, createdAt, owner }) => {
+    ({
+      id,
+      code,
+      lowestBetAmount,
+      thinkingTime,
+      createdAt,
+      owner,
+      initialChips
+    }) => {
       return {
         id,
         code,
         owner,
+        initialChips,
         thinkingTime,
         lowestBetAmount,
         createdAt: dayjs(createdAt).format(timeFormat)
