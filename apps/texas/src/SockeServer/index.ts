@@ -27,7 +27,7 @@ class SocketServer {
      * 命名空间：
      * - /game        ：游戏进程 WS，使用 gameCenter.rooms 的 roomId 作为房间名
      * - /room-list   ：房间列表 WS，所有连接 join 'client-room-list'
-     * - /waiting-room：等待房间/客户端房间 WS，默认 join `client-room:{roomId}`
+     * - /waiting-room：等待房间/客户端房间 WS，join 房间名为 roomId
      */
     this.#gameNs = this.#io.of('/game')
     this.#roomListNs = this.#io.of('/room-list')
@@ -154,7 +154,7 @@ class SocketServer {
    * 约定：
    * - query.userId: number
    * - query.roomId: string | number（客户端房间 id）
-   * - 实际 join 的房间名默认 `client-room:{roomId}`
+   * - 实际 join 的房间名即 roomId（字符串）
    */
   #setupWaitingRoomNamespace() {
     this.#waitingRoomNs.use((socket, next) => {
@@ -180,10 +180,9 @@ class SocketServer {
       const userId = Number(query.userId)
       const roomId = String(query.roomId)
 
-      const channel = `client-room:${roomId}`
       socket.data.userId = userId
       socket.data.roomId = roomId
-      socket.join(channel)
+      socket.join(roomId)
       socket.send({ type: 'initial connect', data: null })
 
       socket.on('disconnect', (reason) => {
@@ -342,13 +341,13 @@ class SocketServer {
 
   /**
    * 等待房间广播（/waiting-room 命名空间）
-   * @param channel 等待房间 channel，例如 client-room:{roomId}
+   * @param roomId 客户端房间 id，即 Socket.IO 房间名
    */
-  broadcastWaitingRoom(channel: string, data: Parameters<Socket['send']>[0]) {
+  broadcastWaitingRoom(roomId: number, data: Parameters<Socket['send']>[0]) {
     logger.info(
-      `broadcastWaitingRoom, channel: ${channel}, data: ${JSON.stringify(data)}`
+      `broadcastWaitingRoom, roomId: ${roomId}, data: ${JSON.stringify(data)}`
     )
-    this.#waitingRoomNs.to(channel).emit('message', data)
+    this.#waitingRoomNs.to(String(roomId)).emit('message', data)
   }
 }
 

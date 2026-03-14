@@ -22,12 +22,6 @@ const roomApi = combinePath(apiPrefix)('/room')
 
 const roomApiClient = combinePath(apiPrefixClient)('/room')
 
-/** 客户端房间 WS 订阅通道前缀，前端连接时 roomId 传该字符串即可收到加入/退出推送 */
-const CLIENT_ROOM_WS_PREFIX = 'client-room:'
-function getClientRoomChannel(roomId: number): string {
-  return CLIENT_ROOM_WS_PREFIX + roomId
-}
-
 /**
  * 客户端创建房间
  */
@@ -229,7 +223,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
     joinedAt: dayjs().format(timeFormat),
     isOwner: roomInfo.ownerId === joinUser.id
   }
-  ws.broadcast(getClientRoomChannel(roomInfo.id), {
+  ws.broadcastWaitingRoom(roomInfo.id, {
     type: 'client-room-member-joined',
     data: memberPayload
   })
@@ -312,7 +306,7 @@ router.post(roomApiClient('/quit'), async (ctx) => {
       })
 
       // 通知房间内所有客户端：房主变更
-      ws.broadcast(getClientRoomChannel(roomId), {
+      ws.broadcastWaitingRoom(roomId, {
         type: 'client-room-owner-changed',
         data: {
           oldOwnerId: userId,
@@ -325,7 +319,7 @@ router.post(roomApiClient('/quit'), async (ctx) => {
   await roomMember.delete({
     where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
   })
-  ws.broadcast(getClientRoomChannel(roomId), {
+  ws.broadcastWaitingRoom(roomId, {
     type: 'client-room-member-left',
     data: { userId }
   })
@@ -406,7 +400,7 @@ router.post(roomApiClient('/kick'), async (ctx) => {
     where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
   })
 
-  ws.broadcastWaitingRoom(getClientRoomChannel(roomId), {
+  ws.broadcastWaitingRoom(roomId, {
     type: 'client-room-member-left',
     data: { userId: targetUserId }
   })
