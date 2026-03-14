@@ -9,12 +9,6 @@ import combinePath from '../../utils/combinePath'
 import { rooms, getRoomId } from '../../gameCenter'
 import { apiPrefix, apiPrefixClient } from '../../config'
 import {
-  MIN_BB,
-  MAX_PLAYERS_COUNT,
-  MIN_THINKING_TIME,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER
-} from '../../constants/game'
-import {
   match,
   betRecord,
   matchError,
@@ -22,6 +16,14 @@ import {
   playerMatchRecord,
   matchStageTimeRecord
 } from '../../models'
+import {
+  MIN_BB,
+  MAX_PLAYERS_COUNT,
+  MIN_THINKING_TIME,
+  EXTENDED_THINKING_TIME,
+  MAX_DELAY_REQUEST_COUNT,
+  INITIAL_CHIPS_MIN_BB_MULTIPLIER
+} from '../../constants/game'
 
 const toolsApi = combinePath(apiPrefix)('/game')
 const gameClientApi = combinePath(apiPrefixClient)('/game')
@@ -32,7 +34,9 @@ router.get(gameClientApi('/config'), async (ctx) => {
     minThinkingTime: MIN_THINKING_TIME,
     initialChipsMinBigBlindMultiplier: INITIAL_CHIPS_MIN_BB_MULTIPLIER,
     maxPlayersCount: MAX_PLAYERS_COUNT,
-    minBB: MIN_BB
+    minBB: MIN_BB,
+    maxDelayRequestCount: MAX_DELAY_REQUEST_COUNT,
+    extendedThinkingTime: EXTENDED_THINKING_TIME
   })
 })
 
