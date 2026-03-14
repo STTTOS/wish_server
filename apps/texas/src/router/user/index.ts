@@ -143,6 +143,7 @@ router.post(userClientApi('/info'), async (ctx) => {
       id: true,
       name: true,
       avatar: true,
+      username: true,
       createdAt: true
     }
   })
