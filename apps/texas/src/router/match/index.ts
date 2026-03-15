@@ -258,7 +258,8 @@ router.post(matchApi('/detail'), async (ctx) => {
       sortIndex: number
     }
 
-  const sortedPlayerRecords = matchInfo.playerMatchRecords
+  // 玩家结算记录
+  const settleRecords = matchInfo.playerMatchRecords
     //根据牌力排序, 弃牌在后
     .sort((a, b) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
@@ -302,11 +303,12 @@ router.post(matchApi('/detail'), async (ctx) => {
     maxPokes,
     records,
     startedAt,
+    commonPokes,
     totalBetAmount,
     maxPresentation,
     lowestBetAmount
   } = matchInfo
-  const betRecords = records.map(
+  const actionRecords = records.map(
     ({ player: { id: userId, ...player }, createdAt, ...record }) => ({
       userId,
       ...player,
@@ -321,10 +323,11 @@ router.post(matchApi('/detail'), async (ctx) => {
     startedAt: dayjs(startedAt).format(timeFormat),
     endedAt: dayjs(endedAt).format(timeFormat),
     maxPokes,
+    commonPokes,
     lowestBetAmount,
     totalBetAmount,
     maxPresentation,
-    players: sortedPlayerRecords,
-    records: betRecords
+    settleRecords,
+    actionRecords
   })
 })
