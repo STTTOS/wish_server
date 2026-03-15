@@ -271,7 +271,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     //根据牌力排序, 弃牌在后
     .sort((a, b) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      return comparePresentation(String(b.presentation), String(a.presentation))
+      return comparePresentation(a.presentation, b.presentation)
     })
     // 根据牌力设置 sortIndex
     .reduce<PlayerRecordWithSortIndex[]>((acc, cur, index) => {
