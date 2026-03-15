@@ -212,9 +212,9 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         endStage: texas.controller.endAt,
         totalBetAmount: texas.pool.totalAmount,
         // 最大牌型组合
-        maximumPokes: texas.dealer.getMaxPokes(),
+        maxPokes: texas.dealer.getMaxPokes(),
         // 最大牌力
-        maximumType: texas.dealer.getMaxPresentation(),
+        maxPresentation: texas.dealer.getMaxPresentation(),
         // 底牌
         commonPokes: texas.dealer.deck.getPokes().commonPokes
       }

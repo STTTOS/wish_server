@@ -200,17 +200,6 @@ router.post(matchApi('/detail'), async (ctx) => {
     return
   }
 
-  const participated = await playerMatchRecord.findFirst({
-    where: {
-      matchId,
-      playerId: userId
-    }
-  })
-  if (!participated) {
-    response.error(ctx, 403, '无权查看该对局')
-    return
-  }
-
   const matchInfo = await match.findUnique({
     where: { id: matchId, endedAt: { not: null } },
     include: {
@@ -248,11 +237,22 @@ router.post(matchApi('/detail'), async (ctx) => {
       }
     }
   })
-
   if (!matchInfo) {
     response.error(ctx, 2000, '对局不存在')
     return
   }
+
+  const participated = await playerMatchRecord.findFirst({
+    where: {
+      matchId,
+      playerId: userId
+    }
+  })
+  if (!participated) {
+    response.error(ctx, 403, '无权查看该对局')
+    return
+  }
+
   type PlayerRecordWithSortIndex =
     (typeof matchInfo.playerMatchRecords)[number] & {
       sortIndex: number
