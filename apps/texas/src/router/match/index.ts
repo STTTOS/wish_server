@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { comparePresentation } from 'texas-poker-core'
 
 import router from '../instance'
+import { logger } from '../../logger'
 import combinePath from '../../utils/combinePath'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
@@ -59,7 +60,7 @@ router.post(matchApi('/list'), async (ctx) => {
   const listForResponse = records
     .sort((a, b) => a.match.startedAt.getTime() - b.match.endedAt!.getTime())
     .map((r) => {
-      const { id, wager, presentation } = r
+      const { id, wager, presentation, hand } = r
 
       const m = r.match!
       const {
@@ -68,9 +69,12 @@ router.post(matchApi('/list'), async (ctx) => {
         room,
         startedAt,
         endedAt,
+        endStage,
+        commonPokes,
         lowestBetAmount
       } = m
       const { code: roomCode, initialChips } = room
+      logger.info('hand', typeof hand, typeof commonPokes)
       return {
         id,
         roomId,
@@ -79,6 +83,9 @@ router.post(matchApi('/list'), async (ctx) => {
         wager,
         lowestBetAmount,
         initialChips,
+        endStage,
+        handPokes: hand,
+        commonPokes,
         handType: (presentation as string)[0],
         startedAt: dayjs(startedAt).format(timeFormat),
         endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
