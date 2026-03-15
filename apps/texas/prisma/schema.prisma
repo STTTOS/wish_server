@@ -164,7 +164,6 @@ model Match {
   startedAt       DateTime          @default(now())
   // 对局结束的时间
   endedAt         DateTime?
-  playersCount    Int
   // 总的下注额度
   totalBetAmount  Float?
   // 记录游戏在哪个阶段结束的

@@ -258,8 +258,16 @@ router.post(matchApi('/detail'), async (ctx) => {
       sortIndex: number
     }
 
+  const {
+    room: { code: roomCode, id: roomId },
+    endedAt,
+    records,
+    startedAt,
+    playerMatchRecords,
+    ...restMatchInfo
+  } = matchInfo
   // 玩家结算记录
-  const settleRecords = matchInfo.playerMatchRecords
+  const settleRecords = playerMatchRecords
     //根据牌力排序, 弃牌在后
     .sort((a, b) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
@@ -287,13 +295,6 @@ router.post(matchApi('/detail'), async (ctx) => {
       hand: isFold ? [] : hand
     }))
 
-  const {
-    room: { code: roomCode, id: roomId },
-    endedAt,
-    records,
-    startedAt,
-    ...restMatchInfo
-  } = matchInfo
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
       userId,
@@ -306,6 +307,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     ...restMatchInfo,
     roomId,
     roomCode,
+    memberCount: playerMatchRecords.length,
     startedAt: dayjs(startedAt).format(timeFormat),
     endedAt: dayjs(endedAt).format(timeFormat),
     settleRecords,
