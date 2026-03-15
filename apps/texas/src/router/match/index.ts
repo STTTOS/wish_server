@@ -227,21 +227,23 @@ router.post(matchApi('/detail'), async (ctx) => {
         }
       },
       records: {
-        include: {
+        select: {
           player: {
             select: {
+              id: true,
               avatar: true,
-              name: true,
-              id: true
+              name: true
             }
-          }
-        },
-        select: {
+          },
           id: true,
           action: true,
           amount: true,
           stage: true,
           createdAt: true
+        },
+
+        orderBy: {
+          createdAt: 'desc'
         }
       }
     }
