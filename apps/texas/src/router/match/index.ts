@@ -232,7 +232,7 @@ router.post(matchApi('/detail'), async (ctx) => {
         },
 
         orderBy: {
-          createdAt: 'desc'
+          createdAt: 'asc'
         }
       }
     }
