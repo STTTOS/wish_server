@@ -212,17 +212,36 @@ router.post(matchApi('/detail'), async (ctx) => {
   }
 
   const matchInfo = await match.findUnique({
-    where: { id: matchId },
+    where: { id: matchId, endedAt: { not: null } },
     include: {
       room: true,
       playerMatchRecords: {
         include: {
-          player: true
+          player: {
+            select: {
+              id: true,
+              avatar: true,
+              name: true
+            }
+          }
         }
       },
       records: {
         include: {
-          player: true
+          player: {
+            select: {
+              avatar: true,
+              name: true,
+              id: true
+            }
+          }
+        },
+        select: {
+          id: true,
+          action: true,
+          amount: true,
+          stage: true,
+          createdAt: true
         }
       }
     }
@@ -236,59 +255,75 @@ router.post(matchApi('/detail'), async (ctx) => {
     (typeof matchInfo.playerMatchRecords)[number] & {
       sortIndex: number
     }
-  const sorted = [...matchInfo.playerMatchRecords].sort((a, b) => {
-    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-    return comparePresentation(String(b.presentation), String(a.presentation))
-  })
-  const sortedPlayerRecords: PlayerRecordWithSortIndex[] = sorted.reduce<
-    PlayerRecordWithSortIndex[]
-  >((acc, cur, index) => {
-    const lastOne = acc[index - 1]
-    let sortIndex: number
-    if (!lastOne) {
-      sortIndex = 1
-    } else if (String(lastOne.presentation) === String(cur.presentation)) {
-      sortIndex = lastOne.sortIndex
-    } else {
-      sortIndex = lastOne.sortIndex + 1
-    }
-    return [...acc, { ...cur, sortIndex }]
-  }, [])
 
+  const sortedPlayerRecords = matchInfo.playerMatchRecords
+    //根据牌力排序, 弃牌在后
+    .sort((a, b) => {
+      if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+      return comparePresentation(String(b.presentation), String(a.presentation))
+    })
+    // 根据牌力设置 sortIndex
+    .reduce<PlayerRecordWithSortIndex[]>((acc, cur, index) => {
+      const lastOne = acc[index - 1]
+      let sortIndex: number
+      if (!lastOne) {
+        sortIndex = 1
+      } else if (String(lastOne.presentation) === String(cur.presentation)) {
+        sortIndex = lastOne.sortIndex
+      } else {
+        sortIndex = lastOne.sortIndex + 1
+      }
+      return [...acc, { ...cur, sortIndex }]
+    }, [])
+    // 格式化字段
+    .map(
+      ({
+        hand,
+        isFold,
+        sortIndex: rank,
+        player: { id: userId, ...player },
+        ...rest
+      }) => ({
+        ...player,
+        ...rest,
+        rank,
+        userId,
+        isFold,
+        totalBetAmount,
+        hand: isFold ? [] : hand
+      })
+    )
+
+  const {
+    id,
+    room,
+    endedAt,
+    maxPokes,
+    records,
+    startedAt,
+    totalBetAmount,
+    maxPresentation,
+    lowestBetAmount
+  } = matchInfo
+  const betRecords = records.map(
+    ({ player: { id: userId, ...player }, createdAt, ...record }) => ({
+      userId,
+      ...player,
+      ...record,
+      createdAt: dayjs(createdAt).format(timeFormat)
+    })
+  )
   response.success(ctx, {
-    id: matchInfo.id,
-    room: {
-      id: matchInfo.room.id,
-      code: matchInfo.room.code
-    },
-    startedAt: dayjs(matchInfo.startedAt).format(timeFormat),
-    endedAt: matchInfo.endedAt
-      ? dayjs(matchInfo.endedAt).format(timeFormat)
-      : null,
-    lowestBetAmount: matchInfo.lowestBetAmount,
-    totalBetAmount: matchInfo.totalBetAmount,
-    maximumType: matchInfo.maximumType,
-    maximumPokes: matchInfo.maximumPokes,
-    players: sortedPlayerRecords.map((ph) => ({
-      userId: ph.playerId,
-      name: ph.player.name,
-      avatar: ph.player.avatar,
-      role: ph.role,
-      hand: ph.isFold ? [] : ph.hand,
-      wager: ph.wager,
-      presentation: ph.presentation,
-      totalBetAmount: ph.totalBetAmount,
-      isFold: ph.isFold,
-      isAllIn: ph.isAllIn,
-      rank: ph.sortIndex
-    })),
-    records: matchInfo.records.map((r) => ({
-      userId: r.playerId,
-      name: r.player.name,
-      action: r.action,
-      amount: r.amount,
-      stage: r.stage,
-      createdAt: dayjs(r.createdAt).format(timeFormat)
-    }))
+    id,
+    roomCode: room.code,
+    roomId: room.id,
+    startedAt: dayjs(startedAt).format(timeFormat),
+    endedAt: dayjs(endedAt).format(timeFormat),
+    maxPokes,
+    lowestBetAmount,
+    totalBetAmount,
+    maxPresentation,
+    players: sortedPlayerRecords,
+    records: betRecords
   })
 })

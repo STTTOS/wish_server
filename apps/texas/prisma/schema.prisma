@@ -142,7 +142,7 @@ model PlayerMatchRecord {
   matchId        Int
   // 对应的玩家 ID
   playerId       Int
-  // string[]
+  // Poke[]
   hand           Json
   // 记录用户角色
   role           String?
@@ -172,9 +172,9 @@ model Match {
   // 公共牌
   commonPokes     Json?
   // 存储计算后的最大牌力
-  maximumType     PresentationType?
-  // string[] 记录这场对局结算时可以形成最大牌型的扑克牌
-  maximumPokes    Json?
+  maxPresentation     PresentationType?
+  // string[][] 记录这场对局结算时可以形成最大牌型的扑克牌
+  maxPokes    Json?
   // 大盲注
   lowestBetAmount Int               @default(0)
 
