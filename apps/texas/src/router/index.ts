@@ -1,6 +1,7 @@
 import './room'
 import './user'
 import './game'
+import './match'
 import './action'
 import './analysis'
 
