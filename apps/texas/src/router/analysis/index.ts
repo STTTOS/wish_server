@@ -23,6 +23,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       lte: new Date(end)
     }
   }
+
   const total = await match.count({ where })
   const list = await match.findMany({
     take,
@@ -31,7 +32,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
     select: {
       id: true,
       startedAt: true,
-      maximumType: true,
+      maxPresentation: true,
       commonPokes: true,
       playersCount: true,
       lowestBetAmount: true,
