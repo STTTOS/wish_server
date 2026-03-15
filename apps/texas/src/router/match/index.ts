@@ -291,7 +291,6 @@ router.post(matchApi('/detail'), async (ctx) => {
         rank,
         userId,
         isFold,
-        totalBetAmount,
         hand: isFold ? [] : hand
       })
     )
