@@ -299,7 +299,6 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   // 需要创建对局信息
   const matchInfo = await match.create({
     data: {
-      playersCount: texas.dealer.count,
       lowestBetAmount: texas.room.lowestBetAmount,
       roomId: Number(roomId)
     }

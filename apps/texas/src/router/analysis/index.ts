@@ -34,10 +34,14 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       startedAt: true,
       maxPresentation: true,
       commonPokes: true,
-      playersCount: true,
       lowestBetAmount: true,
       endedAt: true,
       endStage: true,
+      playerMatchRecords: {
+        select: {
+          id: true
+        }
+      },
       MatchError: {
         select: {
           id: true
@@ -54,6 +58,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
       list.map(({ MatchError, ...rest }) => {
         return {
           ...rest,
+          memberCount: rest.playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
           endAt: dayjs(rest.endedAt).format(timeFormat),
           errorCount: MatchError.length
