@@ -163,7 +163,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       hand: player.getHandPokes(),
       wager: player.wager,
       totalBetAmount: player.totalBetAmount,
-      playerId: player.getUserInfo().id,
+      userId: player.getUserInfo().id,
       presentation: texas.dealer.getMaxPresentation(),
       createdAt: matchInfo.startedAt
     }))
@@ -279,7 +279,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
 
     await betRecord.create({
       data: {
-        playerId: player.getUserInfo().id,
+        userId: player.getUserInfo().id,
         stage: texas.controller.stage,
         action: action!.type,
         amount: action?.payload?.value,

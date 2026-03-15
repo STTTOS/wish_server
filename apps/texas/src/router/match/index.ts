@@ -27,7 +27,7 @@ router.post(matchApi('/list'), async (ctx) => {
   const take = pageSize
 
   const where = {
-    playerId: userId,
+    userId,
     match: {
       endedAt: { not: null }
     },
@@ -133,7 +133,7 @@ router.post(matchApi('/overview'), async (ctx) => {
   const userId = ctx.state.user!.id
 
   const records = await playerMatchRecord.findMany({
-    where: { playerId: userId },
+    where: { userId },
     select: {
       isAllIn: true,
       isFold: true,
@@ -206,7 +206,7 @@ router.post(matchApi('/detail'), async (ctx) => {
       room: true,
       playerMatchRecords: {
         include: {
-          player: {
+          user: {
             select: {
               id: true,
               avatar: true,
@@ -217,7 +217,7 @@ router.post(matchApi('/detail'), async (ctx) => {
       },
       records: {
         select: {
-          player: {
+          user: {
             select: {
               id: true,
               avatar: true,
@@ -245,7 +245,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   const participated = await playerMatchRecord.findFirst({
     where: {
       matchId,
-      playerId: userId
+      userId
     }
   })
   if (!participated) {
@@ -279,22 +279,13 @@ router.post(matchApi('/detail'), async (ctx) => {
       return [...acc, { ...cur, sortIndex }]
     }, [])
     // 格式化字段
-    .map(
-      ({
-        hand,
-        isFold,
-        sortIndex: rank,
-        player: { id: userId, ...player },
-        ...rest
-      }) => ({
-        ...player,
-        ...rest,
-        rank,
-        userId,
-        isFold,
-        hand: isFold ? [] : hand
-      })
-    )
+    .map(({ hand, isFold, sortIndex: rank, user, ...rest }) => ({
+      ...user,
+      ...rest,
+      rank,
+      isFold,
+      hand: isFold ? [] : hand
+    }))
 
   const {
     id,
@@ -309,9 +300,9 @@ router.post(matchApi('/detail'), async (ctx) => {
     lowestBetAmount
   } = matchInfo
   const actionRecords = records.map(
-    ({ player: { id: userId, ...player }, createdAt, ...record }) => ({
+    ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
       userId,
-      ...player,
+      ...user,
       ...record,
       createdAt: dayjs(createdAt).format(timeFormat)
     })

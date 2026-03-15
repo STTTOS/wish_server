@@ -140,8 +140,8 @@ model PlayerMatchRecord {
   id             Int              @id @default(autoincrement())
   // 对应的对局 ID
   matchId        Int
-  // 对应的玩家 ID
-  playerId       Int
+  // 对应用户 ID
+  userId         Int
   // Poke[]
   hand           Json
   // 记录用户角色
@@ -153,8 +153,8 @@ model PlayerMatchRecord {
   isFold         Boolean          @default(false)
   isAllIn        Boolean          @default(false)
 
-  match  Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  player User  @relation(fields: [playerId], references: [id])
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
 }
 
 // 对局信息
@@ -211,8 +211,8 @@ model BetRecord {
   // 记录用户在哪个阶段发生的行为
   stage  Stage
 
-  playerId  Int
-  player    User     @relation(fields: [playerId], references: [id])
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   match   Match? @relation(fields: [matchId], references: [id], onDelete: Cascade)

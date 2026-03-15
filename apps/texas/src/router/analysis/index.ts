@@ -79,7 +79,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
       }
     },
     select: {
-      playerId: true
+      userId: true
     }
   })
   const detail = await match.findUnique({
@@ -87,7 +87,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     include: {
       records: {
         include: {
-          player: {
+          user: {
             select: {
               id: true,
               name: true,
@@ -98,7 +98,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
       },
       playerMatchRecords: {
         include: {
-          player: {
+          user: {
             select: {
               id: true,
               name: true,
@@ -134,7 +134,7 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     playerHands: detail.playerMatchRecords.map((playerHand) => {
       return {
         ...playerHand,
-        win: !!winners.find((winner) => winner.playerId === playerHand.playerId)
+        win: !!winners.find((winner) => winner.userId === playerHand.userId)
       }
     })
   })
@@ -186,7 +186,7 @@ router.post(analysisApi('/players/:matchId'), async (ctx) => {
       matchId
     },
     include: {
-      player: true
+      user: true
     }
   })
   response.success(ctx, { list })
