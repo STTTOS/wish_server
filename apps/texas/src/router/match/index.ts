@@ -1,11 +1,7 @@
 import type { WithPaginationReq } from '../interface'
 
 import dayjs from 'dayjs'
-import {
-  Poke,
-  comparePresentation,
-  getBestPokesPresentation
-} from 'texas-poker-core'
+import { comparePresentation } from 'texas-poker-core'
 
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
@@ -31,6 +27,9 @@ router.post(matchApi('/list'), async (ctx) => {
 
   const where = {
     playerId: userId,
+    match: {
+      endedAt: { not: null }
+    },
     ...(roomId ? { match: { roomId } } : {})
   }
 
@@ -57,48 +56,34 @@ router.post(matchApi('/list'), async (ctx) => {
     })
   ])
 
-  const sorted = records.sort((a, b) => {
-    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-    return comparePresentation(String(b.presentation), String(a.presentation))
-  })
+  const listForResponse = records
+    .sort((a, b) => a.match.startedAt.getTime() - b.match.endedAt!.getTime())
+    .map((r) => {
+      const { id, wager, presentation } = r
 
-  type RecordWithSortIndex = (typeof records)[number] & { sortIndex: number }
-  const list: RecordWithSortIndex[] = sorted.reduce<RecordWithSortIndex[]>(
-    (acc, cur, index) => {
-      const lastOne = acc[index - 1] as RecordWithSortIndex | undefined
-      let sortIndex: number
-      if (!lastOne) {
-        sortIndex = 1
-      } else if (lastOne.presentation === cur.presentation) {
-        sortIndex = lastOne.sortIndex
-      } else {
-        sortIndex = lastOne.sortIndex + 1
+      const m = r.match!
+      const {
+        id: matchId,
+        roomId,
+        room,
+        startedAt,
+        endedAt,
+        lowestBetAmount
+      } = m
+      const { code: roomCode, initialChips } = room
+      return {
+        id,
+        roomId,
+        matchId,
+        roomCode,
+        wager,
+        lowestBetAmount,
+        initialChips,
+        handType: (presentation as string)[0],
+        startedAt: dayjs(startedAt).format(timeFormat),
+        endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
       }
-      return [...acc, { ...cur, sortIndex }]
-    },
-    []
-  )
-
-  const listForResponse = list.map((r) => {
-    const { id, wager, presentation, sortIndex } = r
-
-    const m = r.match!
-    const { id: matchId, roomId, room, startedAt, endedAt, lowestBetAmount } = m
-    const { code: roomCode, initialChips } = room
-    return {
-      id,
-      roomId,
-      matchId,
-      roomCode,
-      wager,
-      lowestBetAmount,
-      initialChips,
-      rank: sortIndex,
-      handType: (presentation as string)[0],
-      startedAt: dayjs(startedAt).format(timeFormat),
-      endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
-    }
-  })
+    })
 
   response.success(ctx, withList(listForResponse, total))
 })
@@ -240,19 +225,28 @@ router.post(matchApi('/detail'), async (ctx) => {
     response.error(ctx, 2000, '对局不存在')
     return
   }
-  const commonPokes = matchInfo.commonPokes as Poke[]
-
-  const sortedPlayerRecords = [...matchInfo.playerMatchRecords].sort((a, b) => {
-    // 先按是否弃牌：未弃牌在前
-    if (a.isFold !== b.isFold) {
-      return a.isFold ? 1 : -1
+  type PlayerRecordWithSortIndex =
+    (typeof matchInfo.playerMatchRecords)[number] & {
+      sortIndex: number
     }
-    // 比较两个玩家的最大牌型
-    return comparePresentation(
-      getBestPokesPresentation([a.hand as Poke[]], commonPokes),
-      getBestPokesPresentation([b.hand as Poke[]], commonPokes)
-    )
+  const sorted = [...matchInfo.playerMatchRecords].sort((a, b) => {
+    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+    return comparePresentation(String(b.presentation), String(a.presentation))
   })
+  const sortedPlayerRecords: PlayerRecordWithSortIndex[] = sorted.reduce<
+    PlayerRecordWithSortIndex[]
+  >((acc, cur, index) => {
+    const lastOne = acc[index - 1]
+    let sortIndex: number
+    if (!lastOne) {
+      sortIndex = 1
+    } else if (String(lastOne.presentation) === String(cur.presentation)) {
+      sortIndex = lastOne.sortIndex
+    } else {
+      sortIndex = lastOne.sortIndex + 1
+    }
+    return [...acc, { ...cur, sortIndex }]
+  }, [])
 
   response.success(ctx, {
     id: matchInfo.id,
@@ -278,7 +272,8 @@ router.post(matchApi('/detail'), async (ctx) => {
       presentation: ph.presentation,
       totalBetAmount: ph.totalBetAmount,
       isFold: ph.isFold,
-      isAllIn: ph.isAllIn
+      isAllIn: ph.isAllIn,
+      rank: ph.sortIndex
     })),
     records: matchInfo.records.map((r) => ({
       userId: r.playerId,
