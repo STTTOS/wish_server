@@ -57,27 +57,51 @@ router.post(matchApi('/list'), async (ctx) => {
     })
   ])
 
-  const list = records.map((record) => {
-    const m = record.match!
+  const sorted = records.sort((a, b) => {
+    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+    return comparePresentation(String(b.presentation), String(a.presentation))
+  })
+
+  type RecordWithSortIndex = (typeof records)[number] & { sortIndex: number }
+  const list: RecordWithSortIndex[] = sorted.reduce<RecordWithSortIndex[]>(
+    (acc, cur, index) => {
+      const lastOne = acc[index - 1] as RecordWithSortIndex | undefined
+      let sortIndex: number
+      if (!lastOne) {
+        sortIndex = 1
+      } else if (lastOne.presentation === cur.presentation) {
+        sortIndex = lastOne.sortIndex
+      } else {
+        sortIndex = lastOne.sortIndex + 1
+      }
+      return [...acc, { ...cur, sortIndex }]
+    },
+    []
+  )
+
+  const listForResponse = list.map((r) => {
+    const { id, wager, presentation, sortIndex } = r
+
+    const m = r.match!
+    const { id: matchId, roomId, room, startedAt, endedAt, lowestBetAmount } = m
+    const { code: roomCode, initialChips } = room
     return {
-      id: record.id,
-      matchId: m.id,
-      roomId: m.roomId,
-      // 筹码增减
-      wager: record.wager,
-      roomCode: m.room.code,
-      totalBetAmount: m.totalBetAmount,
-      // 最大牌型
-      presentation: record.presentation,
-      lowestBetAmount: m.lowestBetAmount,
-      startedAt: dayjs(m.startedAt).format(timeFormat),
-      endedAt: m.endedAt ? dayjs(m.endedAt).format(timeFormat) : null
+      id,
+      roomId,
+      matchId,
+      roomCode,
+      wager,
+      lowestBetAmount,
+      initialChips,
+      rank: sortIndex,
+      handType: (presentation as string)[0],
+      startedAt: dayjs(startedAt).format(timeFormat),
+      endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
     }
   })
 
-  response.success(ctx, withList(list, total))
+  response.success(ctx, withList(listForResponse, total))
 })
-
 /**
  * 查询当前用户参与过的所有房间列表（按房间归类）
  */
