@@ -259,7 +259,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     }
 
   const {
-    room: { code: roomCode, id: roomId },
+    room: { code: roomCode, id: roomId, initialChips },
     endedAt,
     records,
     startedAt,
@@ -307,6 +307,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     ...restMatchInfo,
     roomId,
     roomCode,
+    initialChips,
     memberCount: playerMatchRecords.length,
     startedAt: dayjs(startedAt).format(timeFormat),
     endedAt: dayjs(endedAt).format(timeFormat),
