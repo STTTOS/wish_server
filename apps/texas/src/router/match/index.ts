@@ -288,16 +288,11 @@ router.post(matchApi('/detail'), async (ctx) => {
     }))
 
   const {
-    id,
-    room,
+    room: { code: roomCode, id: roomId },
     endedAt,
-    maxPokes,
     records,
     startedAt,
-    commonPokes,
-    totalBetAmount,
-    maxPresentation,
-    lowestBetAmount
+    ...restMatchInfo
   } = matchInfo
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
@@ -308,16 +303,11 @@ router.post(matchApi('/detail'), async (ctx) => {
     })
   )
   response.success(ctx, {
-    id,
-    roomCode: room.code,
-    roomId: room.id,
+    ...restMatchInfo,
+    roomId,
+    roomCode,
     startedAt: dayjs(startedAt).format(timeFormat),
     endedAt: dayjs(endedAt).format(timeFormat),
-    maxPokes,
-    commonPokes,
-    lowestBetAmount,
-    totalBetAmount,
-    maxPresentation,
     settleRecords,
     actionRecords
   })
