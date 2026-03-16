@@ -38,12 +38,18 @@ router.post(matchApi('/list'), async (ctx) => {
     }),
     playerMatchRecord.findMany({
       where,
-      include: {
+      select: {
         match: {
           include: {
             room: true
           }
-        }
+        },
+        id: true,
+        handPokes: true,
+        wager: true,
+        isAllIn: true,
+        isFold: true,
+        totalBetAmount: true
       },
       orderBy: {
         match: {
