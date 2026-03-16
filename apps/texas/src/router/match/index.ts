@@ -222,7 +222,7 @@ router.post(matchApi('/detail'), async (ctx) => {
             }
           },
           id: true,
-          action: true,
+          actionType: true,
           amount: true,
           stage: true,
           createdAt: true
