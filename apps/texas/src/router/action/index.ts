@@ -1,4 +1,4 @@
-import { $Enums } from '@prisma/texas-client'
+import { ActionType } from 'texas-poker-core'
 
 import router from '../instance'
 import { apiPrefix } from '../../config'
@@ -18,7 +18,7 @@ router.post(toolsApi('/take'), async (ctx) => {
     matchId: number
     amount?: number
     roomId: string
-    actionType: $Enums.Action
+    actionType: ActionType
   } = ctx.request.body
   if (!matchId || !roomId || !actionType) {
     response.error(ctx, 400, '参数异常')

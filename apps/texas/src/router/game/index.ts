@@ -284,7 +284,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
       data: {
         userId: player.getUserInfo().id,
         stage: texas.controller.stage,
-        action: action!.type,
+        actionType: action!.type,
         amount: action?.payload?.value,
         matchId: matchInfo.id
       }
