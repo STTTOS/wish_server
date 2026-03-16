@@ -96,7 +96,7 @@ model UserRoomStat {
   @@unique([userId, roomId])
 }
 
-enum Action {
+enum ActionType {
   check
   fold
   bet
@@ -223,7 +223,7 @@ model MatchStageTimeRecord {
 model BetRecord {
   id     Int    @id @default(autoincrement())
   // 用户的行为
-  action Action
+  actionType ActionType
   // 下注金额, 过牌等行为默认为0
   amount Float  @default(0)
   // 记录用户在哪个阶段发生的行为
