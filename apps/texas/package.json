@@ -5,6 +5,7 @@
   "name": "@wishufree/texas-server",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit --skipLibCheck",
     "dev": "npm run db:sync && nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
     "lint": "eslint --cache --ext .ts ./src",

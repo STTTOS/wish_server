@@ -32,7 +32,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
     select: {
       id: true,
       startedAt: true,
-      maxPresentation: true,
+      bestRankCategory: true,
       commonPokes: true,
       lowestBetAmount: true,
       endedAt: true,

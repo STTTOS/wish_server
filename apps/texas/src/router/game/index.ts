@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import { Texas } from 'texas-poker-core'
+import { Texas, RoleEnum, RankCategory } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
@@ -50,7 +50,7 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
   }
   const userId = ctx.state.user!.id
   const player = texas.room.getPlayerById(userId)!
-  if (player.getRole() !== 'button') {
+  if (player.getRole() !== RoleEnum.BTN) {
     response.error(ctx, 2000, '不是庄家, 无法发牌')
     return
   }
@@ -160,11 +160,14 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
     const playerHands = texas.dealer.map((player) => ({
       matchId: matchInfo.id,
       role: player.getRole(),
-      hand: player.getHandPokes(),
+      handPokes: player.getHandPokes(),
       wager: player.wager,
       totalBetAmount: player.totalBetAmount,
       userId: player.getUserInfo().id,
-      presentation: texas.dealer.getMaxPresentation(),
+      // 以下三个字段 存储牌型大小, 包含牌型签名, 牌型大小数值, 牌型类别
+      rankStrength: player.rankStrength,
+      rankCategory: player.rankSignature?.[0] as RankCategory,
+      rankSignature: texas.dealer.getBestRankSignature(),
       createdAt: matchInfo.startedAt
     }))
     await playerMatchRecord.createMany({ data: playerHands })
@@ -212,9 +215,9 @@ router.post(toolsApi('/start/:roomId'), async (ctx) => {
         endStage: texas.controller.endAt,
         totalBetAmount: texas.pool.totalAmount,
         // 最大牌型组合
-        maxPokes: texas.dealer.getMaxPokes(),
+        bestPokes: texas.dealer.deck.getBestPokeCombinations(),
         // 最大牌力
-        maxPresentation: texas.dealer.getMaxPresentation(),
+        bestRankCategory: texas.dealer.deck.getBestRankCategory(),
         // 底牌
         commonPokes: texas.dealer.deck.getPokes().commonPokes
       }

@@ -112,7 +112,21 @@ enum Stage {
   river
 }
 
-enum PresentationType {
+// 座位角色（从庄家顺时针：庄家→小盲→大盲→枪口→…→关煞位），支持最多 10 人
+enum Role {
+  btn   // 庄家/按钮
+  sb    // 小盲
+  bb    // 大盲
+  utg   // 枪口
+  utg1  // 枪口+1
+  utg2  // 枪口+2（10 人桌）
+  mp    // 中位
+  lj    // Lojack（10 人桌）
+  hj    // 劫持位
+  co    // 关煞位
+}
+
+enum RankCategory {
   //皇家同花顺
   z
   //同花顺
@@ -142,13 +156,18 @@ model PlayerMatchRecord {
   matchId        Int
   // 对应用户 ID
   userId         Int
-  // Poke[]
-  hand           Json
-  // 记录用户角色
-  role           String?
+  // [Poke, Poke]
+  handPokes       Json
+  // 该手牌中的座位角色（庄家/小盲/大盲等）
+  role           Role?
   // 输赢结果
   wager          Float            @default(0)
-  presentation   PresentationType
+  // 牌型
+  rankCategory   RankCategory?
+  // 牌型的唯一签名
+  rankSignature  String?
+  // 将牌型转化为大小存储, 方便数据库索引
+  rankStrength Int @default(0)
   totalBetAmount Int              @default(0)
   isFold         Boolean          @default(false)
   isAllIn        Boolean          @default(false)
@@ -171,9 +190,9 @@ model Match {
   // 公共牌
   commonPokes     Json?
   // 存储计算后的最大牌力
-  maxPresentation     PresentationType?
+  bestRankCategory     RankCategory?
   // string[][] 记录这场对局结算时可以形成最大牌型的扑克牌
-  maxPokes    Json?
+  bestPokes    Json?
   // 大盲注
   lowestBetAmount Int               @default(0)
 

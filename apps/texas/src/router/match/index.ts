@@ -1,10 +1,8 @@
 import type { WithPaginationReq } from '../interface'
 
 import dayjs from 'dayjs'
-import { comparePresentation } from 'texas-poker-core'
 
 import router from '../instance'
-import { logger } from '../../logger'
 import combinePath from '../../utils/combinePath'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
@@ -60,7 +58,7 @@ router.post(matchApi('/list'), async (ctx) => {
   const listForResponse = records
     .sort((a, b) => a.match.startedAt.getTime() - b.match.endedAt!.getTime())
     .map((r) => {
-      const { id, wager, presentation, hand } = r
+      const { id, wager, rankCategory, handPokes } = r
 
       const m = r.match!
       const {
@@ -74,7 +72,6 @@ router.post(matchApi('/list'), async (ctx) => {
         lowestBetAmount
       } = m
       const { code: roomCode, initialChips } = room
-      logger.info('hand', typeof hand, typeof commonPokes)
       return {
         id,
         roomId,
@@ -84,9 +81,9 @@ router.post(matchApi('/list'), async (ctx) => {
         lowestBetAmount,
         initialChips,
         endStage,
-        handPokes: hand,
+        handPokes,
         commonPokes,
-        handType: (presentation as string)[0],
+        rankCategory,
         startedAt: dayjs(startedAt).format(timeFormat),
         endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
       }
@@ -137,7 +134,7 @@ router.post(matchApi('/overview'), async (ctx) => {
     select: {
       isAllIn: true,
       isFold: true,
-      presentation: true,
+      rankCategory: true,
       wager: true,
       totalBetAmount: true
     }
@@ -160,9 +157,9 @@ router.post(matchApi('/overview'), async (ctx) => {
     if (r.isAllIn) allInCount += 1
     if (r.isFold) foldCount += 1
 
-    if (r.presentation === 'z') royalFlushCount += 1
-    if (r.presentation === 'y') straightFlushCount += 1
-    if (r.presentation === 'x') fourOfKindCount += 1
+    if (r.rankCategory === 'z') royalFlushCount += 1
+    if (r.rankCategory === 'y') straightFlushCount += 1
+    if (r.rankCategory === 'x') fourOfKindCount += 1
 
     const wager = r.wager ?? 0
     if (wager > 0) winMatchCount += 1
@@ -271,7 +268,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     //根据牌力排序, 弃牌在后
     .sort((a, b) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      return comparePresentation(a.presentation, b.presentation)
+      return a.rankStrength - b.rankStrength
     })
     // 根据牌力设置 sortIndex
     .reduce<PlayerRecordWithSortIndex[]>((acc, cur, index) => {
@@ -279,7 +276,7 @@ router.post(matchApi('/detail'), async (ctx) => {
       let sortIndex: number
       if (!lastOne) {
         sortIndex = 1
-      } else if (String(lastOne.presentation) === String(cur.presentation)) {
+      } else if (lastOne.rankStrength === cur.rankStrength) {
         sortIndex = lastOne.sortIndex
       } else {
         sortIndex = lastOne.sortIndex + 1
@@ -287,12 +284,12 @@ router.post(matchApi('/detail'), async (ctx) => {
       return [...acc, { ...cur, sortIndex }]
     }, [])
     // 格式化字段
-    .map(({ hand, isFold, sortIndex: rank, user, ...rest }) => ({
+    .map(({ handPokes, isFold, sortIndex: rank, user, ...rest }) => ({
       ...user,
       ...rest,
       rank,
       isFold,
-      hand: isFold ? [] : hand
+      handPokes: isFold ? [] : handPokes
     }))
 
   const actionRecords = records.map(
