@@ -57,33 +57,20 @@ router.post(matchApi('/list'), async (ctx) => {
 
   const listForResponse = records
     .sort((a, b) => a.match.startedAt.getTime() - b.match.endedAt!.getTime())
-    .map((r) => {
-      const { id, wager, rankCategory, handPokes } = r
-
-      const m = r.match!
+    .map(({ match, ...restRecord }) => {
       const {
         id: matchId,
-        roomId,
-        room,
+        room: { code: roomCode, initialChips },
         startedAt,
         endedAt,
-        endStage,
-        commonPokes,
-        lowestBetAmount
-      } = m
-      const { code: roomCode, initialChips } = room
+        ...restMatch
+      } = match
       return {
-        id,
-        roomId,
+        ...restRecord,
+        ...restMatch,
         matchId,
         roomCode,
-        wager,
-        lowestBetAmount,
         initialChips,
-        endStage,
-        handPokes,
-        commonPokes,
-        rankCategory,
         startedAt: dayjs(startedAt).format(timeFormat),
         endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
       }
