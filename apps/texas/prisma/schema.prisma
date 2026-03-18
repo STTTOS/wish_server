@@ -11,8 +11,10 @@ generator client {
 model User {
   id       Int     @id @default(autoincrement())
   balance  Float
-  // 用户的头像
-  avatar   String
+  // 自定义头像 URL（上传等），可选
+  avatarUrl String?
+  // 客户端预设头像 key，如 cartoon/default
+  avatarKey String  @default("cartoon/default")
   // 用户通过weChat注册的话会关联weChatId
   weChatId String?
   // 游戏昵称, 需要唯一, 设置为非必填, 在注册时给一个随机的名字, 降低注册门槛

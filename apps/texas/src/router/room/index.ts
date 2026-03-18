@@ -125,7 +125,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
         select: {
           id: true,
           name: true,
-          avatar: true
+          avatarUrl: true,
+          avatarKey: true
         }
       },
       members: {
@@ -219,7 +220,8 @@ router.post(roomApiClient('/join'), async (ctx) => {
   const memberPayload = {
     userId: joinUser.id,
     name: joinUser.name,
-    avatar: joinUser.avatar,
+    avatarUrl: joinUser.avatarUrl,
+    avatarKey: joinUser.avatarKey,
     joinedAt: dayjs().format(timeFormat),
     isOwner: roomInfo.ownerId === joinUser.id
   }
@@ -440,7 +442,8 @@ router.post(roomApiClient('/detail'), async (ctx) => {
         select: {
           id: true,
           name: true,
-          avatar: true
+          avatarUrl: true,
+          avatarKey: true
         }
       }
     }
@@ -516,7 +519,8 @@ router.post(roomApiClient('/members'), async (ctx) => {
   const result = members.map(({ joinedAt, user: u }) => ({
     userId: u.id,
     name: u.name,
-    avatar: u.avatar,
+    avatarUrl: u.avatarUrl,
+    avatarKey: u.avatarKey,
     joinedAt: dayjs(joinedAt).format(timeFormat),
     isOwner: roomInfo.ownerId === u.id
   }))

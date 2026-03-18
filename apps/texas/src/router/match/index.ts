@@ -200,7 +200,8 @@ router.post(matchApi('/detail'), async (ctx) => {
           user: {
             select: {
               id: true,
-              avatar: true,
+              avatarUrl: true,
+              avatarKey: true,
               name: true
             }
           }
@@ -211,7 +212,8 @@ router.post(matchApi('/detail'), async (ctx) => {
           user: {
             select: {
               id: true,
-              avatar: true,
+              avatarUrl: true,
+              avatarKey: true,
               name: true
             }
           },

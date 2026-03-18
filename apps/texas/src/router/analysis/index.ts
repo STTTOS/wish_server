@@ -96,7 +96,8 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
             select: {
               id: true,
               name: true,
-              avatar: true
+              avatarUrl: true,
+              avatarKey: true
             }
           }
         }
@@ -107,7 +108,8 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
             select: {
               id: true,
               name: true,
-              avatar: true
+              avatarUrl: true,
+              avatarKey: true
             }
           }
         }

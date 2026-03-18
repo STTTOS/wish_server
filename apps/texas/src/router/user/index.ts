@@ -61,9 +61,8 @@ router.post(userClientApi('/sign'), async (ctx) => {
           name: ramdomName,
           username,
           password,
-          balance: 20_000,
-          avatar:
-            'https://www.wishufree.com/static/files/download__2ea40fda-d3d0-4504-809c-996b2cb13ec0.jpeg'
+          balance: 20_000
+          // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
         }
       })
       loginUsers.set(target.id!, { sessionId, time })
@@ -142,7 +141,8 @@ router.post(userClientApi('/info'), async (ctx) => {
     select: {
       id: true,
       name: true,
-      avatar: true,
+      avatarUrl: true,
+      avatarKey: true,
       username: true,
       createdAt: true
     }
@@ -159,25 +159,51 @@ router.post(userClientApi('/info'), async (ctx) => {
 })
 
 /**
- * 修改用户头像（需登录，body: { avatar: string }，一般为图片 URL）
+ * 修改头像：自定义 URL 与预设 key 至少传一项
+ * body: { avatarUrl?: string | null, avatarKey?: string }
+ * - 传 avatarKey：使用客户端预设头像（如 cartoon/default）
+ * - 传 avatarUrl：自定义图；传 null 可清空以仅用 avatarKey
  */
 router.post(userClientApi('/setAvatar'), async (ctx) => {
   const userId = ctx.state.user!.id
   const {
-    avatar
+    avatarUrl,
+    avatarKey
   }: {
-    avatar?: Prisma.UserCreateInput['avatar']
+    avatarUrl?: string | null
+    avatarKey?: string
   } = ctx.request.body ?? {}
 
-  if (!avatar || typeof avatar !== 'string' || !avatar.trim()) {
-    response.error(ctx, 400, '头像地址不可为空')
+  const hasUrl = avatarUrl !== undefined
+  const hasKey =
+    avatarKey !== undefined &&
+    typeof avatarKey === 'string' &&
+    avatarKey.trim().length > 0
+
+  if (!hasUrl && !hasKey) {
+    response.error(ctx, 400, '请传入 avatarUrl 或 avatarKey')
     return
+  }
+
+  const data: Prisma.UserUpdateInput = {}
+  if (hasUrl) {
+    if (avatarUrl === null || avatarUrl === '') {
+      data.avatarUrl = null
+    } else if (typeof avatarUrl === 'string') {
+      data.avatarUrl = avatarUrl.trim()
+    } else {
+      response.error(ctx, 400, 'avatarUrl 格式异常')
+      return
+    }
+  }
+  if (hasKey) {
+    data.avatarKey = avatarKey!.trim()
   }
 
   try {
     await user.update({
       where: { id: userId },
-      data: { avatar: avatar.trim() }
+      data
     })
     response.success(ctx, null, '头像更新成功')
   } catch (error) {
