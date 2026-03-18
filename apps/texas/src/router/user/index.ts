@@ -158,7 +158,9 @@ router.post(userClientApi('/info'), async (ctx) => {
   }
 })
 
-// 修改用户头像
+/**
+ * 修改用户头像（需登录，body: { avatar: string }，一般为图片 URL）
+ */
 router.post(userClientApi('/setAvatar'), async (ctx) => {
   const userId = ctx.state.user!.id
   const {
@@ -167,15 +169,25 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
     avatar?: Prisma.UserCreateInput['avatar']
   } = ctx.request.body ?? {}
 
-  if (!avatar || typeof avatar !== 'string') {
+  if (!avatar || typeof avatar !== 'string' || !avatar.trim()) {
     response.error(ctx, 400, '头像地址不可为空')
     return
   }
 
-  await user.update({
-    where: { id: userId },
-    data: { avatar }
-  })
-
-  response.success(ctx, null, '头像更新成功')
+  try {
+    await user.update({
+      where: { id: userId },
+      data: { avatar: avatar.trim() }
+    })
+    response.success(ctx, null, '头像更新成功')
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      response.error(ctx, 2000, '用户不存在')
+      return
+    }
+    throw error
+  }
 })

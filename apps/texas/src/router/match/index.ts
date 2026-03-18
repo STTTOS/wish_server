@@ -27,6 +27,7 @@ router.post(matchApi('/list'), async (ctx) => {
   const where = {
     userId,
     match: {
+      // 过滤掉未结束的对局
       endedAt: { not: null }
     },
     ...(roomId ? { match: { roomId } } : {})
