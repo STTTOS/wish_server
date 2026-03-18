@@ -159,51 +159,29 @@ router.post(userClientApi('/info'), async (ctx) => {
 })
 
 /**
- * 修改头像：自定义 URL 与预设 key 至少传一项
- * body: { avatarUrl?: string | null, avatarKey?: string }
- * - 传 avatarKey：使用客户端预设头像（如 cartoon/default）
- * - 传 avatarUrl：自定义图；传 null 可清空以仅用 avatarKey
+ * 修改预设头像，body: { avatarKey: string }（如 cartoon/default）
+ * 会清空 avatarUrl，客户端按 avatarKey 映射本地资源展示
  */
 router.post(userClientApi('/setAvatar'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const {
-    avatarUrl,
-    avatarKey
-  }: {
-    avatarUrl?: string | null
-    avatarKey?: string
-  } = ctx.request.body ?? {}
+  const { avatarKey }: { avatarKey?: string } = ctx.request.body ?? {}
 
-  const hasUrl = avatarUrl !== undefined
-  const hasKey =
-    avatarKey !== undefined &&
-    typeof avatarKey === 'string' &&
-    avatarKey.trim().length > 0
-
-  if (!hasUrl && !hasKey) {
-    response.error(ctx, 400, '请传入 avatarUrl 或 avatarKey')
+  if (
+    avatarKey === undefined ||
+    typeof avatarKey !== 'string' ||
+    avatarKey.trim().length === 0
+  ) {
+    response.error(ctx, 400, '请传入有效的 avatarKey')
     return
-  }
-
-  const data: Prisma.UserUpdateInput = {}
-  if (hasUrl) {
-    if (avatarUrl === null || avatarUrl === '') {
-      data.avatarUrl = null
-    } else if (typeof avatarUrl === 'string') {
-      data.avatarUrl = avatarUrl.trim()
-    } else {
-      response.error(ctx, 400, 'avatarUrl 格式异常')
-      return
-    }
-  }
-  if (hasKey) {
-    data.avatarKey = avatarKey!.trim()
   }
 
   try {
     await user.update({
       where: { id: userId },
-      data
+      data: {
+        avatarKey: avatarKey.trim(),
+        avatarUrl: null
+      }
     })
     response.success(ctx, null, '头像更新成功')
   } catch (error) {
