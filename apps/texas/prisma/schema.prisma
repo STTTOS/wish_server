@@ -21,6 +21,8 @@ model User {
   name     String  @unique
   // 新增用户名和密码字段
   username String  @unique
+  // 是否管理员
+  isAdmin  Boolean @default(false)
   // the password of the user should be hashed
   password String
 
@@ -52,6 +54,42 @@ model UserSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
+}
+
+enum AnnouncementType {
+  activity
+  update
+  maintenance
+}
+
+enum AnnouncementStatus {
+  published
+  disabled
+}
+
+model Announcement {
+  id Int @id @default(autoincrement())
+
+  type AnnouncementType
+
+  title String @db.VarChar(120)
+  summary String @db.VarChar(300)
+  content String @db.Text
+
+  actionText String? @db.VarChar(40)
+  actionUrl String? @db.VarChar(500)
+
+  priority Int @default(0)
+
+  status AnnouncementStatus
+  publishAt DateTime
+  expireAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  deletedAt DateTime?
+
+  @@index([status, priority, publishAt])
 }
 
 model MatchError {

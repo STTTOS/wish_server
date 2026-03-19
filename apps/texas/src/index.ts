@@ -16,6 +16,7 @@ import { app, server } from './server'
 import response from './utils/response'
 import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
+import customHandle403 from './middleware/customHandle403'
 import loggerMiddleware from './middleware/loggerMiddleware'
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
@@ -91,6 +92,9 @@ app.use(
 
 // Custom 401 handling
 app.use(customHandle401)
+
+// Custom 403 handling (admin-only apis)
+app.use(customHandle403)
 
 // 解析请求体
 app.use(

@@ -6,6 +6,7 @@ export const {
   betRecord,
   user,
   userSettings,
+  announcement,
   match,
   matchStageTimeRecord,
   playerMatchRecord,

@@ -1,8 +1,9 @@
+import type { User } from '@prisma/texas-client'
+
 import Router from 'koa-router'
-import { User } from '@prisma/texas-client'
 
 export interface DefaultState {
-  user?: User & { sessionId: string }
+  user?: Pick<User, 'id'> & { sessionId: string }
 }
 const router = new Router<DefaultState>()
 

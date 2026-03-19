@@ -43,7 +43,13 @@ router.post(userClientApi('/sign'), async (ctx) => {
       loginUsers.set(target.id!, { sessionId, time })
       response.success(
         ctx,
-        { token: getToken({ sessionId, id: target.id }), type: 'login' },
+        {
+          token: getToken({
+            sessionId,
+            id: target.id
+          }),
+          type: 'login'
+        },
         '登录成功'
       )
     } else {
@@ -71,7 +77,13 @@ router.post(userClientApi('/sign'), async (ctx) => {
       loginUsers.set(target.id!, { sessionId, time })
       response.success(
         ctx,
-        { token: getToken({ sessionId, id: target.id }), type: 'register' },
+        {
+          token: getToken({
+            sessionId,
+            id: target.id!
+          }),
+          type: 'register'
+        },
         '注册成功'
       )
     } catch (error) {
