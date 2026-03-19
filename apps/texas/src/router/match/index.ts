@@ -196,7 +196,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     include: {
       room: true,
       playerMatchRecords: {
-        include: {
+        select: {
           user: {
             select: {
               id: true,
@@ -204,7 +204,16 @@ router.post(matchApi('/detail'), async (ctx) => {
               avatarKey: true,
               name: true
             }
-          }
+          },
+          id: true,
+          role: true,
+          isFold: true,
+          wager: true,
+          isAllIn: true,
+          handPokes: true,
+          rankStrength: true,
+          rankCategory: true,
+          totalBetAmount: true
         }
       },
       records: {
@@ -280,13 +289,26 @@ router.post(matchApi('/detail'), async (ctx) => {
       return [...acc, { ...cur, sortIndex }]
     }, [])
     // 格式化字段
-    .map(({ handPokes, isFold, sortIndex: rank, user, ...rest }) => ({
-      ...user,
-      ...rest,
-      rank,
-      isFold,
-      handPokes: isFold ? [] : handPokes
-    }))
+    .map(
+      ({
+        handPokes,
+        isFold,
+        sortIndex: rank,
+        user: { id: userId, ...user },
+        rankCategory,
+        rankStrength,
+        ...rest
+      }) => ({
+        ...user,
+        ...rest,
+        rank,
+        userId,
+        isFold,
+        handPokes: isFold ? [] : handPokes,
+        rankCategory: isFold ? undefined : rankCategory,
+        rankStrength: isFold ? 0 : rankStrength
+      })
+    )
 
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
