@@ -1,5 +1,6 @@
 import type { AnnouncementType, AnnouncementStatus } from '@prisma/texas-client'
 
+import dayjs from 'dayjs'
 import { isNil } from 'ramda'
 
 import router from '../instance'
@@ -79,7 +80,12 @@ router.post(announcementApiClient('/list'), async (ctx) => {
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
-  response.success(ctx, list, '查询成功')
+  const formattedList = list.map((item) => ({
+    ...item,
+    publishAt: dayjs(item.publishAt).format('YYYY-MM-DD')
+  }))
+
+  response.success(ctx, formattedList, '查询成功')
 })
 
 /**
