@@ -34,6 +34,24 @@ model User {
   Room          Room[]
   roomMembers   RoomMember[]
   userRoomStats UserRoomStat[]
+  settings      UserSettings?
+}
+
+model UserSettings {
+  id Int @id @default(autoincrement())
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 是否展示历史战绩
+  showHistoryRecords Boolean @default(true)
+  // 是否展示战绩总览
+  showRecordOverview Boolean @default(true)
+  // 离线是否自动跟注
+  autoCallOnOffline Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 }
 
 model MatchError {

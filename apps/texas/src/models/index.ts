@@ -5,6 +5,7 @@ const prisma = new PrismaClient()
 export const {
   betRecord,
   user,
+  userSettings,
   match,
   matchStageTimeRecord,
   playerMatchRecord,

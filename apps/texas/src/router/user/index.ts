@@ -6,9 +6,9 @@ import { v4 as uuidv4 } from 'uuid'
 import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
-import { user } from '../../models'
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
+import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixClient } from '../../config'
 
@@ -61,7 +61,10 @@ router.post(userClientApi('/sign'), async (ctx) => {
           name: ramdomName,
           username,
           password,
-          balance: 20_000
+          balance: 20_000,
+          settings: {
+            create: {}
+          }
           // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
         }
       })
@@ -194,4 +197,84 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
     }
     throw error
   }
+})
+
+// 查询用户设置
+router.post(userClientApi('/settings'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const settings = await userSettings.findUnique({
+    where: { userId },
+    select: {
+      showHistoryRecords: true,
+      showRecordOverview: true,
+      autoCallOnOffline: true
+    }
+  })
+
+  if (!settings) {
+    response.success(
+      ctx,
+      {
+        showHistoryRecords: true,
+        showRecordOverview: true,
+        autoCallOnOffline: false
+      },
+      '查询成功'
+    )
+    return
+  }
+
+  response.success(ctx, settings, '查询成功')
+})
+
+// 修改用户设置
+router.post(userClientApi('/setSettings'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const {
+    showHistoryRecords,
+    showRecordOverview,
+    autoCallOnOffline
+  }: {
+    showHistoryRecords?: boolean
+    showRecordOverview?: boolean
+    autoCallOnOffline?: boolean
+  } = ctx.request.body ?? {}
+
+  const data: {
+    showHistoryRecords?: boolean
+    showRecordOverview?: boolean
+    autoCallOnOffline?: boolean
+  } = {}
+  if (typeof showHistoryRecords === 'boolean') {
+    data.showHistoryRecords = showHistoryRecords
+  }
+  if (typeof showRecordOverview === 'boolean') {
+    data.showRecordOverview = showRecordOverview
+  }
+  if (typeof autoCallOnOffline === 'boolean') {
+    data.autoCallOnOffline = autoCallOnOffline
+  }
+
+  if (Object.keys(data).length === 0) {
+    response.error(ctx, 400, '请至少传入一个设置项')
+    return
+  }
+
+  const updatedSettings = await userSettings.upsert({
+    where: { userId },
+    create: {
+      user: {
+        connect: { id: userId }
+      },
+      ...data
+    },
+    update: data,
+    select: {
+      showHistoryRecords: true,
+      showRecordOverview: true,
+      autoCallOnOffline: true
+    }
+  })
+
+  response.success(ctx, updatedSettings, '设置更新成功')
 })
