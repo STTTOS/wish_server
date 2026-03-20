@@ -10,6 +10,7 @@ const loginUsers = new Map<number, { sessionId: string; time: string }>()
 const paths = [
   /^\/api\/client\/user\/sign$/,
   /^\/api\/web\/user\/login/,
+  /^\/api\/web\/user\/info/,
   /^\/api\/client\/analysis/,
   /^\/api\/client\/game\/config$/,
   /^\/api\/client\/announcement\/list$/

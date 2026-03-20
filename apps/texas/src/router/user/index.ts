@@ -120,8 +120,46 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
  */
 router.post(userClientApi('/sign'), handleSignOrRegister)
 
-/** Web 端登录，与 /api/client/user/sign 行为一致 */
-router.post(userWebApi('/login'), handleSignOrRegister)
+/** Web 端登录（仅登录，不自动注册） */
+router.post(userWebApi('/login'), async (ctx) => {
+  const {
+    username,
+    password
+  }: {
+    username: Prisma.UserCreateInput['username']
+    password: Prisma.UserCreateInput['password']
+  } = ctx.request.body
+  if (!username || !password) {
+    response.error(ctx, 400, '参数异常')
+    return
+  }
+
+  const target = await user.findFirst({ where: { username } })
+  if (!target) {
+    response.error(ctx, 2000, '用户不存在')
+    return
+  }
+
+  if (target.password !== password) {
+    response.error(ctx, 2100, '密码错误')
+    return
+  }
+
+  const sessionId = uuidv4()
+  const time = dayjs().format(timeFormat)
+  loginUsers.set(target.id!, { sessionId, time })
+  response.success(
+    ctx,
+    {
+      token: getToken({
+        sessionId,
+        id: target.id
+      }),
+      type: 'login'
+    },
+    '登录成功'
+  )
+})
 
 // 此接口会被middleware接管, 必定有用户信息
 router.post(userClientApi('/setName'), async (ctx) => {
