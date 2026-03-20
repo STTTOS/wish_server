@@ -4,8 +4,8 @@ import dayjs from 'dayjs'
 import { isNil } from 'ramda'
 import {
   Prisma,
-  type AnnouncementType,
-  type AnnouncementStatus
+  AnnouncementType,
+  AnnouncementStatus
 } from '@prisma/texas-client'
 
 import response from '../../utils/response'
@@ -40,7 +40,6 @@ const parseToDate = (value: unknown, fieldName: string) => {
 
 /**
  * 查询当前有效公告列表：
- * 入参：{ now: number | string }
  * 规则：
  * - status: published
  * - publishAt <= now
@@ -50,19 +49,7 @@ const parseToDate = (value: unknown, fieldName: string) => {
 async function handleValidAnnouncementsList(
   ctx: ParameterizedContext<DefaultState>
 ) {
-  const { now } = ctx.request.body ?? {}
-  let nowDate: Date | null = null
-  try {
-    nowDate = parseToDate(now, 'now')
-  } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
-    return
-  }
-
-  if (!nowDate) {
-    response.error(ctx, 400, 'now 不可为空')
-    return
-  }
+  const nowDate = new Date()
 
   const list = await announcement.findMany({
     where: {
@@ -105,11 +92,17 @@ router.post(announcementApiWeb('/validList'), async (ctx) => {
   await handleValidAnnouncementsList(ctx)
 })
 
-const ANNOUNCEMENT_TYPES = new Set<string>([
-  'activity',
-  'update',
-  'maintenance'
-])
+const ANNOUNCEMENT_TYPES = new Set<AnnouncementType>(
+  Object.values(AnnouncementType)
+)
+const ANNOUNCEMENT_STATUSES = new Set<AnnouncementStatus>(
+  Object.values(AnnouncementStatus)
+)
+const isAnnouncementType = (value: unknown): value is AnnouncementType =>
+  typeof value === 'string' && ANNOUNCEMENT_TYPES.has(value as AnnouncementType)
+const isAnnouncementStatus = (value: unknown): value is AnnouncementStatus =>
+  typeof value === 'string' &&
+  ANNOUNCEMENT_STATUSES.has(value as AnnouncementStatus)
 
 /**
  * Web 端公告列表（分页，未删除的全部记录；需管理员）
@@ -118,6 +111,7 @@ const ANNOUNCEMENT_TYPES = new Set<string>([
  *   current?: number,     // 默认 1
  *   pageSize?: number,    // 默认 20，最大 100
  *   type?: AnnouncementType,
+ *   status?: AnnouncementStatus,
  *   title?: string,       // 模糊匹配 title
  *   summary?: string,     // 模糊匹配 summary
  *   content?: string,     // 模糊匹配 content
@@ -131,6 +125,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
     current: pageRaw,
     pageSize: pageSizeRaw,
     type,
+    status,
     title,
     summary,
     content,
@@ -144,11 +139,23 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
     Math.max(1, Math.trunc(Number(pageSizeRaw) || 20))
   )
 
-  if (type !== undefined && type !== null && type !== '') {
-    if (typeof type !== 'string' || !ANNOUNCEMENT_TYPES.has(type)) {
-      response.error(ctx, 400, 'type 不合法')
-      return
-    }
+  if (
+    type !== undefined &&
+    type !== null &&
+    type !== '' &&
+    !isAnnouncementType(type)
+  ) {
+    response.error(ctx, 400, 'type 不合法')
+    return
+  }
+  if (
+    status !== undefined &&
+    status !== null &&
+    status !== '' &&
+    !isAnnouncementStatus(status)
+  ) {
+    response.error(ctx, 400, 'status 不合法')
+    return
   }
 
   let publishAtDate: Date | null = null
@@ -169,8 +176,11 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
     deletedAt: null
   }
 
-  if (typeof type === 'string' && ANNOUNCEMENT_TYPES.has(type)) {
-    where.type = type as AnnouncementType
+  if (isAnnouncementType(type)) {
+    where.type = type
+  }
+  if (isAnnouncementStatus(status)) {
+    where.status = status
   }
 
   if (typeof title === 'string' && title.trim().length > 0) {
@@ -374,12 +384,12 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     return
   }
 
-  if (typeof type !== 'string' || !ANNOUNCEMENT_TYPES.has(type)) {
+  if (!isAnnouncementType(type)) {
     response.error(ctx, 400, 'type 不合法')
     return
   }
 
-  const announcementType = type as AnnouncementType
+  const announcementType = type
 
   let publishAtDate: Date | null = null
   let expireAtDate: Date | null = null
