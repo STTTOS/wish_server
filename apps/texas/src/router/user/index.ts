@@ -6,6 +6,7 @@ import { omit } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { Prisma } from '@prisma/texas-client'
 
+import { logger } from '../../logger'
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
@@ -195,7 +196,26 @@ router.post(userClientApi('/setName'), async (ctx) => {
 })
 
 async function handleUserInfo(ctx: ParameterizedContext<DefaultState>) {
-  const userId = ctx.state.user!.id
+  const authHeader = ctx.get('authorization')
+  const hasBearer = /^bearer\s+.+/i.test(authHeader)
+  const hasCookieToken = typeof ctx.cookies.get('token') === 'string'
+  const parsedUser = ctx.state.user
+
+  logger.info(
+    '[user/info] auth debug',
+    JSON.stringify({
+      path: ctx.path,
+      hasBearer,
+      hasCookieToken,
+      parsedUser
+    })
+  )
+
+  if (!parsedUser?.id) {
+    response.success(ctx, null)
+    return
+  }
+  const userId = parsedUser.id
 
   const userInfo = await user.findUnique({
     where: {
