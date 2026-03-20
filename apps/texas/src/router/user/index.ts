@@ -11,7 +11,12 @@ import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
-import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
+import {
+  timeFormat,
+  apiPrefixWeb,
+  apiPrefixClient,
+  tokenValidatedTime
+} from '../../config'
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
 const userWebApi = combinePath(apiPrefixWeb)('/user')
@@ -147,14 +152,19 @@ router.post(userWebApi('/login'), async (ctx) => {
 
   const sessionId = uuidv4()
   const time = dayjs().format(timeFormat)
+  const token = getToken({
+    sessionId,
+    id: target.id
+  })
   loginUsers.set(target.id!, { sessionId, time })
+  ctx.cookies.set('token', token, {
+    maxAge: tokenValidatedTime * 1000,
+    httpOnly: true
+  })
   response.success(
     ctx,
     {
-      token: getToken({
-        sessionId,
-        id: target.id
-      }),
+      token,
       type: 'login'
     },
     '登录成功'
@@ -194,8 +204,9 @@ router.post(userClientApi('/setName'), async (ctx) => {
   }
 })
 
-async function handleUserInfo(ctx: ParameterizedContext<DefaultState>) {
-  const userId = ctx.state.user?.id
+async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
+  const parsedUser = ctx.state.user
+  const userId = parsedUser?.id
 
   if (!userId) {
     response.success(ctx, null)
@@ -226,10 +237,14 @@ async function handleUserInfo(ctx: ParameterizedContext<DefaultState>) {
   }
 }
 
-router.post(userClientApi('/info'), handleUserInfo)
+router.post(userClientApi('/info'), async (ctx) => {
+  await fetchUserInfo(ctx)
+})
 
 /** Web 端获取用户信息，需 Cookie `token` 或 Authorization Bearer（与客户端一致） */
-router.post(userWebApi('/info'), handleUserInfo)
+router.post(userWebApi('/info'), async (ctx) => {
+  await fetchUserInfo(ctx)
+})
 
 /**
  * 修改预设头像，body: { avatarKey: string }（如 cartoon/default）
