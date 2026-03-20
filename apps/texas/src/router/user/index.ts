@@ -172,6 +172,16 @@ router.post(userWebApi('/login'), async (ctx) => {
   )
 })
 
+/** Web 端退出登录 */
+router.post(userWebApi('/logout'), async (ctx) => {
+  ctx.cookies.set('token', null, {
+    maxAge: 0,
+    domain: 'wishufree.com',
+    httpOnly: true
+  })
+  response.success(ctx, null, '退出成功')
+})
+
 // 此接口会被middleware接管, 必定有用户信息
 router.post(userClientApi('/setName'), async (ctx) => {
   const { name }: { name: Prisma.UserCreateInput['name'] } = ctx.request.body
