@@ -159,7 +159,6 @@ router.post(userWebApi('/login'), async (ctx) => {
   loginUsers.set(target.id!, { sessionId, time })
   ctx.cookies.set('token', token, {
     maxAge: tokenValidatedTime * 1000,
-    domain: 'wishufree.com',
     httpOnly: true
   })
   response.success(
@@ -176,7 +175,6 @@ router.post(userWebApi('/login'), async (ctx) => {
 router.post(userWebApi('/logout'), async (ctx) => {
   ctx.cookies.set('token', null, {
     maxAge: 0,
-    domain: 'wishufree.com',
     httpOnly: true
   })
   response.success(ctx, null, '退出成功')

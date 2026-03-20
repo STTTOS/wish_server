@@ -2,7 +2,6 @@ import dayjs from 'dayjs'
 import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
-import { logger } from '../../logger'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
@@ -46,7 +45,6 @@ router.post(matchWebApi('/list'), async (ctx) => {
       }
     }
   }
-  logger.info('where', JSON.stringify(where))
   if (time) {
     const [start, end] = time
     where.startedAt = {

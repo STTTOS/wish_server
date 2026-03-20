@@ -35,7 +35,6 @@ function setCookie(
   const token = encrypt(pick(['id', 'sessionId'])(payload))
   ctx.cookies.set('token', token, {
     httpOnly: true,
-    domain: 'wishufree.com',
     expires: keepLogin
       ? new Date(Date.now() + tokenValidatedTime * 1000)
       : undefined
@@ -83,7 +82,7 @@ router.post(userApi('/signin'), async (ctx) => {
 })
 
 router.post(userApi('/logout'), async (ctx) => {
-  ctx.cookies.set('token', null, { domain: 'wishufree.com' })
+  ctx.cookies.set('token', null)
   const userId = ctx.state.user?.id
   if (userId) loginUsers.delete(userId)
 
