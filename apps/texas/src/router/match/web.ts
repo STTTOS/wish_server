@@ -127,9 +127,10 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
     response.error(ctx, 404, '对局不存在')
     return
   }
-  const { records, playerMatchRecords, matchStageTimeRecord } = detail
+  const { records, playerMatchRecords, matchStageTimeRecord, ...restDetail } =
+    detail
   response.success(ctx, {
-    ...detail,
+    ...restDetail,
     startedAt: formatTime(detail.startedAt),
     endedAt: formatTime(detail.endedAt),
     stageRecords: matchStageTimeRecord.map((record) => {
