@@ -9,6 +9,7 @@ const loginUsers = new Map<number, { sessionId: string; time: string }>()
 // 如下的接口, 即使解析不到用户数据, 也不做401跳转
 const paths = [
   /^\/api\/client\/user\/sign$/,
+  /^\/api\/web\/user\/login/,
   /^\/api\/client\/analysis/,
   /^\/api\/client\/game\/config$/,
   /^\/api\/client\/announcement\/list$/

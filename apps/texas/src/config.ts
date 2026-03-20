@@ -1,7 +1,7 @@
 // export const port = process.env.SERVER_PORT!
 export const port = '7501'
 
-export const apiPrefix = '/api'
+export const apiPrefixWeb = '/api/web'
 
 export const apiPrefixClient = '/api/client'
 

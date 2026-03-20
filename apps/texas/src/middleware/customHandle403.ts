@@ -5,8 +5,12 @@ import response from '../utils/response'
 import { DefaultState } from '../router/instance'
 
 const adminOnlyPaths = new Set([
-  '/api/client/announcement/create',
-  '/api/client/announcement/changeStatus'
+  '/api/web/announcement/list',
+  '/api/web/announcement/detail',
+  '/api/web/announcement/update',
+  '/api/web/announcement/create',
+  '/api/web/announcement/changeStatus',
+  '/api/web/announcement/delete'
 ])
 
 export default async (

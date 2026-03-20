@@ -7,7 +7,7 @@ import { logger } from '../../logger'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { rooms, getRoomId } from '../../gameCenter'
-import { apiPrefix, apiPrefixClient } from '../../config'
+import { apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   match,
   betRecord,
@@ -25,7 +25,7 @@ import {
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
 
-const toolsApi = combinePath(apiPrefix)('/game')
+const toolsApi = combinePath(apiPrefixWeb)('/game')
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存

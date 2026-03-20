@@ -4,11 +4,11 @@ import { Prisma } from '@prisma/texas-client'
 import router from '../instance'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
-import { apiPrefix, timeFormat } from '../../config'
+import { timeFormat, apiPrefixWeb } from '../../config'
 import response, { withList } from '../../utils/response'
 import { match, betRecord, matchError, playerMatchRecord } from '../../models'
 
-const analysisApi = combinePath(apiPrefix)('/analysis')
+const analysisApi = combinePath(apiPrefixWeb)('/analysis')
 router.post(analysisApi('/match/list'), async (ctx) => {
   const { current: skip, pageSize: take, time } = ctx.request.body
   if (!skip || !take) {

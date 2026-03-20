@@ -11,14 +11,14 @@ import combinePath from '../../utils/combinePath'
 import { rooms, leaveRoom } from '../../gameCenter'
 import { room, user, roomMember } from '../../models'
 import { generateRoomCode } from '../../utils/roomCode'
-import { apiPrefix, timeFormat, apiPrefixClient } from '../../config'
+import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   MIN_BB,
   MIN_THINKING_TIME,
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
 
-const roomApi = combinePath(apiPrefix)('/room')
+const roomApi = combinePath(apiPrefixWeb)('/room')
 
 const roomApiClient = combinePath(apiPrefixClient)('/room')
 

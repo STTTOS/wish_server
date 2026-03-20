@@ -1,3 +1,4 @@
+import type { ParameterizedContext } from 'koa'
 import type { PrismaUniqueConstraintMeta } from '../interface'
 
 import dayjs from 'dayjs'
@@ -5,22 +6,21 @@ import { omit } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { Prisma } from '@prisma/texas-client'
 
-import router from '../instance'
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
-import { timeFormat, apiPrefixClient } from '../../config'
+import router, { type DefaultState } from '../instance'
+import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
+const userWebApi = combinePath(apiPrefixWeb)('/user')
 export const loginUsers = new Map<number, { sessionId: string; time: string }>()
 
 /**
- * 用户登录接口
- * 目前测试只用输入昵称即可
- * 正式版本需要调用weChat实现登录注册
+ * 用户登录 / 注册（客户端 sign 与 Web login 共用逻辑）
  */
-router.post(userClientApi('/sign'), async (ctx) => {
+async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
   const {
     username,
     password
@@ -111,7 +111,17 @@ router.post(userClientApi('/sign'), async (ctx) => {
       }
     }
   }
-})
+}
+
+/**
+ * 用户登录接口
+ * 目前测试只用输入昵称即可
+ * 正式版本需要调用weChat实现登录注册
+ */
+router.post(userClientApi('/sign'), handleSignOrRegister)
+
+/** Web 端登录，与 /api/client/user/sign 行为一致 */
+router.post(userWebApi('/login'), handleSignOrRegister)
 
 // 此接口会被middleware接管, 必定有用户信息
 router.post(userClientApi('/setName'), async (ctx) => {
@@ -146,7 +156,7 @@ router.post(userClientApi('/setName'), async (ctx) => {
   }
 })
 
-router.post(userClientApi('/info'), async (ctx) => {
+async function handleUserInfo(ctx: ParameterizedContext<DefaultState>) {
   const userId = ctx.state.user!.id
 
   const userInfo = await user.findUnique({
@@ -171,7 +181,12 @@ router.post(userClientApi('/info'), async (ctx) => {
       ...rest
     })
   }
-})
+}
+
+router.post(userClientApi('/info'), handleUserInfo)
+
+/** Web 端获取用户信息，需 Cookie `token` 或 Authorization Bearer（与客户端一致） */
+router.post(userWebApi('/info'), handleUserInfo)
 
 /**
  * 修改预设头像，body: { avatarKey: string }（如 cartoon/default）

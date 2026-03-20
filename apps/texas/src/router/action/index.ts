@@ -1,12 +1,12 @@
 import { ActionType } from 'texas-poker-core'
 
 import router from '../instance'
-import { apiPrefix } from '../../config'
 import { rooms } from '../../gameCenter'
+import { apiPrefixWeb } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 
-const toolsApi = combinePath(apiPrefix)('/action')
+const toolsApi = combinePath(apiPrefixWeb)('/action')
 
 router.post(toolsApi('/take'), async (ctx) => {
   const {
