@@ -47,7 +47,8 @@ router.post(matchWebApi('/list'), async (ctx) => {
         select: {
           id: true
         }
-      }
+      },
+      room: true
     },
     orderBy: {
       startedAt: 'desc'
@@ -56,12 +57,17 @@ router.post(matchWebApi('/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ matchError, ...rest }) => {
+      list.map(({ matchError, playerMatchRecords, ...rest }) => {
+        const { code, id, initialChips } = rest.room
+
         return {
           ...rest,
-          memberCount: rest.playerMatchRecords.length,
+          roomId: id,
+          initialChips,
+          roomCode: code,
+          memberCount: playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
-          endAt: dayjs(rest.endedAt).format(timeFormat),
+          endedAt: dayjs(rest.endedAt).format(timeFormat),
           errorCount: matchError.length
         }
       }),
@@ -90,9 +96,13 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
               avatarKey: true
             }
           }
+        },
+        orderBy: {
+          createdAt: 'asc'
         }
       },
       playerMatchRecords: {
+        orderBy: [{ isFold: 'asc' }, { rankStrength: 'desc' }],
         include: {
           user: {
             select: {
@@ -117,19 +127,30 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
     response.error(ctx, 404, '对局不存在')
     return
   }
+  const { records, playerMatchRecords, matchStageTimeRecord } = detail
   response.success(ctx, {
     ...detail,
     startedAt: formatTime(detail.startedAt),
     endedAt: formatTime(detail.endedAt),
-    stageRecords: detail.matchStageTimeRecord?.map((record) => {
+    stageRecords: matchStageTimeRecord.map((record) => {
       return {
         ...record,
         endAt: formatTime(record.endAt),
         startAt: formatTime(record.startAt)
       }
     }),
-    settleRecords: detail.playerMatchRecords,
-    betRecords: detail.records
+    settleRecords: playerMatchRecords.map(
+      ({ user: { id, ...restUser }, isFold, handPokes, ...restRecord }) => {
+        return {
+          ...restUser,
+          ...restRecord,
+          userId: id,
+          isFold,
+          handPokes: isFold ? [] : handPokes
+        }
+      }
+    ),
+    betRecords: records
   })
 })
 
