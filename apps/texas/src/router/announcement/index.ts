@@ -69,14 +69,18 @@ async function handleValidAnnouncementsList(
       priority: true,
       status: true,
       publishAt: true,
-      expireAt: true
+      expireAt: true,
+      createdAt: true,
+      updatedAt: true
     },
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
   const formattedList = list.map((item) => ({
     ...item,
-    publishAt: dayjs(item.publishAt).format('YYYY-MM-DD')
+    publishAt: dayjs(item.publishAt).format(timeFormat),
+    createdAt: dayjs(item.createdAt).format(timeFormat),
+    updatedAt: dayjs(item.updatedAt).format(timeFormat)
   }))
 
   response.success(ctx, formattedList, '查询成功')
