@@ -3,11 +3,9 @@ import type { PrismaUniqueConstraintMeta } from '../interface'
 
 import dayjs from 'dayjs'
 import { omit } from 'ramda'
-import jwt from 'jsonwebtoken'
 import { v4 as uuidv4 } from 'uuid'
 import { Prisma } from '@prisma/texas-client'
 
-import { logger } from '../../logger'
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
@@ -197,59 +195,12 @@ router.post(userClientApi('/setName'), async (ctx) => {
 })
 
 async function handleUserInfo(ctx: ParameterizedContext<DefaultState>) {
-  const authHeader = ctx.get('authorization')
-  const hasBearer = /^bearer\s+.+/i.test(authHeader)
-  const cookieToken = ctx.cookies.get('token')
-  const hasCookieToken = typeof cookieToken === 'string'
-  const parsedUser = ctx.state.user
-  const bearerToken = hasBearer
-    ? authHeader.replace(/^bearer\s+/i, '').trim()
-    : ''
+  const userId = ctx.state.user?.id
 
-  // koa-jwt 解析失败时，补充打印具体 verify 错误，便于线上定位
-  if (!parsedUser?.id) {
-    const tokenForDebug = bearerToken || cookieToken || ''
-    if (!tokenForDebug) {
-      logger.info('[user/info] jwt debug no-token')
-    } else if (!process.env.SECRET_KEY) {
-      logger.error('[user/info] jwt debug missing SECRET_KEY')
-    } else {
-      try {
-        const decoded = jwt.verify(tokenForDebug, process.env.SECRET_KEY)
-        logger.info(
-          '[user/info] jwt debug manual-verify-ok',
-          JSON.stringify({
-            decoded
-          })
-        )
-      } catch (error) {
-        logger.error(
-          '[user/info] jwt debug manual-verify-failed',
-          JSON.stringify({
-            message: error instanceof Error ? error.message : String(error),
-            hasBearer,
-            hasCookieToken
-          })
-        )
-      }
-    }
-  }
-
-  logger.info(
-    '[user/info] auth debug',
-    JSON.stringify({
-      path: ctx.path,
-      hasBearer,
-      hasCookieToken,
-      userId: parsedUser?.id
-    })
-  )
-
-  if (!parsedUser?.id) {
+  if (!userId) {
     response.success(ctx, null)
     return
   }
-  const userId = parsedUser.id
 
   const userInfo = await user.findUnique({
     where: {
