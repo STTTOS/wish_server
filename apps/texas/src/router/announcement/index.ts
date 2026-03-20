@@ -1,3 +1,5 @@
+import type { ParameterizedContext } from 'koa'
+
 import dayjs from 'dayjs'
 import { isNil } from 'ramda'
 import {
@@ -6,10 +8,10 @@ import {
   type AnnouncementStatus
 } from '@prisma/texas-client'
 
-import router from '../instance'
 import response from '../../utils/response'
 import { announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
+import router, { type DefaultState } from '../instance'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 
 const announcementApiClient = combinePath(apiPrefixClient)('/announcement')
@@ -37,7 +39,7 @@ const parseToDate = (value: unknown, fieldName: string) => {
 }
 
 /**
- * 查询公告列表：
+ * 查询当前有效公告列表：
  * 入参：{ now: number | string }
  * 规则：
  * - status: published
@@ -45,7 +47,9 @@ const parseToDate = (value: unknown, fieldName: string) => {
  * - expireAt 为 null 或 expireAt >= now
  * - 排序：priority desc，priority 相同按 publishAt desc
  */
-router.post(announcementApiClient('/list'), async (ctx) => {
+async function handleValidAnnouncementsList(
+  ctx: ParameterizedContext<DefaultState>
+) {
   const { now } = ctx.request.body ?? {}
   let nowDate: Date | null = null
   try {
@@ -89,6 +93,16 @@ router.post(announcementApiClient('/list'), async (ctx) => {
   }))
 
   response.success(ctx, formattedList, '查询成功')
+}
+
+// 客户端：查询当前有效的所有公告
+router.post(announcementApiClient('/validList'), async (ctx) => {
+  await handleValidAnnouncementsList(ctx)
+})
+
+// Web 端（用户）：查询当前有效的所有公告，返回与 client/validList 一致
+router.post(announcementApiWeb('/validList'), async (ctx) => {
+  await handleValidAnnouncementsList(ctx)
 })
 
 const ANNOUNCEMENT_TYPES = new Set<string>([
