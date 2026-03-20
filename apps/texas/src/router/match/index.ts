@@ -2,6 +2,7 @@ import type { WithPaginationReq } from '../interface'
 
 import dayjs from 'dayjs'
 
+import './web'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
 import response, { withList } from '../../utils/response'
@@ -9,7 +10,6 @@ import { timeFormat, apiPrefixClient } from '../../config'
 import { match, userRoomStat, playerMatchRecord } from '../../models'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
-
 /**
  * 查询当前用户的对局记录（分页）
  */

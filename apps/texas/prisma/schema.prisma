@@ -262,7 +262,7 @@ model Match {
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
 
-  MatchError MatchError[]
+  matchError MatchError[]
 }
 
 model MatchStageTimeRecord {

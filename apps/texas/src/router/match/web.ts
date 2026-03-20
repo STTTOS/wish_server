@@ -8,8 +8,9 @@ import { timeFormat, apiPrefixWeb } from '../../config'
 import response, { withList } from '../../utils/response'
 import { match, betRecord, matchError, playerMatchRecord } from '../../models'
 
-const analysisApi = combinePath(apiPrefixWeb)('/analysis')
-router.post(analysisApi('/match/list'), async (ctx) => {
+const matchWebApi = combinePath(apiPrefixWeb)('/match')
+
+router.post(matchWebApi('/list'), async (ctx) => {
   const { current: skip, pageSize: take, time } = ctx.request.body
   if (!skip || !take) {
     response.error(ctx, 400, '分页参数错误')
@@ -42,7 +43,7 @@ router.post(analysisApi('/match/list'), async (ctx) => {
           id: true
         }
       },
-      MatchError: {
+      matchError: {
         select: {
           id: true
         }
@@ -55,13 +56,13 @@ router.post(analysisApi('/match/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ MatchError, ...rest }) => {
+      list.map(({ matchError, ...rest }) => {
         return {
           ...rest,
           memberCount: rest.playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
           endAt: dayjs(rest.endedAt).format(timeFormat),
-          errorCount: MatchError.length
+          errorCount: matchError.length
         }
       }),
       total
@@ -69,24 +70,13 @@ router.post(analysisApi('/match/list'), async (ctx) => {
   )
 })
 
-router.post(analysisApi('/match/detail/:id'), async (ctx) => {
+router.post(matchWebApi('/detail/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   if (isNaN(id)) {
     response.error(ctx, 400, '参数错误')
     return
   }
 
-  const winners = await playerMatchRecord.findMany({
-    where: {
-      matchId: id,
-      wager: {
-        gt: 0
-      }
-    },
-    select: {
-      userId: true
-    }
-  })
   const detail = await match.findUnique({
     where: { id },
     include: {
@@ -131,23 +121,19 @@ router.post(analysisApi('/match/detail/:id'), async (ctx) => {
     ...detail,
     startedAt: formatTime(detail.startedAt),
     endedAt: formatTime(detail.endedAt),
-    matchStageTimeRecord: detail.matchStageTimeRecord?.map((record) => {
+    stageRecords: detail.matchStageTimeRecord?.map((record) => {
       return {
         ...record,
         endAt: formatTime(record.endAt),
         startAt: formatTime(record.startAt)
       }
     }),
-    playerHands: detail.playerMatchRecords.map((playerHand) => {
-      return {
-        ...playerHand,
-        win: !!winners.find((winner) => winner.userId === playerHand.userId)
-      }
-    })
+    settleRecords: detail.playerMatchRecords,
+    betRecords: detail.records
   })
 })
 
-router.post(analysisApi('/match/error/:id'), async (ctx) => {
+router.post(matchWebApi('/error/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   if (isNaN(id)) {
     response.error(ctx, 400, '参数错误')
@@ -167,7 +153,8 @@ router.post(analysisApi('/match/error/:id'), async (ctx) => {
     })
   })
 })
-router.post(analysisApi('/records/:matchId'), async (ctx) => {
+
+router.post(matchWebApi('/records/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
 
   if (isNaN(matchId)) {
@@ -182,7 +169,7 @@ router.post(analysisApi('/records/:matchId'), async (ctx) => {
   response.success(ctx, { list })
 })
 
-router.post(analysisApi('/players/:matchId'), async (ctx) => {
+router.post(matchWebApi('/players/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
   if (isNaN(matchId)) {
     response.error(ctx, 400, '参数错误')
