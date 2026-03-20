@@ -224,7 +224,8 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
       avatarUrl: true,
       avatarKey: true,
       username: true,
-      createdAt: true
+      createdAt: true,
+      isAdmin: true
     }
   })
   if (!userInfo) {
