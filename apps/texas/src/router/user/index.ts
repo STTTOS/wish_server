@@ -159,6 +159,7 @@ router.post(userWebApi('/login'), async (ctx) => {
   loginUsers.set(target.id!, { sessionId, time })
   ctx.cookies.set('token', token, {
     maxAge: tokenValidatedTime * 1000,
+    domain: 'wishufree.com',
     httpOnly: true
   })
   response.success(
