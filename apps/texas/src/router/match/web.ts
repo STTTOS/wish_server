@@ -6,17 +6,45 @@ import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
 import response, { withList } from '../../utils/response'
-import { match, betRecord, matchError, playerMatchRecord } from '../../models'
+import {
+  user,
+  match,
+  betRecord,
+  matchError,
+  playerMatchRecord
+} from '../../models'
 
 const matchWebApi = combinePath(apiPrefixWeb)('/match')
 
 router.post(matchWebApi('/list'), async (ctx) => {
+  const userId = ctx.state.user?.id
   const { current: skip, pageSize: take, time } = ctx.request.body
+  if (!userId) {
+    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    return
+  }
   if (!skip || !take) {
     response.error(ctx, 400, '分页参数错误')
     return
   }
+
+  const loginUser = await user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true }
+  })
+  if (!loginUser) {
+    response.error(ctx, 2000, '用户不存在')
+    return
+  }
+
   const where: Prisma.MatchWhereInput = {}
+  if (!loginUser.isAdmin) {
+    where.playerMatchRecords = {
+      some: {
+        userId
+      }
+    }
+  }
   if (time) {
     const [start, end] = time
     where.startedAt = {
@@ -77,9 +105,22 @@ router.post(matchWebApi('/list'), async (ctx) => {
 })
 
 router.post(matchWebApi('/detail/:id'), async (ctx) => {
+  const userId = ctx.state.user?.id
   const id = Number(ctx.params.id)
+  if (!userId) {
+    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    return
+  }
   if (isNaN(id)) {
     response.error(ctx, 400, '参数错误')
+    return
+  }
+  const loginUser = await user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true }
+  })
+  if (!loginUser) {
+    response.error(ctx, 2000, '用户不存在')
     return
   }
 
@@ -126,6 +167,15 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
   if (!detail) {
     response.error(ctx, 404, '对局不存在')
     return
+  }
+  if (!loginUser.isAdmin) {
+    const participated = detail.playerMatchRecords.some(
+      (record) => record.userId === userId
+    )
+    if (!participated) {
+      response.error(ctx, 403, '无权限查看该对局')
+      return
+    }
   }
   const { records, playerMatchRecords, matchStageTimeRecord, ...restDetail } =
     detail
