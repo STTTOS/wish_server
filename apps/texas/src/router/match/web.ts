@@ -150,7 +150,13 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
         }
       }
     ),
-    betRecords: records
+    betRecords: records.map(({ user: { id, ...restUser }, ...restRecord }) => {
+      return {
+        ...restUser,
+        ...restRecord,
+        userId: id
+      }
+    })
   })
 })
 
