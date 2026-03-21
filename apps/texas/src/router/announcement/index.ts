@@ -50,6 +50,14 @@ const validateExpireAfterPublish = (
   return null
 }
 
+/** priority 统一解析：未传默认 0，传值需可转为数字 */
+const parsePriority = (value: unknown): number => {
+  if (value === undefined || value === null || value === '') return 0
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (Number.isNaN(parsed)) throw new Error('priority 格式异常')
+  return Math.trunc(parsed)
+}
+
 /**
  * 查询当前有效公告列表：
  * 规则：
@@ -311,14 +319,24 @@ router.post(announcementApiWeb('/detail'), async (ctx) => {
  *   id: number,
  *   title, summary, content,
  *   publishAt, expireAt?,
- *   priority?
+ *   priority?,
+ *   actionText?, actionUrl?
  *   其中 id/title/summary/content/publishAt 必传；
  *   expireAt 未传时按 null 处理；若有 expireAt（非空）则必须晚于 publishAt
  * }
  */
 router.post(announcementApiWeb('/update'), async (ctx) => {
-  const { id, title, summary, content, publishAt, expireAt, priority } = (ctx
-    .request.body ?? {}) as Record<string, unknown>
+  const {
+    id,
+    title,
+    summary,
+    content,
+    publishAt,
+    expireAt,
+    priority,
+    actionText,
+    actionUrl
+  } = (ctx.request.body ?? {}) as Record<string, unknown>
 
   if ([id, title, summary, content, publishAt].some((value) => !value)) {
     response.error(ctx, 400, '参数异常')
@@ -341,15 +359,20 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
   data.title = titleText
   data.summary = summaryText
   data.content = contentText
+  data.actionText =
+    actionText === undefined || actionText === null || actionText === ''
+      ? null
+      : String(actionText).trim()
+  data.actionUrl =
+    actionUrl === undefined || actionUrl === null || actionUrl === ''
+      ? null
+      : String(actionUrl).trim()
 
-  if (!isEmpty(priority)) {
-    const priorityValue =
-      typeof priority === 'number' ? priority : Number(priority)
-    if (Number.isNaN(priorityValue)) {
-      response.error(ctx, 400, 'priority 格式异常')
-      return
-    }
-    data.priority = Math.trunc(priorityValue)
+  try {
+    data.priority = parsePriority(priority)
+  } catch (e) {
+    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    return
   }
 
   let publishAtDate: Date | null = null
@@ -424,6 +447,7 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     response.error(ctx, 400, 'type 不合法')
     return
   }
+
   const [titleText, summaryText, contentText] = [title, summary, content].map(
     (item) => String(item).trim()
   )
@@ -457,8 +481,11 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
   const createStatus: AnnouncementStatus =
     status === 'disabled' ? 'disabled' : 'published'
   let priorityValue = 0
-  if (priority !== undefined && priority !== null && priority !== '') {
-    priorityValue = typeof priority === 'number' ? priority : Number(priority)
+  try {
+    priorityValue = parsePriority(priority)
+  } catch (e) {
+    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    return
   }
 
   const created = await announcement.create({
@@ -475,7 +502,7 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
         actionUrl === undefined || actionUrl === null || actionUrl === ''
           ? null
           : String(actionUrl).trim(),
-      priority: Number.isNaN(priorityValue) ? 0 : Math.trunc(priorityValue),
+      priority: priorityValue,
       status: createStatus,
       publishAt: publishAtDate,
       expireAt: expireAtDate
