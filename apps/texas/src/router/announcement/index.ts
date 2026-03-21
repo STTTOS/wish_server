@@ -1,7 +1,7 @@
 import type { ParameterizedContext } from 'koa'
 
 import dayjs from 'dayjs'
-import { isNil } from 'ramda'
+import { isEmpty } from 'ramda'
 import {
   Prisma,
   AnnouncementType,
@@ -36,6 +36,18 @@ const parseToDate = (value: unknown, fieldName: string) => {
     throw new Error(`${fieldName} 格式异常`)
   }
   return date
+}
+
+/** 有结束时间时，必须严格晚于发布时间 */
+const validateExpireAfterPublish = (
+  publishAt: Date,
+  expireAt: Date | null
+): string | null => {
+  if (expireAt == null) return null
+  if (expireAt.getTime() <= publishAt.getTime()) {
+    return '过期时间必须晚于发布时间'
+  }
+  return null
 }
 
 /**
@@ -297,53 +309,72 @@ router.post(announcementApiWeb('/detail'), async (ctx) => {
  * 更新公告
  * body: {
  *   id: number,
- *   title?, summary?, content?,
- *   publishAt?, expireAt?
+ *   title, summary, content,
+ *   publishAt, expireAt?,
+ *   priority?
+ *   其中 id/title/summary/content/publishAt 必传；
+ *   expireAt 未传时按 null 处理；若有 expireAt（非空）则必须晚于 publishAt
  * }
  */
 router.post(announcementApiWeb('/update'), async (ctx) => {
-  const { id, title, summary, content, publishAt, expireAt } = (ctx.request
-    .body ?? {}) as Record<string, unknown>
+  const { id, title, summary, content, publishAt, expireAt, priority } = (ctx
+    .request.body ?? {}) as Record<string, unknown>
 
-  if (!id) {
+  if ([id, title, summary, content, publishAt].some((value) => !value)) {
     response.error(ctx, 400, '参数异常')
+    return
+  }
+  const idNum = Number(id)
+  if (Number.isNaN(idNum)) {
+    response.error(ctx, 400, 'id 格式异常')
     return
   }
 
   const data: Prisma.AnnouncementUpdateInput = {}
-  if (typeof title === 'string') data.title = title.trim()
-  if (typeof summary === 'string') data.summary = summary.trim()
-  if (typeof content === 'string') data.content = content.trim()
-
-  if (publishAt !== undefined) {
-    try {
-      const publishAtDate = parseToDate(publishAt, 'publishAt')
-      if (!publishAtDate) {
-        response.error(ctx, 400, 'publishAt 不可为空')
-        return
-      }
-      data.publishAt = publishAtDate
-    } catch (e) {
-      response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
-      return
-    }
-  }
-  if (expireAt !== undefined) {
-    try {
-      data.expireAt = { set: parseToDate(expireAt, 'expireAt') }
-    } catch (e) {
-      response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
-      return
-    }
-  }
-
-  if (Object.keys(data).length === 0) {
+  const [titleText, summaryText, contentText] = [title, summary, content].map(
+    (item) => String(item).trim()
+  )
+  if ([titleText, summaryText, contentText].some(isEmpty)) {
     response.error(ctx, 400, '参数异常')
     return
   }
+  data.title = titleText
+  data.summary = summaryText
+  data.content = contentText
+
+  if (!isEmpty(priority)) {
+    const priorityValue =
+      typeof priority === 'number' ? priority : Number(priority)
+    if (Number.isNaN(priorityValue)) {
+      response.error(ctx, 400, 'priority 格式异常')
+      return
+    }
+    data.priority = Math.trunc(priorityValue)
+  }
+
+  let publishAtDate: Date | null = null
+  let expireAtDate: Date | null = null
+  try {
+    publishAtDate = parseToDate(publishAt, 'publishAt')
+    expireAtDate = parseToDate(expireAt, 'expireAt')
+  } catch (e) {
+    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    return
+  }
+  if (!publishAtDate) {
+    response.error(ctx, 400, 'publishAt 不可为空')
+    return
+  }
+  const timeErr = validateExpireAfterPublish(publishAtDate, expireAtDate)
+  if (timeErr) {
+    response.error(ctx, 400, timeErr)
+    return
+  }
+  data.publishAt = publishAtDate
+  data.expireAt = { set: expireAtDate }
 
   const exists = await announcement.findFirst({
-    where: { id: Number(id), deletedAt: null },
+    where: { id: idNum, deletedAt: null },
     select: { id: true }
   })
   if (!exists) {
@@ -352,7 +383,7 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
   }
 
   const updated = await announcement.update({
-    where: { id: Number(id) },
+    where: { id: idNum },
     data
   })
 
@@ -365,7 +396,8 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
  *  type, title, summary, content,
  *  actionText?, actionUrl?,
  *  priority?, status?('published'|'disabled'),
- *  publishAt, expireAt?
+ *  publishAt（必填）, expireAt?
+ *  若 expireAt 有值，必须晚于 publishAt
  * }
  */
 router.post(announcementApiWeb('/create'), async (ctx) => {
@@ -383,13 +415,20 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
   } = ctx.request.body ?? {}
 
   // type 需要是 Prisma 枚举值，运行时无法完全校验，至少保证必填字段存在
-  if ([type, title, summary, content, publishAt].some(isNil)) {
+  if ([type, title, summary, content, publishAt].some((value) => !value)) {
     response.error(ctx, 400, '参数异常')
     return
   }
 
   if (!isAnnouncementType(type)) {
     response.error(ctx, 400, 'type 不合法')
+    return
+  }
+  const [titleText, summaryText, contentText] = [title, summary, content].map(
+    (item) => String(item).trim()
+  )
+  if ([titleText, summaryText, contentText].some(isEmpty)) {
+    response.error(ctx, 400, '参数异常')
     return
   }
 
@@ -404,9 +443,14 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
     return
   }
-
   if (!publishAtDate) {
     response.error(ctx, 400, 'publishAt 不可为空')
+    return
+  }
+
+  const createTimeErr = validateExpireAfterPublish(publishAtDate, expireAtDate)
+  if (createTimeErr) {
+    response.error(ctx, 400, createTimeErr)
     return
   }
 
@@ -419,9 +463,9 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
 
   const created = await announcement.create({
     data: {
-      title,
-      summary,
-      content,
+      title: titleText,
+      summary: summaryText,
+      content: contentText,
       type: announcementType,
       actionText:
         actionText === undefined || actionText === null || actionText === ''
