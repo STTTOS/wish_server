@@ -14,6 +14,7 @@ import router from './router'
 import { logger } from './logger'
 import { app, server } from './server'
 import response from './utils/response'
+import rateLimit from './middleware/rateLimit'
 import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
 import customHandle403 from './middleware/customHandle403'
@@ -95,6 +96,9 @@ app.use(customHandle401)
 
 // Custom 403 handling (admin-only apis)
 app.use(customHandle403)
+
+// Global API rate limit (first-step anti-abuse protection)
+app.use(rateLimit)
 
 // 解析请求体
 app.use(
