@@ -10,8 +10,7 @@ const paths = [
   /^\/api\/web\/user\/login/,
   /^\/api\/web\/user\/info/,
   /^\/api\/client\/user\/info/,
-  /^\/api\/client\/game\/config$/,
-  /^\/api\/client\/announcement\/validList$/
+  /^\/api\/client\/game\/config$/
 ]
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,

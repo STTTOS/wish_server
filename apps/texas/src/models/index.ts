@@ -7,6 +7,7 @@ export const {
   user,
   userSettings,
   announcement,
+  announcementRead,
   match,
   matchStageTimeRecord,
   playerMatchRecord,

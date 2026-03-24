@@ -9,9 +9,9 @@ import {
 } from '@prisma/texas-client'
 
 import response from '../../utils/response'
-import { announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
+import { announcement, announcementRead } from '../../models'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 
 const announcementApiClient = combinePath(apiPrefixClient)('/announcement')
@@ -67,9 +67,11 @@ const parsePriority = (value: unknown): number => {
  * - 排序：priority desc，priority 相同按 publishAt desc
  */
 async function handleValidAnnouncementsList(
-  ctx: ParameterizedContext<DefaultState>
+  ctx: ParameterizedContext<DefaultState>,
+  userId?: number
 ) {
   const nowDate = new Date()
+  const readWhere = userId ? { userId } : undefined
 
   const list = await announcement.findMany({
     where: {
@@ -91,29 +93,163 @@ async function handleValidAnnouncementsList(
       publishAt: true,
       expireAt: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      reads: readWhere
+        ? {
+            where: readWhere,
+            select: { id: true },
+            take: 1
+          }
+        : false
     },
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
-  const formattedList = list.map((item) => ({
-    ...item,
-    publishAt: dayjs(item.publishAt).format(timeFormat),
-    createdAt: dayjs(item.createdAt).format(timeFormat),
-    updatedAt: dayjs(item.updatedAt).format(timeFormat)
-  }))
+  const formattedList = list.map(
+    ({ publishAt, expireAt, createdAt, updatedAt, reads, ...rest }) => ({
+      ...rest,
+      isRead: Boolean(reads && reads.length > 0),
+      publishAt: dayjs(publishAt).format(timeFormat),
+      expireAt: expireAt ? dayjs(expireAt).format(timeFormat) : null,
+      createdAt: dayjs(createdAt).format(timeFormat),
+      updatedAt: dayjs(updatedAt).format(timeFormat)
+    })
+  )
 
   response.success(ctx, formattedList, '查询成功')
 }
 
 // 客户端：查询当前有效的所有公告
 router.post(announcementApiClient('/validList'), async (ctx) => {
-  await handleValidAnnouncementsList(ctx)
+  const userId = ctx.state.user!.id
+
+  await handleValidAnnouncementsList(ctx, userId)
 })
 
 // Web 端（用户）：查询当前有效的所有公告，返回与 client/validList 一致
 router.post(announcementApiWeb('/validList'), async (ctx) => {
   await handleValidAnnouncementsList(ctx)
+})
+
+/**
+ * 客户端：标记公告为已读（防重复写入）
+ * body: { announcementId: number }
+ */
+router.post(announcementApiClient('/markRead'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    return
+  }
+
+  const { announcementId } = (ctx.request.body ?? {}) as {
+    announcementId?: number | string
+  }
+  if (!announcementId) {
+    response.error(ctx, 400, '参数异常')
+    return
+  }
+  const announcementIdNum = Number(announcementId)
+  if (Number.isNaN(announcementIdNum)) {
+    response.error(ctx, 400, 'announcementId 格式异常')
+    return
+  }
+
+  const nowDate = new Date()
+  const exists = await announcement.findFirst({
+    where: {
+      id: announcementIdNum,
+      deletedAt: null,
+      status: 'published',
+      publishAt: { lte: nowDate },
+      OR: [{ expireAt: null }, { expireAt: { gte: nowDate } }]
+    },
+    select: { id: true }
+  })
+  if (!exists) {
+    response.error(ctx, 2000, '公告不存在或已失效')
+    return
+  }
+
+  await announcementRead.upsert({
+    where: {
+      // eslint-disable-next-line camelcase
+      announcementId_userId: {
+        announcementId: announcementIdNum,
+        userId
+      }
+    },
+    create: {
+      announcementId: announcementIdNum,
+      userId
+    },
+    update: {
+      readAt: nowDate
+    }
+  })
+
+  response.success(ctx, null, '标记已读成功')
+})
+
+/**
+ * 客户端：批量标记公告为已读（防重复写入）
+ * body: { announcementIds: number[] }
+ */
+router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
+  const userId = ctx.state.user!.id
+
+  const { announcementIds } = (ctx.request.body ?? {}) as {
+    announcementIds?: Array<number | string>
+  }
+  if (!Array.isArray(announcementIds) || announcementIds.length === 0) {
+    response.error(ctx, 400, '参数异常')
+    return
+  }
+
+  const idSet = new Set<number>()
+  for (const id of announcementIds) {
+    const idNum = Number(id)
+    if (!Number.isInteger(idNum) || idNum <= 0) {
+      response.error(ctx, 400, 'announcementIds 格式异常')
+      return
+    }
+    idSet.add(idNum)
+  }
+  const dedupedIds = Array.from(idSet)
+
+  const nowDate = new Date()
+  const validAnnouncements = await announcement.findMany({
+    where: {
+      id: { in: dedupedIds },
+      deletedAt: null,
+      status: 'published',
+      publishAt: { lte: nowDate },
+      OR: [{ expireAt: null }, { expireAt: { gte: nowDate } }]
+    },
+    select: { id: true }
+  })
+  const validIds = validAnnouncements.map((item) => item.id)
+  if (validIds.length === 0) {
+    response.error(ctx, 2000, '公告不存在或已失效')
+    return
+  }
+
+  await announcementRead.createMany({
+    data: validIds.map((announcementId) => ({
+      announcementId,
+      userId,
+      readAt: nowDate
+    })),
+    skipDuplicates: true
+  })
+
+  response.success(
+    ctx,
+    {
+      markedCount: validIds.length
+    },
+    '批量标记已读成功'
+  )
 })
 
 const ANNOUNCEMENT_TYPES = new Set<AnnouncementType>(

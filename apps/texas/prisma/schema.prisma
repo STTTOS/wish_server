@@ -37,6 +37,7 @@ model User {
   roomMembers   RoomMember[]
   userRoomStats UserRoomStat[]
   settings      UserSettings?
+  announcementReads AnnouncementRead[]
 }
 
 model UserSettings {
@@ -88,8 +89,22 @@ model Announcement {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   deletedAt DateTime?
+  reads     AnnouncementRead[]
 
   @@index([status, priority, publishAt])
+}
+
+model AnnouncementRead {
+  id             Int          @id @default(autoincrement())
+  announcementId Int
+  userId         Int
+  readAt         DateTime     @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId, readAt])
 }
 
 model MatchError {
