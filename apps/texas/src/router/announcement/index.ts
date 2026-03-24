@@ -102,7 +102,7 @@ async function handleValidAnnouncementsList(
           }
         : false
     },
-    orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
+    orderBy: [{ status: 'asc' }, { priority: 'desc' }, { publishAt: 'desc' }]
   })
 
   const formattedList = list.map(
@@ -383,7 +383,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
         updatedAt: true,
         deletedAt: true
       },
-      orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }],
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize
     })
@@ -614,8 +614,9 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     return
   }
 
+  // 改为默认未发布状态
   const createStatus: AnnouncementStatus =
-    status === 'disabled' ? 'disabled' : 'published'
+    status === 'published' ? 'published' : 'disabled'
   let priorityValue = 0
   try {
     priorityValue = parsePriority(priority)
