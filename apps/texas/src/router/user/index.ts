@@ -173,7 +173,7 @@ router.post(userWebApi('/login'), async (ctx) => {
 router.post(userWebApi('/logout'), async (ctx) => {
   const userId = ctx.state.user?.id
   if (userId) {
-    clearLoginSession(userId, 'web')
+    await clearLoginSession(userId, 'web')
   }
   ctx.cookies.set('token', null, {
     maxAge: 0,

@@ -30,7 +30,7 @@ export default async (
     return
   }
 
-  const latestSession = getLoginSession(parsedUser.id, scope)
+  const latestSession = await getLoginSession(parsedUser.id, scope)
   if (!latestSession) {
     response.error(ctx, 401, '登录已失效，请重新登录')
     return

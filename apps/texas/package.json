@@ -22,14 +22,17 @@
   "author": "三分",
   "license": "ISC",
   "devDependencies": {
-    "tsconfig": "workspace:*",
     "eslint-config-custom": "workspace:*",
-    "prettier-config": "workspace:*"
+    "prettier-config": "workspace:*",
+    "tsconfig": "workspace:*"
   },
   "lint-staged": {
     "**/*.{js,jsx,ts,tsx,less,md,json}": [
       "pnpm run prettier"
     ],
     "**/*.{js,jsx,ts,tsx}": "pnpm run lint:fix"
+  },
+  "dependencies": {
+    "redis": "^5.11.0"
   }
 }
