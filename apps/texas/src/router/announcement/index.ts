@@ -119,7 +119,7 @@ async function handleValidAnnouncementsList(
   response.success(ctx, formattedList, '查询成功')
 }
 
-// 客户端：查询当前有效的所有公告
+// 客户端：查询当前有效的所有公告, 需要返回是否已读
 router.post(announcementApiClient('/validList'), async (ctx) => {
   const userId = ctx.state.user!.id
 

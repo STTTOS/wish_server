@@ -6,6 +6,7 @@ import { DefaultState } from '../router/instance'
 
 const adminOnlyPaths = new Set([
   '/api/web/announcement/list',
+  '/api/web/announcement/validList',
   '/api/web/announcement/detail',
   '/api/web/announcement/update',
   '/api/web/announcement/create',
