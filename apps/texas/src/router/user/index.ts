@@ -11,6 +11,7 @@ import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
+import { setLoginSession, clearLoginSession } from '../../utils/loginSession'
 import {
   timeFormat,
   apiPrefixWeb,
@@ -20,7 +21,6 @@ import {
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
 const userWebApi = combinePath(apiPrefixWeb)('/user')
-export const loginUsers = new Map<number, { sessionId: string; time: string }>()
 
 /**
  * 用户登录 / 注册（客户端 sign 与 Web login 共用逻辑）
@@ -38,14 +38,13 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
     return
   }
   const sessionId = uuidv4()
-  const time = dayjs().format(timeFormat)
 
   const target = await user.findFirst({ where: { username } })
 
   // 存在账户, 直接登录
   if (target) {
     if (target.password === password) {
-      loginUsers.set(target.id!, { sessionId, time })
+      setLoginSession(target.id!, sessionId, 'client')
       response.success(
         ctx,
         {
@@ -79,7 +78,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
           // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
         }
       })
-      loginUsers.set(target.id!, { sessionId, time })
+      setLoginSession(target.id!, sessionId, 'client')
       response.success(
         ctx,
         {
@@ -151,12 +150,11 @@ router.post(userWebApi('/login'), async (ctx) => {
   }
 
   const sessionId = uuidv4()
-  const time = dayjs().format(timeFormat)
   const token = getToken({
     sessionId,
     id: target.id
   })
-  loginUsers.set(target.id!, { sessionId, time })
+  setLoginSession(target.id!, sessionId, 'web')
   ctx.cookies.set('token', token, {
     maxAge: tokenValidatedTime * 1000,
     httpOnly: true
@@ -173,6 +171,10 @@ router.post(userWebApi('/login'), async (ctx) => {
 
 /** Web 端退出登录 */
 router.post(userWebApi('/logout'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (userId) {
+    clearLoginSession(userId, 'web')
+  }
   ctx.cookies.set('token', null, {
     maxAge: 0,
     httpOnly: true

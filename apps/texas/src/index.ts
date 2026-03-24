@@ -19,6 +19,7 @@ import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
 import customHandle403 from './middleware/customHandle403'
 import loggerMiddleware from './middleware/loggerMiddleware'
+import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
 // import { match, matchStageTimeRecord, playerHand, record, win } from './models'
@@ -93,6 +94,9 @@ app.use(
 
 // Custom 401 handling
 app.use(customHandle401)
+
+// Single-device login guard
+app.use(singleDeviceLoginGuard)
 
 // Custom 403 handling (admin-only apis)
 app.use(customHandle403)
