@@ -12,19 +12,20 @@ const paths = [
   /^\/api\/client\/user\/info/,
   /^\/api\/client\/game\/config$/
 ]
+
+export const isPublic401Path = (url: string) =>
+  paths.some((path) => {
+    if (typeof path === 'string') return toLower(path) === toLower(url)
+    return path.test(url)
+  })
+
 const customHandle401 = async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
 ) => {
   const user = ctx.state.user
   // 抽出来哪些接口不需要用户数据
-  if (
-    paths.some((path) => {
-      const { url } = ctx.request
-      if (typeof path === 'string') return toLower(path) === toLower(url)
-      return path.test(url)
-    })
-  ) {
+  if (isPublic401Path(ctx.request.url)) {
     await next()
     return
   }

@@ -2,6 +2,7 @@ import type { ParameterizedContext } from 'koa'
 import type { DefaultState } from '../router/instance'
 
 import response from '../utils/response'
+import { isPublic401Path } from './customHandle401'
 import { getLoginSession, type LoginScope } from '../utils/loginSession'
 
 /**
@@ -13,6 +14,11 @@ export default async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
 ) => {
+  if (isPublic401Path(ctx.request.url)) {
+    await next()
+    return
+  }
+
   let scope: LoginScope | null = null
   if (ctx.path.startsWith('/api/client/')) {
     scope = 'client'
