@@ -68,7 +68,8 @@ const parsePriority = (value: unknown): number => {
  */
 async function handleValidAnnouncementsList(
   ctx: ParameterizedContext<DefaultState>,
-  userId?: number
+  userId?: number,
+  onlyUnread = false
 ) {
   const nowDate = new Date()
   const readWhere = userId ? { userId } : undefined
@@ -105,7 +106,11 @@ async function handleValidAnnouncementsList(
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
-  const formattedList = list.map(
+  const filteredList = onlyUnread
+    ? list.filter((item) => !item.reads || item.reads.length === 0)
+    : list
+
+  const formattedList = filteredList.map(
     ({ publishAt, expireAt, createdAt, updatedAt, reads, ...rest }) => ({
       ...rest,
       isRead: Boolean(reads && reads.length > 0),
@@ -122,8 +127,11 @@ async function handleValidAnnouncementsList(
 // 客户端：查询当前有效的所有公告, 需要返回是否已读
 router.post(announcementApiClient('/validList'), async (ctx) => {
   const userId = ctx.state.user!.id
+  const { onlyUnread = false } = (ctx.request.body ?? {}) as {
+    onlyUnread?: boolean
+  }
 
-  await handleValidAnnouncementsList(ctx, userId)
+  await handleValidAnnouncementsList(ctx, userId, onlyUnread)
 })
 
 // Web 端（用户）：查询当前有效的所有公告，返回与 client/validList 一致
