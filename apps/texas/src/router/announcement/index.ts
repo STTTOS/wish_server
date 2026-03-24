@@ -102,7 +102,7 @@ async function handleValidAnnouncementsList(
           }
         : false
     },
-    orderBy: [{ status: 'asc' }, { priority: 'desc' }, { publishAt: 'desc' }]
+    orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
   const formattedList = list.map(
@@ -383,7 +383,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
         updatedAt: true,
         deletedAt: true
       },
-      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ status: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize
     })
