@@ -182,6 +182,15 @@ router.post(userWebApi('/logout'), async (ctx) => {
   response.success(ctx, null, '退出成功')
 })
 
+/** Client 端退出登录 */
+router.post(userClientApi('/logout'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (userId) {
+    await clearLoginSession(userId, 'client')
+  }
+  response.success(ctx, null, '退出成功')
+})
+
 // 此接口会被middleware接管, 必定有用户信息
 router.post(userClientApi('/setName'), async (ctx) => {
   const { name }: { name: Prisma.UserCreateInput['name'] } = ctx.request.body
