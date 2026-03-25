@@ -8,6 +8,7 @@ import { DefaultState } from '../router/instance'
 const paths = [
   /^\/api\/client\/user\/sign$/,
   /^\/api\/web\/user\/login/,
+  /^\/api\/client\/user\/info/,
   /^\/api\/web\/user\/info/,
   /^\/api\/client\/user\/info/,
   /^\/api\/client\/game\/config$/
