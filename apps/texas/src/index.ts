@@ -30,7 +30,7 @@ app.use(async (ctx, next) => {
     await next()
   } catch (error) {
     if (error instanceof TexasError) {
-      response.error(ctx, error.code, error.message)
+      response.error(ctx, error.code, error.message, error.payload ?? null)
     } else {
       response.error(ctx, 500, '系统异常')
     }

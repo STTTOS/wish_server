@@ -580,7 +580,7 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  if (texas.controller.status !== 'waiting') {
+  if (texas.controller.status !== 'idle') {
     response.error(ctx, 2000, '游戏正在进行中, 不可退出')
     return
   }

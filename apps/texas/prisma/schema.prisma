@@ -121,6 +121,8 @@ model Room {
   id              Int            @id @default(autoincrement())
   // 房间代码
   code            String         @unique
+  // 房间在业务侧的对局状态（用于“房主点击开始游戏”）
+  gameStatus      RoomGameStatus @default(waiting)
   // 大盲注
   lowestBetAmount Int
   // 初始筹码
@@ -135,6 +137,12 @@ model Room {
   Match           Match[]
   members         RoomMember[]
   userRoomStats   UserRoomStat[]
+}
+
+enum RoomGameStatus {
+  waiting
+  entering
+  in_game
 }
 
 // 房间成员（加入/退出）

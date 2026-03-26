@@ -15,11 +15,16 @@ export function success(
     code
   }
 }
-export function error(ctx: Context, code: number, msg: string) {
+export function error(
+  ctx: Context,
+  code: number,
+  msg: string,
+  data: unknown = null
+) {
   ctx.body = {
     msg,
     code,
-    data: null
+    data
   }
 }
 // 统一封装response响应

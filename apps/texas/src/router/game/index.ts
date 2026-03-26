@@ -1,5 +1,10 @@
 /* eslint-disable camelcase */
-import { Texas, RoleEnum, RankCategory } from 'texas-poker-core'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { ActionType } from 'texas-poker-core'
+import type { WsMessage } from '../../ws/ws-event-types'
+
+import { Texas } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
@@ -7,13 +12,13 @@ import { logger } from '../../logger'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { rooms, getRoomId } from '../../gameCenter'
+import { joinRoom, createRoom } from '../../gameCenter'
 import { apiPrefixWeb, apiPrefixClient } from '../../config'
+import { roomMember, room as roomModel } from '../../models'
 import {
   match,
   betRecord,
   matchError,
-  userRoomStat,
-  playerMatchRecord,
   matchStageTimeRecord
 } from '../../models'
 import {
@@ -40,340 +45,363 @@ router.get(gameClientApi('/config'), async (ctx) => {
   })
 })
 
-// 由庄家发牌
-router.post(toolsApi('/start/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-  const texas = rooms.get(roomId)
-  if (!texas) {
+// 以下开始新增接口
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * 客户端：房主点击开始游戏（进入对局）
+ * url: client/game/entring
+ * body: { roomId: number }
+ */
+router.post(gameClientApi('/entring'), async (ctx) => {
+  const { roomId }: { roomId?: number } = ctx.request.body ?? {}
+  const ownerId = ctx.state.user!.id
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, 400, '参数异常：需要 roomId')
+    return
+  }
+
+  const roomInfo = await roomModel.findUnique({
+    where: { id: roomId },
+    include: { owner: true }
+  })
+  if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在')
     return
   }
-  const userId = ctx.state.user!.id
-  const player = texas.room.getPlayerById(userId)!
-  if (player.getRole() !== RoleEnum.BTN) {
-    response.error(ctx, 2000, '不是庄家, 无法发牌')
+  if (roomInfo.ownerId !== ownerId) {
+    response.error(ctx, 403, '仅房主可开始游戏')
     return
   }
-  // 轮到玩家行动时, 会触发回调
-  texas.onPreAction(({ userId, restrict, allowedActions }) => {
-    // TODO: 如果client不存在, 则表示掉线
-    // 掉线后需要向其他玩家推送当前玩家的状态信息
-    // 同时需要将Player的状态置为offline
+  const roomGameStatus = (roomInfo as unknown as { gameStatus?: string })
+    .gameStatus
+  if (roomGameStatus !== 'waiting') {
+    response.error(ctx, 2100, '房间已开始或正在进入游戏中')
+    return
+  }
 
-    // // 向其他玩家推送当前正在行动的玩家
-    logger.info('向客户端推送player-action事件')
-    ws.broadcastTo(userId, {
-      type: 'player-action',
-      data: {
-        userInfo: {
-          id: userId
-        },
-        restrict,
-        allowedActions
-      }
-    })
-    ws.broadcastExcept(roomId, userId, {
-      type: 'player-action',
-      data: {
-        userInfo: {
-          id: userId
-        }
-      }
-    })
+  const members = await roomMember.findMany({
+    where: { roomId },
+    include: { user: true },
+    orderBy: { joinedAt: 'asc' }
+  })
+  if (members.length < 2) {
+    response.error(ctx, 2100, '人数不足，无法开始游戏')
+    return
+  }
+
+  // 进入对局：更新房间状态 & 通知等待房间内所有玩家去建立 /game namespace 连接
+  await roomModel.update({
+    where: { id: roomId },
+    data: { gameStatus: 'entering' } as unknown as any
   })
 
-  texas.onGameStart(async () => {
-    await matchStageTimeRecord.create({
-      data: {
-        stage: 'pre_flop',
-        matchId: matchInfo.id
-      }
-    })
-    logger.info('向客户端推送game-start事件')
+  const enteringMsg: WsMessage<'game-entering'> = {
+    type: 'game-entering',
+    data: { roomId }
+  }
+  ws.broadcastWaitingRoom(roomId, enteringMsg)
 
-    ws.broadcastEach(roomId, (id) => {
-      return {
-        type: 'game-start',
+  const roomKey = String(roomId)
+  const userIds = members.map((m) => m.userId)
+
+  // 开始追踪进入进度（等待房间 WS 会持续收到 game-entering-progress）
+  ws.trackGameEntering(roomId, userIds)
+
+  // HTTP 立即返回：后续开局流程在后台异步推进
+  response.success(ctx, { roomId }, '进入游戏中')
+
+  void (async () => {
+    try {
+      // 等待所有玩家完成 /game namespace 连接（客户端需用 query.roomId=roomId）
+      await ws.waitForGameUsersConnected(roomKey, userIds, {
+        timeoutMs: 20_000
+      })
+      ws.untrackGameEntering(roomId)
+
+      // 实例化 Texas（业务层负责 join/seat/ready/开局）
+      const texas = new Texas({
+        lowestBetAmount: roomInfo.lowestBetAmount,
+        maximumCountOfPlayers: members.length,
+        initialChips: roomInfo.initialChips,
+        thinkingTime: roomInfo.thinkingTime,
+        user: { id: roomInfo.owner.id, name: roomInfo.owner.name }
+      })
+
+      // 将房间成员加入并全部入座
+      const ownerPlayer = texas.room.owner
+      texas.room.seat(ownerPlayer)
+      for (const m of members) {
+        if (m.userId === ownerId) continue
+        const p = texas.createPlayer({ id: m.user.id, name: m.user.name })
+        texas.room.join(p)
+        texas.room.seat(p)
+      }
+
+      // 创建对局 Match（startedAt/lowestBetAmount/roomId）
+      const matchInfo = await match.create({
         data: {
-          matchId: matchInfo.id,
-          // each player has different handPokes
-          handPokes: texas.dealer
-            .find((player) => player.id === id)
-            ?.getHandPokes(),
-          stage: texas.controller.stage,
-          pool: texas.pool.totalAmount,
-          defaultBets: texas.getDefaultBet().map(({ userId, amount }) => {
-            return {
-              amount,
-              userInfo: texas.room.getPlayerById(userId)?.getUserInfo()
-            }
+          roomId,
+          lowestBetAmount: roomInfo.lowestBetAmount,
+          startedAt: new Date()
+        }
+      })
+
+      // 通知等待房间：已进入游戏（可跳转到 /game 页面）
+      const enteredMsg: WsMessage<'game-entered'> = {
+        type: 'game-entered',
+        data: { roomId, matchId: matchInfo.id }
+      }
+      ws.broadcastWaitingRoom(roomId, enteredMsg)
+
+      // 将 Texas 实例挂到 gameCenter（用于 action/currentState 等接口）
+      createRoom(roomKey, ownerId, texas)
+      userIds
+        .filter((id) => id !== ownerId)
+        .forEach((id) => joinRoom(roomKey, id))
+
+      const matchStartedAt = Date.now()
+
+      texas.onError(async (error) => {
+        try {
+          await matchError.create({
+            data: { matchId: matchInfo.id, info: JSON.stringify(error) }
           })
+        } catch (e) {
+          logger.error('write matchError failed', e)
         }
-      }
-    })
-  })
+        throw error
+      })
 
-  texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
-    // 更新上一个阶段的结束时间
-    await matchStageTimeRecord.update({
-      where: {
-        matchId_stage: {
-          matchId: matchInfo.id,
-          stage: lastStage
-        }
-      },
-      data: {
-        endAt: new Date()
-      }
-    })
-    await matchStageTimeRecord.create({
-      data: {
-        stage,
-        matchId: matchInfo.id
-      }
-    })
-    logger.info('向客户端推送stage-change事件')
-    ws.broadcast(roomId, {
-      type: 'stage-change',
-      data: {
-        stage,
-        restCommonPokes: commonPokes
-      }
-    })
-  })
-
-  texas.onGameEnd(async ({ restCommonPokes, currentStage, showHandPokes }) => {
-    // 这时候游戏状态为end
-    await texas.settle()
-    await matchStageTimeRecord.update({
-      where: {
-        matchId_stage: {
-          matchId: matchInfo.id,
-          stage: currentStage
-        }
-      },
-      data: {
-        endAt: new Date()
-      }
-    })
-    // 记录玩家手牌以及奖池分配情况
-    const playerHands = texas.dealer.map((player) => ({
-      matchId: matchInfo.id,
-      role: player.getRole(),
-      handPokes: player.getHandPokes(),
-      wager: player.wager,
-      totalBetAmount: player.totalBetAmount,
-      userId: player.getUserInfo().id,
-      // 以下三个字段 存储牌型大小, 包含牌型签名, 牌型大小数值, 牌型类别
-      rankStrength: player.rankStrength,
-      rankCategory: player.rankSignature?.[0] as RankCategory,
-      rankSignature: texas.dealer.getBestRankSignature(),
-      createdAt: matchInfo.startedAt
-    }))
-    await playerMatchRecord.createMany({ data: playerHands })
-
-    // 更新用户在房间内的对局统计
-    await Promise.all(
-      texas.dealer.map((player) => {
-        const userId = player.getUserInfo().id
-        const wager = texas.pool.bills.get(player.id) ?? 0
-
-        return userRoomStat.upsert({
-          where: {
-            userId_roomId: {
-              userId,
-              roomId: matchInfo.roomId
-            }
-          },
-          update: {
-            matchCount: {
-              increment: 1
-            },
-            lastMatchAt: new Date(),
-            totalWager: {
-              increment: wager
-            }
-          },
-          create: {
+      // 轮到玩家行动（广播给所有玩家，客户端可显示“谁在行动 + 倒计时 + 可行动列表/限制”）
+      texas.onPreAction(({ userId, restrict, allowedActions }) => {
+        const player = texas.room.getPlayerById(userId)
+        const serverNow = Date.now()
+        const thinkingTimeMs =
+          (player?.thinkingTime ?? roomInfo.thinkingTime) * 1000
+        const deadlineAt = serverNow + thinkingTimeMs
+        const msg: WsMessage<'player-action-required'> = {
+          type: 'player-action-required',
+          data: {
+            matchId: matchInfo.id,
             userId,
-            roomId: matchInfo.roomId,
-            matchCount: 1,
-            lastMatchAt: new Date(),
-            totalWager: wager
+            serverNow,
+            deadlineAt,
+            allowedActions,
+            restrict
           }
-        })
-      })
-    )
-
-    // 更新对局信息
-    await match.update({
-      where: {
-        id: matchInfo.id
-      },
-      data: {
-        endedAt: new Date(),
-        endStage: texas.controller.endAt,
-        totalBetAmount: texas.pool.totalAmount,
-        // 最大牌型组合
-        bestPokes: texas.dealer.deck.getBestPokeCombinations(),
-        // 最大牌力
-        bestRankCategory: texas.dealer.deck.getBestRankCategory(),
-        // 底牌
-        commonPokes: texas.dealer.deck.getPokes().commonPokes
-      }
-    })
-
-    const handPokes = (() => {
-      if (showHandPokes)
-        return texas.dealer.map((player) => {
-          return {
-            userInfo: {
-              id: player.getUserInfo().id
-            },
-            hand: player.getHandPokes()
-          }
-        })
-      return []
-    })()
-    logger.info('向客户端推送game-end事件')
-    ws.broadcast(roomId, {
-      type: 'game-end',
-      data: {
-        handPokes,
-        showHandPokes,
-        restCommonPokes,
-        settleList: Array.from(texas.pool.bills).map(([userId, amount]) => {
-          const player = texas.room.getPlayerById(userId)
-
-          return {
-            amount,
-            userInfo: player?.getUserInfo()
-          }
-        })
-      }
-    })
-
-    // 游戏结束后轮换角色
-    texas.dealer.changeButtonToNextPlayer()
-    texas.dealer.setOthers()
-    broadCastRoles(roomId, texas)
-
-    // 重置对局信息
-    // 这时候游戏状态为waiting
-    texas.reset()
-  })
-
-  texas.onAction(async (player, isPreFlop) => {
-    const action = player.getAction()
-    // 默认下注行为不推送
-    if (!isPreFlop) {
-      logger.info('向客户端推送player-take-action事件')
-      ws.broadcast(roomId, {
-        type: 'player-take-action',
-        data: {
-          actionType: action?.type,
-          pool: texas.pool.totalAmount,
-          userInfo: player.getUserInfo(),
-          amount: action?.payload?.value ?? 0,
-          currentStageBetAmount: player.currentStageTotalAmount
         }
+        ws.broadcast(roomKey, msg)
       })
+
+      // 玩家已行动（记录 BetRecord + 广播）
+      texas.onAction(async (player) => {
+        const action = player.getAction()
+        const actionType = (action?.type ?? 'check') as ActionType
+        const amount = Number(action?.payload?.value ?? 0)
+
+        await betRecord.create({
+          data: {
+            userId: player.getUserInfo().id,
+            actionType,
+            amount,
+            stage: texas.controller.stage,
+            matchId: matchInfo.id
+          }
+        })
+
+        const msg: WsMessage<'player-action-taken'> = {
+          type: 'player-action-taken',
+          data: {
+            matchId: matchInfo.id,
+            userId: player.getUserInfo().id,
+            actionType,
+            amount,
+            pool: texas.pool.totalAmount,
+            currentStageBetAmount: player.currentStageTotalAmount,
+            balance: player.balance
+          }
+        }
+        ws.broadcast(roomKey, msg)
+      })
+
+      // 阶段推进（翻公共牌）
+      texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
+        // 更新上一个阶段结束时间，记录新阶段开始时间
+        await matchStageTimeRecord.update({
+          where: {
+            matchId_stage: {
+              matchId: matchInfo.id,
+              stage: lastStage
+            }
+          },
+          data: { endAt: new Date() }
+        })
+        await matchStageTimeRecord.create({
+          data: { matchId: matchInfo.id, stage }
+        })
+
+        const msg: WsMessage<'game-stage-changed'> = {
+          type: 'game-stage-changed',
+          data: { matchId: matchInfo.id, stage, pokesToReveal: commonPokes }
+        }
+        ws.broadcast(roomKey, msg)
+      })
+
+      // 小盲/大盲已下，hand 正式开始（用于创建 pre_flop 计时记录 + 广播）
+      texas.onGameStart(async () => {
+        await matchStageTimeRecord.create({
+          data: { matchId: matchInfo.id, stage: 'pre_flop' }
+        })
+
+        const msg: WsMessage<'game-start'> = {
+          type: 'game-start',
+          data: {
+            matchId: matchInfo.id,
+            stage: texas.controller.stage,
+            pool: texas.pool.totalAmount,
+            defaultBets: texas.getDefaultBet().map((b) => ({
+              userId: b.userId,
+              amount: b.amount,
+              balance: b.balance
+            }))
+          }
+        }
+        ws.broadcast(roomKey, msg)
+      })
+
+      // 游戏结束（结算、落库、广播）
+      texas.onGameEnd((params) => {
+        void (async () => {
+          try {
+            texas.settle()
+
+            const seated = texas.room.getPlayersBySeatStatus('on-set')
+            const strengthSorted = seated
+              .filter((p) => p.getStatus() !== 'out')
+              .map((p) => p.rankStrength)
+              .sort((a, b) => b - a)
+            const rankOf = (strength: number) =>
+              Math.max(1, strengthSorted.indexOf(strength) + 1)
+
+            const settleList = seated.map((p) => ({
+              userId: p.getUserInfo().id,
+              balance: p.balance,
+              wager: p.wager,
+              rank: rankOf(p.rankStrength),
+              isAllIn: p.getStatus() === 'allIn',
+              isFold: p.getStatus() === 'out',
+              handPokes: p.getHandPokes(),
+              rankCategory: (p.rankSignature?.[0] ??
+                params.bestRankCategory) as any
+            }))
+
+            const commonPokes = texas.dealer.deck.getPokes().commonPokes
+            await match.update({
+              where: { id: matchInfo.id },
+              data: {
+                endedAt: new Date(),
+                endStage: params.currentStage as any,
+                commonPokes,
+                bestRankCategory: (params.bestRankCategory as any) ?? null,
+                bestPokes: (params.bestPokes ?? undefined) as unknown as any,
+                totalBetAmount: seated.reduce(
+                  (s, p) => s + (p.totalBetAmount ?? 0),
+                  0
+                )
+              }
+            })
+
+            await roomModel.update({
+              where: { id: roomId },
+              data: { gameStatus: 'waiting' } as unknown as any
+            })
+
+            const msg: WsMessage<'game-end'> = {
+              type: 'game-end',
+              data: {
+                matchId: matchInfo.id,
+                settleList: settleList as any,
+                pokesToReveal: commonPokes,
+                endStage: params.currentStage as any,
+                bestRankCategory: params.bestRankCategory as any,
+                gameDuration: Math.floor((Date.now() - matchStartedAt) / 1000),
+                bestPokes: (params.bestPokes ?? []) as any,
+                totalBetAmount: seated.reduce(
+                  (s, p) => s + (p.totalBetAmount ?? 0),
+                  0
+                )
+              }
+            }
+            ws.broadcast(roomKey, msg)
+          } catch (e) {
+            logger.error('onGameEnd handler failed', e)
+          }
+        })()
+      })
+
+      // 开局前重置（与引擎 start 的 resetBeforeGameStart 对齐，但由业务编排）
+      texas.resetBeforeGameStart()
+
+      // 由 core 事件驱动推送：角色分配
+      texas.onRolesAssigned(({ players }) => {
+        const rolesMsg: WsMessage<'player-roles-assigned'> = {
+          type: 'player-roles-assigned',
+          data: {
+            matchId: matchInfo.id,
+            roles: players.map((p) => ({
+              userId: p.userId,
+              role: p.role as any
+            }))
+          }
+        }
+        ws.broadcast(roomKey, rolesMsg)
+      })
+
+      // 由 core 事件驱动推送：发牌（私牌只发给自己）
+      texas.onDealCards(({ players }) => {
+        players.forEach((p) => {
+          const msg: WsMessage<'player-hand-dealt'> = {
+            type: 'player-hand-dealt',
+            data: {
+              matchId: matchInfo.id,
+              roomId,
+              handPokes: p.handPokes
+            }
+          }
+          ws.broadcastTo(p.userId, msg)
+        })
+      })
+
+      // 此处按业务分步推进
+      texas.setPlayerRoles()
+      await delay(2000)
+
+      texas.dealCards()
+      await delay(2000)
+      await texas.controller.start()
+
+      await roomModel.update({
+        where: { id: roomId },
+        data: { gameStatus: 'in_game' } as unknown as any
+      })
+    } catch (e: any) {
+      ws.untrackGameEntering(roomId)
+      await roomModel.update({
+        where: { id: roomId },
+        data: { gameStatus: 'waiting' } as unknown as any
+      })
+      const failedMsg: WsMessage<'game-entering-failed'> = {
+        type: 'game-entering-failed',
+        data: { roomId, reason: e?.message ?? '进入游戏失败' }
+      }
+      ws.broadcastWaitingRoom(roomId, failedMsg)
+      logger.error('[entring] start game flow failed', e)
     }
+  })()
 
-    await betRecord.create({
-      data: {
-        userId: player.getUserInfo().id,
-        stage: texas.controller.stage,
-        actionType: action!.type,
-        amount: action?.payload?.value,
-        matchId: matchInfo.id
-      }
-    })
-  })
-
-  texas.onError(async (error) => {
-    await matchError.create({
-      data: {
-        matchId: matchInfo.id,
-        info: error.stack || `${error.name}: ${error.message}`
-      }
-    })
-  })
-  // 需要创建对局信息
-  const matchInfo = await match.create({
-    data: {
-      lowestBetAmount: texas.room.lowestBetAmount,
-      roomId: Number(roomId)
-    }
-  })
-  await texas.start()
-  response.success(ctx, { matchId: matchInfo.id })
-})
-
-export function broadCastRoles(roomId: string, texas: Texas) {
-  logger.info('向客户端推送set-role事件')
-  // const roomId = texas.room
-  ws.broadcast(roomId, {
-    type: 'set-role',
-    data: texas.dealer.map((player) => {
-      return {
-        userInfo: {
-          id: player.getUserInfo().id
-        },
-        role: player.getRole()
-      }
-    })
-  })
-}
-// 房主开始游戏
-// 确认各个玩家的角色
-// 游戏一经开始, 不允许中途退出
-// 如果强行退出app, 视为离线
-// 当轮游戏结束后, 将离线的玩家踢出房间
-// 如果在游戏进行中重新连接, 则回到房间中
-router.post(toolsApi('/ready/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-  const texas = rooms.get(roomId)
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-  const userId = ctx.state.user!.id
-  if (texas.room.owner.getUserInfo().id !== userId) {
-    response.error(ctx, 2000, '不是房主,无法开始游戏')
-    return
-  }
-  texas.ready()
-  response.success(ctx)
-  broadCastRoles(roomId, texas)
-})
-
-// 手动结束游戏进程
-router.post(toolsApi('/end/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-  if (!roomId) {
-    response.error(ctx, 400, '参数错误')
-    return
-  }
-
-  const texas = rooms.get(roomId)
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-  texas.end()
-  response.success(ctx)
-})
-
-router.post(toolsApi('/settle/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-
-  const texas = rooms.get(roomId)
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-  await texas.settle()
+  return
 })
 
 // 用户重连后获取当前对局的状态
@@ -387,7 +415,7 @@ router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
   }
 
   const gameStatus = texas.controller.status
-  if (gameStatus !== 'on') {
+  if ((gameStatus as unknown as string) !== 'in_hand') {
     response.success(ctx, 2100, '游戏已经结束')
     return
   }

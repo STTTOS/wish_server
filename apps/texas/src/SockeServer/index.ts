@@ -1,3 +1,5 @@
+import type { WsMessage } from '../ws/ws-event-types'
+
 import { OnlineStatus } from 'texas-poker-core'
 import { Server, Socket, Namespace } from 'socket.io'
 
@@ -11,6 +13,23 @@ class SocketServer {
   #roomListNs: Namespace
   #waitingRoomNs: Namespace
   #userIdToSocketIdMap: Map<number, string> = new Map()
+  #gameRoomConnectWaiters: Map<
+    string,
+    Array<{
+      expected: Set<number>
+      resolve: () => void
+      reject: (err: Error) => void
+      timeout: NodeJS.Timeout
+    }>
+  > = new Map()
+
+  #gameEnteringTrackers: Map<
+    string,
+    {
+      roomIdNumber: number
+      expected: Set<number>
+    }
+  > = new Map()
 
   constructor() {
     this.#io = new Server(server, {
@@ -82,10 +101,14 @@ class SocketServer {
       socket.send({ type: 'initial connect', data: null })
 
       this.#handleGameRoomConnect(roomId, userId)
+      this.#notifyGameRoomWaiters(roomId)
+      this.#notifyEnteringProgress(roomId)
 
       socket.on('disconnect', (reason) => {
         this.remove(roomId, userId)
         this.#handleGameRoomDisconnect(roomId, userId)
+        this.#notifyGameRoomWaiters(roomId)
+        this.#notifyEnteringProgress(roomId)
         logger.info(
           '[/game] client disconnect, id:',
           socket.id,
@@ -97,6 +120,8 @@ class SocketServer {
       socket.on('error', (error) => {
         this.remove(roomId, userId)
         this.#handleGameRoomDisconnect(roomId, userId)
+        this.#notifyGameRoomWaiters(roomId)
+        this.#notifyEnteringProgress(roomId)
         logger.error('[/game] WebSocket connect error:', error)
       })
     })
@@ -348,6 +373,106 @@ class SocketServer {
       `broadcastWaitingRoom, roomId: ${roomId}, data: ${JSON.stringify(data)}`
     )
     this.#waitingRoomNs.to(String(roomId)).emit('message', data)
+  }
+
+  trackGameEntering(roomIdNumber: number, expectedUserIds: number[]) {
+    const roomKey = String(roomIdNumber)
+    this.#gameEnteringTrackers.set(roomKey, {
+      roomIdNumber,
+      expected: new Set(expectedUserIds)
+    })
+    this.#notifyEnteringProgress(roomKey)
+  }
+
+  untrackGameEntering(roomIdNumber: number) {
+    const roomKey = String(roomIdNumber)
+    this.#gameEnteringTrackers.delete(roomKey)
+  }
+
+  #notifyEnteringProgress(roomKey: string) {
+    const tracker = this.#gameEnteringTrackers.get(roomKey)
+    if (!tracker) return
+
+    const connectedUserIds = this.getConnectedGameUserIds(roomKey).filter(
+      (id) => tracker.expected.has(id)
+    )
+    const msg: WsMessage<'game-entering-progress'> = {
+      type: 'game-entering-progress',
+      data: {
+        roomId: tracker.roomIdNumber,
+        expectedUserIds: Array.from(tracker.expected),
+        connectedUserIds
+      }
+    }
+    this.broadcastWaitingRoom(tracker.roomIdNumber, msg)
+  }
+
+  #notifyGameRoomWaiters(roomId: string) {
+    const waiters = this.#gameRoomConnectWaiters.get(roomId)
+    if (!waiters || waiters.length === 0) return
+
+    const connected = new Set(this.getConnectedGameUserIds(roomId))
+    const readyWaiters = waiters.filter((w) =>
+      Array.from(w.expected).every((id) => connected.has(id))
+    )
+    if (readyWaiters.length === 0) return
+
+    readyWaiters.forEach((w) => {
+      clearTimeout(w.timeout)
+      w.resolve()
+    })
+
+    const remaining = waiters.filter((w) => !readyWaiters.includes(w))
+    if (remaining.length === 0) this.#gameRoomConnectWaiters.delete(roomId)
+    else this.#gameRoomConnectWaiters.set(roomId, remaining)
+  }
+
+  /**
+   * 获取 /game namespace 下某个 roomId 已连接的 userId 列表
+   */
+  getConnectedGameUserIds(roomId: string): number[] {
+    return this.#getUserIdsInRoom(roomId)
+  }
+
+  /**
+   * 等待指定 userId 列表全部建立 /game namespace 连接（事件驱动）
+   */
+  waitForGameUsersConnected(
+    roomId: string,
+    userIds: number[],
+    options?: { timeoutMs?: number }
+  ): Promise<void> {
+    const timeoutMs = options?.timeoutMs ?? 15_000
+    const expected = new Set(userIds)
+
+    // 先做一次同步检查，避免“都已连接但还在等”的竞态
+    const connected = new Set(this.getConnectedGameUserIds(roomId))
+    const allReady = Array.from(expected).every((id) => connected.has(id))
+    if (allReady) return Promise.resolve()
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        // 从等待队列移除自己
+        const list = this.#gameRoomConnectWaiters.get(roomId) ?? []
+        this.#gameRoomConnectWaiters.set(
+          roomId,
+          list.filter((w) => w.resolve !== resolve)
+        )
+        const latestConnected = this.getConnectedGameUserIds(roomId)
+        reject(
+          new Error(
+            `waitForGameUsersConnected timeout, roomId=${roomId}, expected=${JSON.stringify(
+              userIds
+            )}, connected=${JSON.stringify(latestConnected)}`
+          )
+        )
+      }, timeoutMs)
+
+      const waiter = { expected, resolve, reject, timeout }
+      const list = this.#gameRoomConnectWaiters.get(roomId) ?? []
+      list.push(waiter)
+      this.#gameRoomConnectWaiters.set(roomId, list)
+    })
   }
 }
 

@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import './web'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
+import { rooms, getRoomId } from '../../gameCenter'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import { match, userRoomStat, playerMatchRecord } from '../../models'
@@ -328,5 +329,66 @@ router.post(matchApi('/detail'), async (ctx) => {
     endedAt: dayjs(endedAt).format(timeFormat),
     settleRecords,
     actionRecords
+  })
+})
+
+/**
+ * 获取当前对局状态（用于重连恢复）
+ */
+router.post(matchApi('/currentState'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const roomId = getRoomId(userId)
+  if (!roomId) {
+    response.error(ctx, 2000, '当前不在对局房间中')
+    return
+  }
+
+  const texas = rooms.get(roomId)
+  if (!texas) {
+    response.error(ctx, 2000, '对局不存在')
+    return
+  }
+
+  const latestMatch = await match.findFirst({
+    where: {
+      roomId: Number(roomId),
+      endedAt: null
+    },
+    select: { id: true },
+    orderBy: { startedAt: 'desc' }
+  })
+
+  const playersOnSeat = texas.room
+    .getPlayersBySeatStatus('on-set')
+    .map((player) => ({
+      role: player.getRole(),
+      action: player.getAction(),
+      userInfo: player.getUserInfo(),
+      currentStageTotalAmount: player.currentStageTotalAmount,
+      totalBetAmount: player.totalBetAmount,
+      rankCategory: player.rankSignature?.[0]
+    }))
+  const playersOnWatch = texas.room
+    .getPlayersBySeatStatus('hang')
+    .map((player) => ({
+      userInfo: player.getUserInfo()
+    }))
+
+  const activePlayer = texas.controller.activePlayer
+  const activePlayerInfo = {
+    userInfo: activePlayer?.getUserInfo(),
+    remainThinkTime: activePlayer?.getRemainThinkTime()
+  }
+
+  response.success(ctx, {
+    matchId: latestMatch?.id ?? null,
+    roomId: Number(roomId),
+    status: texas.controller.status,
+    stage: texas.controller.stage,
+    pool: texas.pool.totalAmount,
+    commonPokes: texas.dealer.deck.getPokes().commonPokes,
+    activePlayerInfo,
+    playersOnSeat,
+    playersOnWatch
   })
 })

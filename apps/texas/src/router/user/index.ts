@@ -11,7 +11,11 @@ import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
-import { setLoginSession, clearLoginSession } from '../../utils/loginSession'
+import {
+  setLoginSession,
+  getLoginSession,
+  clearLoginSession
+} from '../../utils/loginSession'
 import {
   timeFormat,
   apiPrefixWeb,
@@ -229,6 +233,14 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
   const userId = parsedUser?.id
 
   if (!userId) {
+    response.success(ctx, null)
+    return
+  }
+
+  const scope = ctx.path.startsWith('/api/web/') ? 'web' : 'client'
+  const latestSession = await getLoginSession(userId, scope)
+  if (!latestSession || latestSession.sessionId !== parsedUser.sessionId) {
+    // info 接口用于静默探测登录态：会话无效时返回 null，不返回 401
     response.success(ctx, null)
     return
   }
