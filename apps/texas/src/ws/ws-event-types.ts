@@ -103,6 +103,18 @@ export type WsGameEnteredData = {
   matchId: number
 }
 
+export type WsGameInvalidatedData = {
+  roomId: number
+  matchId: number
+  reason: string
+  source: 'engine_error' | 'insufficient_players'
+  players: Array<{
+    userId: number
+    role: RoleEnum | null
+    balance: number
+  }>
+}
+
 export type WsNextHandCountdownStartedData = {
   roomId: number
   endsAt: number
@@ -119,6 +131,7 @@ export type WsEventDataMap = {
   'game-entering-progress': WsGameEnteringProgressData
   'game-entering-failed': WsGameEnteringFailedData
   'game-entered': WsGameEnteredData
+  'game-invalidated': WsGameInvalidatedData
   'next-hand-countdown-started': WsNextHandCountdownStartedData
   'next-hand-countdown-cancelled': WsNextHandCountdownCancelledData
   'player-roles-assigned': WsPlayerRolesAssignedData

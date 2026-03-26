@@ -4,11 +4,16 @@ import dayjs from 'dayjs'
 
 import './web'
 import router from '../instance'
+import { getGame } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
-import { rooms, getRoomId } from '../../gameCenter'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
-import { match, userRoomStat, playerMatchRecord } from '../../models'
+import {
+  match,
+  roomMember,
+  userRoomStat,
+  playerMatchRecord
+} from '../../models'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 /**
@@ -337,13 +342,17 @@ router.post(matchApi('/detail'), async (ctx) => {
  */
 router.post(matchApi('/currentState'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const roomId = getRoomId(userId)
+  const membership = await roomMember.findFirst({
+    where: { userId, room: { deletedAt: null } },
+    select: { roomId: true }
+  })
+  const roomId = membership?.roomId
   if (!roomId) {
     response.error(ctx, 2000, '当前不在对局房间中')
     return
   }
 
-  const texas = rooms.get(roomId)
+  const texas = getGame(String(roomId))
   if (!texas) {
     response.error(ctx, 2000, '对局不存在')
     return
@@ -351,7 +360,7 @@ router.post(matchApi('/currentState'), async (ctx) => {
 
   const latestMatch = await match.findFirst({
     where: {
-      roomId: Number(roomId),
+      roomId,
       endedAt: null
     },
     select: { id: true },

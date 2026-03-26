@@ -1,11 +1,10 @@
 import type { WsMessage } from '../ws/ws-event-types'
 
 import { ws } from '../server'
-import { rooms } from './index'
+import { getGame } from './index'
 
 type CountdownState = {
-  roomId: string
-  roomIdNumber: number
+  roomId: number
   lockTimer: NodeJS.Timeout
   dealTimer: NodeJS.Timeout
   startTimer: NodeJS.Timeout
@@ -13,7 +12,7 @@ type CountdownState = {
   lockAt: number
 }
 
-const countdowns = new Map<string, CountdownState>()
+const countdowns = new Map<number, CountdownState>()
 
 const LOCK_DELAY_MS = 3000
 const DEAL_AFTER_LOCK_MS = 2000
@@ -26,7 +25,7 @@ type NextHandHooks = {
   onStart: () => Promise<void> | void
 }
 
-const hooksMap = new Map<string, NextHandHooks>()
+const hooksMap = new Map<number, NextHandHooks>()
 
 function broadcastCancelled(roomId: number) {
   const msg: WsMessage<'next-hand-countdown-cancelled'> = {
@@ -36,7 +35,7 @@ function broadcastCancelled(roomId: number) {
   ws.broadcast(String(roomId), msg)
 }
 
-export function cancelNextHandCountdown(roomId: string) {
+export function cancelNextHandCountdown(roomId: number) {
   const state = countdowns.get(roomId)
   if (!state) return
 
@@ -45,21 +44,21 @@ export function cancelNextHandCountdown(roomId: string) {
   clearTimeout(state.startTimer)
   countdowns.delete(roomId)
 
-  broadcastCancelled(state.roomIdNumber)
+  broadcastCancelled(roomId)
 }
 
-export function registerNextHandHooks(roomId: string, hooks: NextHandHooks) {
+export function registerNextHandHooks(roomId: number, hooks: NextHandHooks) {
   hooksMap.set(roomId, hooks)
 }
 
-export function unregisterNextHandHooks(roomId: string) {
+export function unregisterNextHandHooks(roomId: number) {
   hooksMap.delete(roomId)
 }
 
-export function maybeStartNextHandCountdown(roomId: string) {
+export function maybeStartNextHandCountdown(roomId: number) {
   if (countdowns.has(roomId)) return
 
-  const texas = rooms.get(roomId)
+  const texas = getGame(String(roomId))
   if (!texas) return
 
   // 仅在 idle（上一手结束）时允许进入下一手倒计时
@@ -67,7 +66,7 @@ export function maybeStartNextHandCountdown(roomId: string) {
 
   const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
   if (seatedCount < 2) {
-    broadcastCancelled(Number(roomId))
+    broadcastCancelled(roomId)
     return
   }
 
@@ -81,13 +80,13 @@ export function maybeStartNextHandCountdown(roomId: string) {
   const startedMsg: WsMessage<'next-hand-countdown-started'> = {
     type: 'next-hand-countdown-started',
     data: {
-      roomId: Number(roomId),
+      roomId,
       endsAt,
       lockAt,
       serverNow
     }
   }
-  ws.broadcast(roomId, startedMsg)
+  ws.broadcast(String(roomId), startedMsg)
 
   const lockTimer = setTimeout(async () => {
     try {
@@ -118,7 +117,6 @@ export function maybeStartNextHandCountdown(roomId: string) {
 
   countdowns.set(roomId, {
     roomId,
-    roomIdNumber: Number(roomId),
     lockTimer,
     dealTimer,
     startTimer,

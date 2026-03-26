@@ -1,28 +1,19 @@
 import dayjs from 'dayjs'
 import { isNil } from 'ramda'
 import { Prisma } from '@prisma/texas-client'
-import { Texas, Player } from 'texas-poker-core'
 
 import router from '../instance'
 import { ws } from '../../server'
-import { logger } from '../../logger'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
-import { rooms, leaveRoom } from '../../gameCenter'
 import { room, user, roomMember } from '../../models'
 import { generateRoomCode } from '../../utils/roomCode'
-import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
+import { timeFormat, apiPrefixClient } from '../../config'
 import {
   MIN_BB,
   MIN_THINKING_TIME,
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
-import {
-  cancelNextHandCountdown,
-  maybeStartNextHandCountdown
-} from '../../gameCenter/nextHandCountdown'
-
-const roomApi = combinePath(apiPrefixWeb)('/room')
 
 const roomApiClient = combinePath(apiPrefixClient)('/room')
 
@@ -531,156 +522,3 @@ router.post(roomApiClient('/members'), async (ctx) => {
 
   response.success(ctx, result)
 })
-
-router.post(roomApi('/join/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-
-  const texas = rooms.get(roomId)
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-
-  // TODO: 以后这个方法根据登录人
-  // const player = ctx.state.user!
-  const { userId } = ctx.request.body
-
-  const userInfo = await user.findUnique({
-    where: { id: userId }
-  })
-  if (!userInfo) {
-    response.error(ctx, 2000, '用户不存在')
-    return
-  }
-  if (texas.room.has(userId)) {
-    response.error(ctx, 2000, '你已经在房间中, 不可重复加入')
-    return
-  }
-
-  // 如果当前人正在别的房间里, 则不可再加入新的房间
-  if (
-    Array.from(rooms.entries())
-      .filter(([id]) => id !== roomId)
-      .some(([, texas]) => texas.room.has(userId))
-  ) {
-    response.error(ctx, 2000, '你已经在别的房间中, 请先退出再加入')
-    return
-  }
-
-  const player = texas.createPlayer(userInfo)
-  texas.room.join(player)
-  // 下一手倒计时场景：当房间处于 idle 时，默认让新加入玩家入座，便于凑齐人数自动开下一手
-  if ((texas.controller.status as unknown as string) === 'idle') {
-    try {
-      texas.room.seat(player)
-    } catch {
-      // ignore
-    }
-    maybeStartNextHandCountdown(roomId)
-  }
-  if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
-    broadCastPlayerOnSeat(roomId, player, userId)
-  } else {
-    broadCastPlayerOnWatch(roomId, player, texas, userId)
-  }
-  response.success(ctx)
-})
-
-router.post(roomApi('/quit/:roomId'), async (ctx) => {
-  const roomId = ctx.params.roomId
-  const texas = rooms.get(roomId)
-  if (!texas) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-  if (texas.controller.status !== 'idle') {
-    response.error(ctx, 2000, '游戏正在进行中, 不可退出')
-    return
-  }
-  const userId = ctx.state.user!.id
-  if (!texas.room.has(userId)) {
-    response.error(ctx, 2000, '你不在当前房间中')
-    return
-  }
-
-  const ownerId = texas.room.removeById(userId)
-  // 若正在倒计时且人数不够，取消下一手倒计时
-  if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
-    cancelNextHandCountdown(roomId)
-  }
-  leaveRoom(roomId, userId)
-  if (ownerId) {
-    // await room.update({
-    //   where: {
-    //     uuid: roomId
-    //   },
-    //   data: {
-    //     ownerId
-    //   }
-    // })
-    logger.info('向客户端推送player-leave事件')
-    ws.broadcast(roomId, {
-      type: 'player-leave',
-      data: {
-        userId,
-        ownerId,
-        // TODO: 当前玩家之后的角色才会改变
-        roleChangesList: texas.dealer.map((player) => {
-          return {
-            userId: player.id,
-            role: player.getRole()
-          }
-        })
-      }
-    })
-    response.success(ctx)
-  }
-  // 最后一位玩家离开房间
-  else {
-    // await room.delete({
-    //   where: {
-    //     uuid: roomId
-    //   }
-    // })
-
-    // when the last player leave room
-    // need to clear the texas instance
-    texas.reset()
-    rooms.delete(roomId)
-    response.success(ctx)
-  }
-})
-
-function broadCastPlayerOnSeat(roomId: string, player: Player, selfId: number) {
-  ws.broadcastExcept(roomId, selfId, {
-    type: 'player-on-seat',
-    data: {
-      userInfo: player.getUserInfo(),
-      role: player.getRole(),
-      status: 'online'
-    }
-  })
-}
-
-function broadCastPlayerOnWatch(
-  roomId: string,
-  player: Player,
-  texas: Texas,
-  selfId: number
-) {
-  logger.info('向客户端推送player-on-watch事件')
-  ws.broadcastExcept(roomId, selfId, {
-    type: 'player-on-watch',
-    data: {
-      userId: player.getUserInfo().id,
-      roleChangesList: texas.dealer.map((player) => {
-        return {
-          userInfo: {
-            id: player.getUserInfo().id
-          },
-          role: player.getRole()
-        }
-      })
-    }
-  })
-}

@@ -1,7 +1,7 @@
 import { ActionType } from 'texas-poker-core'
 
 import router from '../instance'
-import { rooms } from '../../gameCenter'
+import { getGame } from '../../gameCenter'
 import { apiPrefixWeb } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
@@ -25,7 +25,7 @@ router.post(toolsApi('/take'), async (ctx) => {
     return
   }
   const user = ctx.state.user!
-  const texas = rooms.get(roomId)
+  const texas = getGame(roomId)
 
   if (!texas) {
     response.error(ctx, 2000, '房间不存在')

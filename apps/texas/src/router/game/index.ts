@@ -11,14 +11,14 @@ import { ws } from '../../server'
 import { logger } from '../../logger'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
-import { rooms, getRoomId } from '../../gameCenter'
-import { joinRoom, createRoom } from '../../gameCenter'
+import { getGame, createGame } from '../../gameCenter'
 import { apiPrefixWeb, apiPrefixClient } from '../../config'
 import { roomMember, room as roomModel } from '../../models'
 import {
   match,
   betRecord,
   matchError,
+  playerMatchRecord,
   matchStageTimeRecord
 } from '../../models'
 import {
@@ -162,12 +162,89 @@ router.post(gameClientApi('/entring'), async (ctx) => {
       ws.broadcastWaitingRoom(roomId, enteredMsg)
 
       // 将 Texas 实例挂到 gameCenter（用于 action/currentState 等接口）
-      createRoom(roomKey, ownerId, texas)
-      userIds
-        .filter((id) => id !== ownerId)
-        .forEach((id) => joinRoom(roomKey, id))
+      createGame(roomKey, texas)
 
       const matchStartedAt = Date.now()
+      const invalidatedMatchIds = new Set<number>()
+      const matchStartSnapshots = new Map<
+        number,
+        Array<{ userId: number; role: any | null; balance: number }>
+      >()
+
+      const snapshotPlayersAtHandStart = (matchId: number) => {
+        const players = texas.room.getPlayersBySeatStatus('on-set')
+        const snapshot = players.map((p) => ({
+          userId: p.getUserInfo().id,
+          role: p.getRole(),
+          balance: p.balance
+        }))
+        matchStartSnapshots.set(matchId, snapshot)
+      }
+      // 首手预置快照：即便在 setPlayerRoles 前作废，也能返回开局前余额
+      snapshotPlayersAtHandStart(currentMatchId)
+
+      const invalidateAndRollbackMatch = async (
+        source: 'engine_error' | 'insufficient_players',
+        reason: string
+      ) => {
+        const matchIdToInvalidate = currentMatchId
+        if (
+          !matchIdToInvalidate ||
+          invalidatedMatchIds.has(matchIdToInvalidate)
+        ) {
+          return
+        }
+        invalidatedMatchIds.add(matchIdToInvalidate)
+
+        try {
+          // 回滚到“本手开始之前”：删除本手所有明细与 match 主记录
+          await Promise.all([
+            matchStageTimeRecord.deleteMany({
+              where: { matchId: matchIdToInvalidate }
+            }),
+            betRecord.deleteMany({ where: { matchId: matchIdToInvalidate } }),
+            playerMatchRecord.deleteMany({
+              where: { matchId: matchIdToInvalidate }
+            }),
+            matchError.deleteMany({ where: { matchId: matchIdToInvalidate } })
+          ])
+          await match.delete({ where: { id: matchIdToInvalidate } })
+        } catch (rollbackErr) {
+          logger.error('[match-invalidated] rollback failed', rollbackErr)
+        }
+
+        const snapshot = matchStartSnapshots.get(matchIdToInvalidate)
+        if (snapshot) {
+          // 回滚 Texas 内存态：将玩家余额恢复到本手开始时
+          snapshot.forEach((s) => {
+            const player = texas.room.getPlayerById(s.userId)
+            if (player) player.balance = s.balance
+          })
+        } else {
+          logger.error(
+            `[match-invalidated] missing start snapshot, matchId=${matchIdToInvalidate}`
+          )
+        }
+
+        const invalidatedMsg: WsMessage<'game-invalidated'> = {
+          type: 'game-invalidated',
+          data: {
+            roomId,
+            matchId: matchIdToInvalidate,
+            reason,
+            source,
+            players:
+              snapshot ??
+              texas.room.getPlayersBySeatStatus('on-set').map((p) => ({
+                userId: p.getUserInfo().id,
+                role: (p.getRole() as any) ?? null,
+                balance: p.balance
+              }))
+          }
+        }
+        ws.broadcast(roomKey, invalidatedMsg)
+        matchStartSnapshots.delete(matchIdToInvalidate)
+      }
 
       texas.onError(async (error) => {
         try {
@@ -177,7 +254,18 @@ router.post(gameClientApi('/entring'), async (ctx) => {
         } catch (e) {
           logger.error('write matchError failed', e)
         }
-        throw error
+        await invalidateAndRollbackMatch(
+          'engine_error',
+          error?.message ?? '引擎异常，对局已作废'
+        )
+        await roomModel.update({
+          where: { id: roomId },
+          data: { gameStatus: 'between_hands' } as unknown as any
+        })
+        // 回滚后尝试自动开局（人数不足时会自动取消倒计时并推送取消消息）
+        maybeStartNextHandCountdown(roomId)
+        // 不要在事件回调里 throw：会导致未处理异常/Promise rejection，影响进程稳定性
+        logger.error('[texas.onError]', error)
       })
 
       // 轮到玩家行动（广播给所有玩家，客户端可显示“谁在行动 + 倒计时 + 可行动列表/限制”）
@@ -277,7 +365,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
         ws.broadcast(roomKey, msg)
       })
 
-      registerNextHandHooks(roomKey, {
+      registerNextHandHooks(roomId, {
         canStart: () =>
           (texas.controller.status as unknown as string) === 'idle' &&
           texas.room.getPlayersBySeatStatus('on-set').length >= 2,
@@ -290,12 +378,21 @@ router.post(gameClientApi('/entring'), async (ctx) => {
             }
           })
           currentMatchId = next.id
+          await roomModel.update({
+            where: { id: roomId },
+            data: { gameStatus: 'between_hands' } as unknown as any
+          })
           texas.resetBeforeGameStart()
           texas.setPlayerRoles()
+          snapshotPlayersAtHandStart(currentMatchId)
         },
         onDeal: () => texas.dealCards(),
         onStart: async () => {
           await texas.controller.start()
+          await roomModel.update({
+            where: { id: roomId },
+            data: { gameStatus: 'in_hand' } as unknown as any
+          })
         }
       })
 
@@ -341,11 +438,6 @@ router.post(gameClientApi('/entring'), async (ctx) => {
               }
             })
 
-            await roomModel.update({
-              where: { id: roomId },
-              data: { gameStatus: 'waiting' } as unknown as any
-            })
-
             const msg: WsMessage<'game-end'> = {
               type: 'game-end',
               data: {
@@ -365,14 +457,22 @@ router.post(gameClientApi('/entring'), async (ctx) => {
             ws.broadcast(roomKey, msg)
 
             if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
-              cancelNextHandCountdown(roomKey)
-              await roomModel.update({
-                where: { id: roomId },
-                data: { gameStatus: 'waiting' } as unknown as any
-              })
+              cancelNextHandCountdown(roomId)
+              await invalidateAndRollbackMatch(
+                'insufficient_players',
+                '对局结束时在座人数不足2人，本手作废'
+              )
             } else {
-              maybeStartNextHandCountdown(roomKey)
+              invalidatedMatchIds.delete(currentMatchId)
+              matchStartSnapshots.delete(currentMatchId)
             }
+
+            await roomModel.update({
+              where: { id: roomId },
+              data: { gameStatus: 'between_hands' } as unknown as any
+            })
+            // 统一尝试自动开局：人数不足会在 nextHandCountdown 内自动取消并推送取消消息
+            maybeStartNextHandCountdown(roomId)
           } catch (e) {
             logger.error('onGameEnd handler failed', e)
           }
@@ -418,11 +518,12 @@ router.post(gameClientApi('/entring'), async (ctx) => {
 
       texas.dealCards()
       await delay(2000)
+      snapshotPlayersAtHandStart(currentMatchId)
       await texas.controller.start()
 
       await roomModel.update({
         where: { id: roomId },
-        data: { gameStatus: 'in_game' } as unknown as any
+        data: { gameStatus: 'in_hand' } as unknown as any
       })
     } catch (e: any) {
       ws.untrackGameEntering(roomId)
@@ -445,9 +546,13 @@ router.post(gameClientApi('/entring'), async (ctx) => {
 // 用户重连后获取当前对局的状态
 router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const roomId = getRoomId(userId)
-  let texas: Texas | undefined
-  if (!roomId || !(texas = rooms.get(roomId))) {
+  const membership = await roomMember.findFirst({
+    where: { userId, room: { deletedAt: null } },
+    select: { roomId: true }
+  })
+  const roomId = membership?.roomId
+  const texas = roomId ? getGame(String(roomId)) : undefined
+  if (!roomId || !texas) {
     response.success(ctx, 2100, '对局不存在')
     return
   }

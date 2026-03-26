@@ -142,7 +142,8 @@ model Room {
 enum RoomGameStatus {
   waiting
   entering
-  in_game
+  in_hand
+  between_hands
 }
 
 // 房间成员（加入/退出）

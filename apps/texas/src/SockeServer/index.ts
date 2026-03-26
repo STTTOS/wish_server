@@ -5,7 +5,12 @@ import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
-import { rooms } from '../gameCenter'
+import { room as roomModel } from '../models'
+import { getGame, hasGame, destroyGame } from '../gameCenter'
+import {
+  cancelNextHandCountdown,
+  unregisterNextHandHooks
+} from '../gameCenter/nextHandCountdown'
 
 class SocketServer {
   #io: Server
@@ -65,14 +70,14 @@ class SocketServer {
    * /game 命名空间：与德州扑克对局相关的 WS 连接
    * 约定：
    * - query.userId: number
-   * - query.roomId: string（gameCenter.rooms 的 key）
+   * - query.roomId: number（客户端房间 id，join 的房间名为 String(roomId)）
    */
   #setupGameNamespace() {
     this.#gameNs.use((socket, next) => {
       const query = socket.handshake.query
       const userId = Number(query.userId)
-      const roomId = query.roomId as string
-      if (!userId || !roomId) {
+      const roomId = Number(query.roomId)
+      if (!userId || !roomId || !Number.isFinite(roomId)) {
         logger.error(
           `[/game] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -90,9 +95,10 @@ class SocketServer {
 
       const query = socket.handshake.query
       const userId = Number(query.userId)
-      const roomId = query.roomId as string
+      const roomId = Number(query.roomId)
+      const roomKey = String(roomId)
 
-      socket.join(roomId)
+      socket.join(roomKey)
       socket.data.userId = userId
       socket.data.roomId = roomId
 
@@ -100,15 +106,19 @@ class SocketServer {
       this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
 
-      this.#handleGameRoomConnect(roomId, userId)
-      this.#notifyGameRoomWaiters(roomId)
-      this.#notifyEnteringProgress(roomId)
+      this.#handleGameRoomConnect(roomKey, userId)
+      this.#notifyGameRoomWaiters(roomKey)
+      this.#notifyEnteringProgress(roomKey)
+
+      const onLeave = () => {
+        this.remove(roomKey, userId)
+        this.#handleGameRoomDisconnect(roomKey, userId)
+        this.#notifyGameRoomWaiters(roomKey)
+        this.#notifyEnteringProgress(roomKey)
+      }
 
       socket.on('disconnect', (reason) => {
-        this.remove(roomId, userId)
-        this.#handleGameRoomDisconnect(roomId, userId)
-        this.#notifyGameRoomWaiters(roomId)
-        this.#notifyEnteringProgress(roomId)
+        onLeave()
         logger.info(
           '[/game] client disconnect, id:',
           socket.id,
@@ -118,10 +128,7 @@ class SocketServer {
       })
 
       socket.on('error', (error) => {
-        this.remove(roomId, userId)
-        this.#handleGameRoomDisconnect(roomId, userId)
-        this.#notifyGameRoomWaiters(roomId)
-        this.#notifyEnteringProgress(roomId)
+        onLeave()
         logger.error('[/game] WebSocket connect error:', error)
       })
     })
@@ -178,15 +185,15 @@ class SocketServer {
    * /waiting-room 命名空间：客户端房间/等待房间订阅
    * 约定：
    * - query.userId: number
-   * - query.roomId: string | number（客户端房间 id）
-   * - 实际 join 的房间名即 roomId（字符串）
+   * - query.roomId: number（客户端房间 id）
+   * - 实际 join 的房间名即 String(roomId)
    */
   #setupWaitingRoomNamespace() {
     this.#waitingRoomNs.use((socket, next) => {
       const query = socket.handshake.query
       const userId = Number(query.userId)
-      const roomId = query.roomId as string
-      if (!userId || !roomId) {
+      const roomId = Number(query.roomId)
+      if (!userId || !roomId || !Number.isFinite(roomId)) {
         logger.error(
           `[/waiting-room] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -203,11 +210,12 @@ class SocketServer {
       logger.info('[/waiting-room] 新的客户端连接, url', socket.handshake.url)
       const query = socket.handshake.query
       const userId = Number(query.userId)
-      const roomId = String(query.roomId)
+      const roomId = Number(query.roomId)
+      const roomKey = String(roomId)
 
       socket.data.userId = userId
       socket.data.roomId = roomId
-      socket.join(roomId)
+      socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
 
       socket.on('disconnect', (reason) => {
@@ -217,19 +225,82 @@ class SocketServer {
           'reason',
           reason
         )
+        void this.#tryCleanupWaitingRoomIfAllOffline(roomKey)
       })
 
       socket.on('error', (error) => {
         logger.error('[/waiting-room] WebSocket connect error:', error)
+        void this.#tryCleanupWaitingRoomIfAllOffline(roomKey)
       })
     })
+  }
+
+  #getSocketById(socketId: string) {
+    return this.#io.sockets.sockets.get(socketId) as Socket | undefined
+  }
+
+  #getSocketsInWaitingRoom(roomId: string) {
+    const socketIds = Array.from(
+      this.#waitingRoomNs.adapter.rooms.get(roomId) || []
+    )
+    return socketIds
+      .map((socketId) => this.#getSocketById(socketId))
+      .filter((socket) => !!socket) as Socket[]
+  }
+
+  #getSocketsInGameRoom(roomId: string) {
+    const socketIds = Array.from(this.#gameNs.adapter.rooms.get(roomId) || [])
+    return socketIds
+      .map((socketId) => this.#getSocketById(socketId))
+      .filter((socket) => !!socket) as Socket[]
+  }
+
+  #getUserIdsInGameRoom(roomId: string) {
+    return this.#getSocketsInGameRoom(roomId)
+      .map((socket) => socket?.data.userId as number)
+      .filter((userId) => !!userId) as number[]
+  }
+
+  async #tryCleanupWaitingRoomIfAllOffline(roomId: string) {
+    // waiting-room 的 roomId 是客户端房间 id（数字字符串）
+    const roomIdNumber = Number(roomId)
+    if (!roomIdNumber) return
+
+    // 还有连接在 waiting-room，说明仍有人在线
+    const sockets = this.#getSocketsInWaitingRoom(roomId)
+    if (sockets.length > 0) return
+
+    // 仅当房间处于 waiting（大厅等待）状态时才允许自动清理：
+    // - entering / between_hands / in_hand：即使 waiting-room 无人在线，也不应删除（客户端会转到 /game）
+    const info = await roomModel.findUnique({
+      where: { id: roomIdNumber },
+      select: { deletedAt: true, gameStatus: true }
+    })
+    if (!info || info.deletedAt) return
+    if (info.gameStatus !== 'waiting') return
+
+    // 若已经有游戏实例，则由 /game 的清理逻辑负责
+    if (hasGame(roomId)) return
+
+    try {
+      await roomModel.update({
+        where: { id: roomIdNumber },
+        data: { deletedAt: new Date() }
+      })
+      logger.info(
+        `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`
+      )
+    } catch (e) {
+      // 房间可能已被删除/不存在，忽略即可
+      logger.error('[waiting-room-cleanup] failed', e)
+    }
   }
 
   /**
    * 仅当 channel 为游戏房间（gameCenter 中存在）时：标记玩家在线并广播
    */
   #handleGameRoomConnect(channel: string, userId: number) {
-    const texas = rooms.get(channel)
+    const texas = getGame(channel)
     const player = texas?.room.getPlayerById(userId)
     if (player && player.onlineStatus !== 'online') {
       player.onlineStatus = 'online'
@@ -244,46 +315,57 @@ class SocketServer {
    * 仅当 channel 为游戏房间时：广播玩家离线并更新 Texas 内状态
    */
   #handleGameRoomDisconnect(channel: string, userId: number) {
-    if (!rooms.has(channel)) return
+    if (!hasGame(channel)) return
     this.broadcast(channel, {
       type: 'player-status-change',
       data: { user: { id: userId }, status: 'offline' as OnlineStatus }
     })
-    const texas = rooms.get(channel)
+    const texas = getGame(channel)
     const player = texas?.room.getPlayerById(userId)
     if (player) player.onlineStatus = 'offline'
+
+    void this.#tryCleanupRoomIfAllOffline(channel)
   }
 
-  /**
-   * @description 通过socketId获取对应的socket实例
-   * @param socketId
-   * @returns
-   */
-  #getSocketById(socketId: string) {
-    return this.#io.sockets.sockets.get(socketId) as Socket | undefined
-  }
+  async #tryCleanupRoomIfAllOffline(roomId: string) {
+    const texas = getGame(roomId)
+    if (!texas) return
 
-  /**
-   * @description 获取房间内的所有socket实例
-   * @param roomId
-   * @returns
-   */
-  #getSocketsInRoom(roomId: string) {
-    const socketIds = Array.from(this.#gameNs.adapter.rooms.get(roomId) || [])
-    return socketIds
-      .map((socketId) => this.#getSocketById(socketId))
-      .filter((socket) => !!socket) as Socket[]
-  }
+    const players = texas.room.getAllPlayers()
+    if (players.length === 0) {
+      const roomIdNumber = Number(roomId)
+      if (roomIdNumber) {
+        try {
+          cancelNextHandCountdown(roomIdNumber)
+          unregisterNextHandHooks(roomIdNumber)
+        } catch {
+          // ignore
+        }
+      }
+      destroyGame(roomId)
+      // 游戏实例已清除后，顺手尝试清理 waiting-room（受 gameStatus 限制，不会误删 entering/in_game）
+      await this.#tryCleanupWaitingRoomIfAllOffline(roomId)
+      return
+    }
 
-  /**
-   * @description 获取指定room下的所有用户id
-   * @param roomId
-   * @returns
-   */
-  #getUserIdsInRoom(roomId: string) {
-    return this.#getSocketsInRoom(roomId)
-      .map((socket) => socket?.data.userId as number)
-      .filter((userId) => !!userId) as number[]
+    const allOffline = players.every((p) => p.onlineStatus === 'offline')
+    if (!allOffline) return
+
+    // 所有人都离线：清理内存对局实例（含下一手倒计时相关状态）
+    const roomIdNumber = Number(roomId)
+    if (roomIdNumber) {
+      try {
+        cancelNextHandCountdown(roomIdNumber)
+        unregisterNextHandHooks(roomIdNumber)
+      } catch {
+        // ignore
+      }
+    }
+    destroyGame(roomId)
+    logger.info(`[room-cleanup] all offline, removed room ${roomId}`)
+
+    // 清除游戏后，若房间处于 waiting 且 waiting-room 也无人在线，则软删房间记录
+    await this.#tryCleanupWaitingRoomIfAllOffline(roomId)
   }
 
   /**
@@ -291,7 +373,7 @@ class SocketServer {
    */
   broadcast(roomId: string, data: Parameters<Socket['send']>[0]) {
     logger.info(
-      `broadcast, ${this.#getUserIdsInRoom(roomId)}, data: ${JSON.stringify(
+      `broadcast, ${this.#getUserIdsInGameRoom(roomId)}, data: ${JSON.stringify(
         data
       )}`
     )
@@ -307,11 +389,11 @@ class SocketServer {
     data: Parameters<Socket['send']>[0]
   ) {
     logger.info(
-      `broadcastExcept, ${this.#getUserIdsInRoom(roomId).filter(
+      `broadcastExcept, ${this.#getUserIdsInGameRoom(roomId).filter(
         (id) => id !== userId
       )}, data: ${JSON.stringify(data)}`
     )
-    const sockets = this.#getSocketsInRoom(roomId)
+    const sockets = this.#getSocketsInGameRoom(roomId)
     const except = sockets.find((socket) => socket.data.userId === userId)
     except?.to(roomId).emit('message', data)
   }
@@ -323,7 +405,6 @@ class SocketServer {
     logger.info(`broadcastTo, ${userId}, data: ${JSON.stringify(data)}`)
     const socketId = this.#userIdToSocketIdMap.get(userId)
     if (!socketId) throw new Error('client does not exist')
-
     this.#io.to(socketId).emit('message', data)
   }
 
@@ -334,19 +415,14 @@ class SocketServer {
     roomId: string,
     callback: (userId: number) => Parameters<Socket['send']>[0]
   ) {
-    logger.info(`broadcastEach, ${this.#getUserIdsInRoom(roomId)}`)
-
-    this.#getSocketsInRoom(roomId).forEach((socket) => {
+    logger.info(`broadcastEach, ${this.#getUserIdsInGameRoom(roomId)}`)
+    this.#getSocketsInGameRoom(roomId).forEach((socket) => {
       const userId = socket.data.userId
       if (!userId) throw new Error('userId doest not exist on socket.data')
-
       this.#io.to(socket.id).emit('message', callback(userId))
     })
   }
 
-  /**
-   * @description 移除ws客户端
-   */
   remove(roomId: string, userId: number) {
     const socketId = this.#userIdToSocketIdMap.get(userId)
     if (!socketId) return
@@ -427,11 +503,8 @@ class SocketServer {
     else this.#gameRoomConnectWaiters.set(roomId, remaining)
   }
 
-  /**
-   * 获取 /game namespace 下某个 roomId 已连接的 userId 列表
-   */
   getConnectedGameUserIds(roomId: string): number[] {
-    return this.#getUserIdsInRoom(roomId)
+    return this.#getUserIdsInGameRoom(roomId)
   }
 
   /**

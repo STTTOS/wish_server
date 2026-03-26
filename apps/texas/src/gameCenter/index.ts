@@ -1,26 +1,22 @@
 import { Texas } from 'texas-poker-core'
 
-// roomId => Texas instance
+// roomId(string) => Texas instance
 const rooms = new Map<string, Texas>([])
-// room(Set(user1, user2))
-// const userIdInRoomMap = new Map<string, Set<number>>()
-// userId => roomId
-const userIdToRoomMap = new Map<number, string>()
-export function createRoom(roomId: string, userId: number, texas: Texas) {
-  rooms.set(roomId, texas)
 
-  // userIdInRoomMap.set(roomId, new Set([userId]))
-  userIdToRoomMap.set(userId, roomId)
+export function getGame(roomId: string) {
+  return rooms.get(roomId)
 }
-export function joinRoom(roomId: string, userId: number) {
-  // userIdInRoomMap.set(roomId, userIdInRoomMap.get(roomId)!.add(userId))
-  userIdToRoomMap.set(userId, roomId)
+
+export function hasGame(roomId: string) {
+  return rooms.has(roomId)
 }
-export function leaveRoom(roomId: string, userId: number) {
-  // userIdInRoomMap.get(roomId)!.delete(userId)
-  userIdToRoomMap.delete(userId)
+export function createGame(roomId: string, texas: Texas) {
+  rooms.set(roomId, texas)
 }
-export function getRoomId(userId: number) {
-  return userIdToRoomMap.get(userId)
+
+export function destroyGame(roomId: string) {
+  const texas = rooms.get(roomId)
+  if (texas) texas.reset()
+  rooms.delete(roomId)
 }
 export { rooms }
