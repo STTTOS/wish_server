@@ -17,6 +17,10 @@ import {
   MIN_THINKING_TIME,
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
+import {
+  cancelNextHandCountdown,
+  maybeStartNextHandCountdown
+} from '../../gameCenter/nextHandCountdown'
 
 const roomApi = combinePath(apiPrefixWeb)('/room')
 
@@ -565,6 +569,15 @@ router.post(roomApi('/join/:roomId'), async (ctx) => {
 
   const player = texas.createPlayer(userInfo)
   texas.room.join(player)
+  // 下一手倒计时场景：当房间处于 idle 时，默认让新加入玩家入座，便于凑齐人数自动开下一手
+  if ((texas.controller.status as unknown as string) === 'idle') {
+    try {
+      texas.room.seat(player)
+    } catch {
+      // ignore
+    }
+    maybeStartNextHandCountdown(roomId)
+  }
   if (texas.room.getPlayerSeatStatus(player) === 'on-set') {
     broadCastPlayerOnSeat(roomId, player, userId)
   } else {
@@ -591,6 +604,10 @@ router.post(roomApi('/quit/:roomId'), async (ctx) => {
   }
 
   const ownerId = texas.room.removeById(userId)
+  // 若正在倒计时且人数不够，取消下一手倒计时
+  if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
+    cancelNextHandCountdown(roomId)
+  }
   leaveRoom(roomId, userId)
   if (ownerId) {
     // await room.update({

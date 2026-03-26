@@ -22,6 +22,11 @@ import {
   matchStageTimeRecord
 } from '../../models'
 import {
+  registerNextHandHooks,
+  cancelNextHandCountdown,
+  maybeStartNextHandCountdown
+} from '../../gameCenter/nextHandCountdown'
+import {
   MIN_BB,
   MAX_PLAYERS_COUNT,
   MIN_THINKING_TIME,
@@ -147,11 +152,12 @@ router.post(gameClientApi('/entring'), async (ctx) => {
           startedAt: new Date()
         }
       })
+      let currentMatchId = matchInfo.id
 
       // 通知等待房间：已进入游戏（可跳转到 /game 页面）
       const enteredMsg: WsMessage<'game-entered'> = {
         type: 'game-entered',
-        data: { roomId, matchId: matchInfo.id }
+        data: { roomId, matchId: currentMatchId }
       }
       ws.broadcastWaitingRoom(roomId, enteredMsg)
 
@@ -166,7 +172,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
       texas.onError(async (error) => {
         try {
           await matchError.create({
-            data: { matchId: matchInfo.id, info: JSON.stringify(error) }
+            data: { matchId: currentMatchId, info: JSON.stringify(error) }
           })
         } catch (e) {
           logger.error('write matchError failed', e)
@@ -184,7 +190,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
         const msg: WsMessage<'player-action-required'> = {
           type: 'player-action-required',
           data: {
-            matchId: matchInfo.id,
+            matchId: currentMatchId,
             userId,
             serverNow,
             deadlineAt,
@@ -207,14 +213,14 @@ router.post(gameClientApi('/entring'), async (ctx) => {
             actionType,
             amount,
             stage: texas.controller.stage,
-            matchId: matchInfo.id
+            matchId: currentMatchId
           }
         })
 
         const msg: WsMessage<'player-action-taken'> = {
           type: 'player-action-taken',
           data: {
-            matchId: matchInfo.id,
+            matchId: currentMatchId,
             userId: player.getUserInfo().id,
             actionType,
             amount,
@@ -232,19 +238,19 @@ router.post(gameClientApi('/entring'), async (ctx) => {
         await matchStageTimeRecord.update({
           where: {
             matchId_stage: {
-              matchId: matchInfo.id,
+              matchId: currentMatchId,
               stage: lastStage
             }
           },
           data: { endAt: new Date() }
         })
         await matchStageTimeRecord.create({
-          data: { matchId: matchInfo.id, stage }
+          data: { matchId: currentMatchId, stage }
         })
 
         const msg: WsMessage<'game-stage-changed'> = {
           type: 'game-stage-changed',
-          data: { matchId: matchInfo.id, stage, pokesToReveal: commonPokes }
+          data: { matchId: currentMatchId, stage, pokesToReveal: commonPokes }
         }
         ws.broadcast(roomKey, msg)
       })
@@ -252,13 +258,13 @@ router.post(gameClientApi('/entring'), async (ctx) => {
       // 小盲/大盲已下，hand 正式开始（用于创建 pre_flop 计时记录 + 广播）
       texas.onGameStart(async () => {
         await matchStageTimeRecord.create({
-          data: { matchId: matchInfo.id, stage: 'pre_flop' }
+          data: { matchId: currentMatchId, stage: 'pre_flop' }
         })
 
         const msg: WsMessage<'game-start'> = {
           type: 'game-start',
           data: {
-            matchId: matchInfo.id,
+            matchId: currentMatchId,
             stage: texas.controller.stage,
             pool: texas.pool.totalAmount,
             defaultBets: texas.getDefaultBet().map((b) => ({
@@ -269,6 +275,28 @@ router.post(gameClientApi('/entring'), async (ctx) => {
           }
         }
         ws.broadcast(roomKey, msg)
+      })
+
+      registerNextHandHooks(roomKey, {
+        canStart: () =>
+          (texas.controller.status as unknown as string) === 'idle' &&
+          texas.room.getPlayersBySeatStatus('on-set').length >= 2,
+        onLock: async () => {
+          const next = await match.create({
+            data: {
+              roomId,
+              lowestBetAmount: roomInfo.lowestBetAmount,
+              startedAt: new Date()
+            }
+          })
+          currentMatchId = next.id
+          texas.resetBeforeGameStart()
+          texas.setPlayerRoles()
+        },
+        onDeal: () => texas.dealCards(),
+        onStart: async () => {
+          await texas.controller.start()
+        }
       })
 
       // 游戏结束（结算、落库、广播）
@@ -299,7 +327,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
 
             const commonPokes = texas.dealer.deck.getPokes().commonPokes
             await match.update({
-              where: { id: matchInfo.id },
+              where: { id: currentMatchId },
               data: {
                 endedAt: new Date(),
                 endStage: params.currentStage as any,
@@ -321,7 +349,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
             const msg: WsMessage<'game-end'> = {
               type: 'game-end',
               data: {
-                matchId: matchInfo.id,
+                matchId: currentMatchId,
                 settleList: settleList as any,
                 pokesToReveal: commonPokes,
                 endStage: params.currentStage as any,
@@ -335,6 +363,16 @@ router.post(gameClientApi('/entring'), async (ctx) => {
               }
             }
             ws.broadcast(roomKey, msg)
+
+            if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
+              cancelNextHandCountdown(roomKey)
+              await roomModel.update({
+                where: { id: roomId },
+                data: { gameStatus: 'waiting' } as unknown as any
+              })
+            } else {
+              maybeStartNextHandCountdown(roomKey)
+            }
           } catch (e) {
             logger.error('onGameEnd handler failed', e)
           }
@@ -349,7 +387,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
         const rolesMsg: WsMessage<'player-roles-assigned'> = {
           type: 'player-roles-assigned',
           data: {
-            matchId: matchInfo.id,
+            matchId: currentMatchId,
             roles: players.map((p) => ({
               userId: p.userId,
               role: p.role as any
@@ -365,7 +403,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
           const msg: WsMessage<'player-hand-dealt'> = {
             type: 'player-hand-dealt',
             data: {
-              matchId: matchInfo.id,
+              matchId: currentMatchId,
               roomId,
               handPokes: p.handPokes
             }
