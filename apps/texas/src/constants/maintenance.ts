@@ -1,5 +1,6 @@
 export const MAINTENANCE_CODE = 2400
-export const MAINTENANCE_MESSAGE = '系统维护中'
+export const MAINTENANCE_MESSAGE =
+  '游戏正在火速升级维护, 即将为你带来更好的体验, 具体消息请关注公告'
 
 export const MAINTENANCE_KEY = 'texas:system:maintenance:enabled'
 
