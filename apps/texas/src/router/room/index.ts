@@ -6,9 +6,9 @@ import router from '../instance'
 import { ws } from '../../server'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
-import { room, user, roomMember } from '../../models'
 import { generateRoomCode } from '../../utils/roomCode'
 import { timeFormat, apiPrefixClient } from '../../config'
+import prisma, { room, user, roomMember } from '../../models'
 import {
   MIN_BB,
   MIN_THINKING_TIME,
@@ -179,6 +179,10 @@ router.post(roomApiClient('/join'), async (ctx) => {
     response.error(ctx, 2000, '房间不存在或房间代码错误')
     return
   }
+  if (roomInfo.gameStatus !== 'waiting') {
+    response.error(ctx, 2100, '仅等待房间状态支持加入房间')
+    return
+  }
 
   const alreadyIn = roomInfo.members.some((m) => m.userId === userId)
   if (alreadyIn) {
@@ -208,9 +212,57 @@ router.post(roomApiClient('/join'), async (ctx) => {
     return
   }
 
-  await roomMember.create({
-    data: { roomId: roomInfo.id, userId }
-  })
+  let memberCountAfterJoin = 0
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomInfo.id} FOR UPDATE`
+
+      const latestRoom = await tx.room.findUnique({
+        where: { id: roomInfo.id },
+        select: { id: true, deletedAt: true, gameStatus: true }
+      })
+      if (!latestRoom || latestRoom.deletedAt) {
+        throw new Error('房间不存在或房间代码错误')
+      }
+      if (latestRoom.gameStatus !== 'waiting') {
+        throw new Error('仅等待房间状态支持加入房间')
+      }
+
+      const memberCount = await tx.roomMember.count({
+        where: { roomId: roomInfo.id }
+      })
+      if (memberCount >= CLIENT_ROOM_MAX_PLAYERS) {
+        throw new Error('房间已满')
+      }
+
+      const alreadyInRoom = await tx.roomMember.findUnique({
+        where: { roomId_userId: { roomId: roomInfo.id, userId } } // eslint-disable-line camelcase
+      })
+      if (alreadyInRoom) throw new Error('你已经在该房间中')
+
+      const inOtherRoomLatest = await tx.roomMember.findFirst({
+        where: {
+          userId,
+          room: { id: { not: roomInfo.id }, deletedAt: null }
+        }
+      })
+      if (inOtherRoomLatest) {
+        throw new Error('你已在其他房间中，请先退出后再加入')
+      }
+
+      await tx.roomMember.create({
+        data: { roomId: roomInfo.id, userId }
+      })
+      memberCountAfterJoin = memberCount + 1
+    })
+  } catch (e) {
+    response.error(
+      ctx,
+      2000,
+      e instanceof Error ? e.message : '加入房间失败，请稍后重试'
+    )
+    return
+  }
 
   const memberPayload = {
     userId: joinUser.id,
@@ -226,16 +278,11 @@ router.post(roomApiClient('/join'), async (ctx) => {
   })
 
   // 更新房间列表中的实时人数
-  const memberCount = await roomMember.count({
-    where: {
-      roomId: roomInfo.id
-    }
-  })
   ws.broadcastRoomList({
     type: 'client-room-member-count-changed',
     data: {
       roomId: roomInfo.id,
-      memberCount
+      memberCount: memberCountAfterJoin
     }
   })
 
@@ -263,79 +310,77 @@ router.post(roomApiClient('/quit'), async (ctx) => {
 
   const roomId = roomInfo.id
   const compoundKey = { roomId, userId }
-  // Prisma 复合唯一键名为 roomId_userId，非 camelCase
-  const member = await roomMember.findUnique({
-    where: { roomId_userId: compoundKey }, // eslint-disable-line camelcase
-    include: { room: true }
-  })
-  if (!member) {
-    response.error(ctx, 2000, '你不在该房间中')
-    return
-  }
-  if (member.room.gameStatus !== 'waiting') {
-    response.error(ctx, 2100, '仅等待房间状态支持退出房间')
-    return
-  }
+  let restCount = 0
+  let deletedRoom = false
+  let newOwnerId: number | null = null
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomId} FOR UPDATE`
 
-  // 当前房间总成员数（退出前）
-  const memberCount = await roomMember.count({
-    where: {
-      roomId
-    }
-  })
+      const latestRoom = await tx.room.findUnique({
+        where: { id: roomId },
+        select: { ownerId: true, gameStatus: true, deletedAt: true }
+      })
+      if (!latestRoom || latestRoom.deletedAt) throw new Error('房间不存在')
+      if (latestRoom.gameStatus !== 'waiting') {
+        throw new Error('仅等待房间状态支持退出房间')
+      }
 
-  // 如果退出的是房主，且房间内还有其他成员，则将房主移交给最早加入的其他成员
-  if (member.room.ownerId === userId && memberCount > 1) {
-    const nextOwnerMember = await roomMember.findFirst({
-      where: {
-        roomId,
-        userId: {
-          not: userId
+      const member = await tx.roomMember.findUnique({
+        where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
+      })
+      if (!member) throw new Error('你不在该房间中')
+
+      const memberCount = await tx.roomMember.count({ where: { roomId } })
+      if (latestRoom.ownerId === userId && memberCount > 1) {
+        const nextOwnerMember = await tx.roomMember.findFirst({
+          where: {
+            roomId,
+            userId: { not: userId }
+          },
+          orderBy: { joinedAt: 'asc' }
+        })
+        if (nextOwnerMember) {
+          await tx.room.update({
+            where: { id: roomId },
+            data: { ownerId: nextOwnerMember.userId }
+          })
+          newOwnerId = nextOwnerMember.userId
         }
-      },
-      orderBy: {
-        joinedAt: 'asc'
+      }
+
+      await tx.roomMember.delete({
+        where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
+      })
+      restCount = memberCount - 1
+      if (restCount === 0) {
+        await tx.room.update({
+          where: { id: roomId },
+          data: { deletedAt: new Date() }
+        })
+        deletedRoom = true
       }
     })
-
-    if (nextOwnerMember) {
-      await room.update({
-        where: { id: roomId },
-        data: {
-          ownerId: nextOwnerMember.userId
-        }
-      })
-
-      // 通知房间内所有客户端：房主变更
-      ws.broadcastWaitingRoom(roomId, {
-        type: 'client-room-owner-changed',
-        data: {
-          oldOwnerId: userId,
-          newOwnerId: nextOwnerMember.userId
-        }
-      })
-    }
+  } catch (e) {
+    response.error(ctx, 2000, e instanceof Error ? e.message : '退出房间失败')
+    return
   }
 
-  await roomMember.delete({
-    where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
-  })
+  if (newOwnerId != null) {
+    ws.broadcastWaitingRoom(roomId, {
+      type: 'client-room-owner-changed',
+      data: {
+        oldOwnerId: userId,
+        newOwnerId
+      }
+    })
+  }
+
   ws.broadcastWaitingRoom(roomId, {
     type: 'client-room-member-left',
     data: { userId }
   })
-
-  // 如果这是房间内最后一名玩家，软删除房间
-  const restCount = memberCount - 1
-  if (restCount === 0) {
-    await room.update({
-      where: { id: roomId },
-      data: {
-        deletedAt: new Date()
-      }
-    })
-
-    // 通知房间列表订阅者：房间被删除，从列表中移除
+  if (deletedRoom) {
     ws.broadcastRoomList({
       type: 'client-room-deleted',
       data: { roomId }
@@ -393,34 +438,44 @@ router.post(roomApiClient('/kick'), async (ctx) => {
   }
 
   const compoundKey = { roomId, userId: targetUserId }
-  const targetMember = await roomMember.findUnique({
-    where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
-  })
-  if (!targetMember) {
-    response.error(ctx, 2000, '该用户不在房间中')
+  let memberCountAfterKick = 0
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomId} FOR UPDATE`
+      const latestRoom = await tx.room.findUnique({
+        where: { id: roomId },
+        select: { ownerId: true, gameStatus: true, deletedAt: true }
+      })
+      if (!latestRoom || latestRoom.deletedAt) throw new Error('房间不存在')
+      if (latestRoom.ownerId !== operatorId) throw new Error('仅房主可以踢人')
+      if (latestRoom.gameStatus !== 'waiting') {
+        throw new Error('仅等待房间状态支持踢人')
+      }
+
+      const targetMember = await tx.roomMember.findUnique({
+        where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
+      })
+      if (!targetMember) throw new Error('该用户不在房间中')
+
+      await tx.roomMember.delete({
+        where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
+      })
+      memberCountAfterKick = await tx.roomMember.count({ where: { roomId } })
+    })
+  } catch (e) {
+    response.error(ctx, 2000, e instanceof Error ? e.message : '踢人失败')
     return
   }
-
-  await roomMember.delete({
-    where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
-  })
 
   ws.broadcastWaitingRoom(roomId, {
     type: 'client-room-member-left',
     data: { userId: targetUserId }
   })
-
-  // 更新房间列表中的实时人数
-  const memberCount = await roomMember.count({
-    where: {
-      roomId
-    }
-  })
   ws.broadcastRoomList({
     type: 'client-room-member-count-changed',
     data: {
       roomId,
-      memberCount
+      memberCount: memberCountAfterKick
     }
   })
 
