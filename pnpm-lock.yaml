@@ -72,8 +72,8 @@ importers:
         specifier: ^4.8.1
         version: 4.8.1
       texas-poker-core:
-        specifier: 1.4.1
-        version: 1.4.1
+        specifier: 1.4.2
+        version: 1.4.2
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -170,6 +170,10 @@ importers:
         version: link:../../packages/tsconfig
 
   apps/texas:
+    dependencies:
+      redis:
+        specifier: ^5.11.0
+        version: 5.11.0
     devDependencies:
       eslint-config-custom:
         specifier: workspace:*
@@ -2334,8 +2338,8 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
-  texas-poker-core@1.4.1:
-    resolution: {integrity: sha512-9ElerS0jFO1AnWg+dsuOXek1jF66+AUVJ9RhOIhCwElQixp2fRFKsS+pdTv5dN4ALzW+bngrD/6JI02LToJCRQ==}
+  texas-poker-core@1.4.2:
+    resolution: {integrity: sha512-GHYsHJGQEmPjnSQLyMrMjfY6a5BTQLK5QAVfm3PvKkW3ireUqAhlVK+BZAU5FzgYJV95lwcwT3lfZ2Sem1g+Mw==}
 
   text-extensions@2.4.0:
     resolution: {integrity: sha512-te/NtwBwfiNRLf9Ijqx3T0nlqZiQ2XrrtBvu+cLL8ZRrGkO0NHTug8MYFKyoSrv/sHTaSKfilUkizV6XhxMJ3g==}
@@ -4823,7 +4827,7 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  texas-poker-core@1.4.1:
+  texas-poker-core@1.4.2:
     dependencies:
       core-js: 3.42.0
       ramda: 0.30.1
