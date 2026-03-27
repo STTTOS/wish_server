@@ -29,7 +29,7 @@ module.exports = {
     "no-lonely-if": "error",
     "no-multiple-empty-lines": ["error", { max: 1 }],
     "no-trailing-spaces": "error",
-    camelcase: "error",
+    camelcase: "off",
     "no-dupe-keys": "error",
     "no-nested-ternary": "error",
     "no-param-reassign": "error",
