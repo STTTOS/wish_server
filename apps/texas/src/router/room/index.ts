@@ -366,6 +366,9 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     return
   }
 
+  // 立刻取消该用户对 waiting-room 房间的订阅，避免继续收到房间广播
+  ws.removeUserFromWaitingRoom(roomId, userId)
+
   if (newOwnerId != null) {
     ws.broadcastWaitingRoom(roomId, {
       type: 'client-room-owner-changed',
@@ -463,9 +466,14 @@ router.post(roomApiClient('/kick'), async (ctx) => {
       memberCountAfterKick = await tx.roomMember.count({ where: { roomId } })
     })
   } catch (e) {
-    response.error(ctx, 2000, e instanceof Error ? e.message : '踢人失败')
+    const errorMessage = e instanceof Error ? e.message : '踢人失败'
+    const errorCode = errorMessage === '仅房主可以踢人' ? 403 : 2000
+    response.error(ctx, errorCode, errorMessage)
     return
   }
+
+  // 立刻取消被踢用户对 waiting-room 房间的订阅，避免继续收到房间广播
+  ws.removeUserFromWaitingRoom(roomId, targetUserId)
 
   ws.broadcastWaitingRoom(roomId, {
     type: 'client-room-member-left',

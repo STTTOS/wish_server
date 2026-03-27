@@ -362,6 +362,24 @@ class SocketServer {
     this.#waitingRoomNs.to(String(roomId)).emit('message', data)
   }
 
+  /**
+   * 将指定 user 从某个等待房间（/waiting-room namespace 的 Socket.IO room）移除。
+   *
+   * 说明：waiting-room 连接不走 #userIdToSocketIdMap（该 map 仅用于 /game），
+   * 因此这里通过 room 内在线 socket 反查并 leave(roomKey)。
+   */
+  removeUserFromWaitingRoom(roomId: number, userId: number) {
+    const roomKey = String(roomId)
+    const sockets = this.#getSocketsInWaitingRoom(roomKey)
+    const targets = sockets.filter((s) => (s.data.userId as number) === userId)
+    if (targets.length === 0) return
+
+    logger.info(
+      `[waiting-room] removeUserFromWaitingRoom, roomId=${roomId}, userId=${userId}, sockets=${targets.length}`
+    )
+    targets.forEach((socket) => socket.leave(roomKey))
+  }
+
   trackGameEntering(roomIdNumber: number, expectedUserIds: number[]) {
     const roomKey = this.#gameEnteringTrackers.set(
       roomIdNumber,
