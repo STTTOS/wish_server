@@ -175,7 +175,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
       members: true
     }
   })
-  if (!roomInfo) {
+  if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在或房间代码错误')
     return
   }
@@ -270,6 +270,10 @@ router.post(roomApiClient('/quit'), async (ctx) => {
   })
   if (!member) {
     response.error(ctx, 2000, '你不在该房间中')
+    return
+  }
+  if (member.room.gameStatus !== 'waiting') {
+    response.error(ctx, 2100, '仅等待房间状态支持退出房间')
     return
   }
 
@@ -372,6 +376,10 @@ router.post(roomApiClient('/kick'), async (ctx) => {
   })
   if (!roomInfo || roomInfo.deletedAt) {
     response.error(ctx, 2000, '房间不存在')
+    return
+  }
+  if (roomInfo.gameStatus !== 'waiting') {
+    response.error(ctx, 2100, '仅等待房间状态支持踢人')
     return
   }
   const roomId = roomInfo.id
