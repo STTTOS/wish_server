@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit --skipLibCheck",
+    "test": "node --test -r ts-node/register \"src/**/*.test.ts\"",
     "dev": "npm run db:sync && nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
     "lint": "eslint --cache --ext .ts ./src",

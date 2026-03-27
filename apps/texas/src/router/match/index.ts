@@ -4,7 +4,6 @@ import dayjs from 'dayjs'
 
 import './web'
 import router from '../instance'
-import { getGame } from '../../gameCenter'
 import combinePath from '../../utils/combinePath'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
@@ -14,6 +13,10 @@ import {
   userRoomStat,
   playerMatchRecord
 } from '../../models'
+import {
+  gameRuntimeRegistry,
+  getCurrentMatchIdWithFallback
+} from '../game/services/runtimeKit'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 /**
@@ -352,20 +355,13 @@ router.post(matchApi('/currentState'), async (ctx) => {
     return
   }
 
-  const texas = getGame(String(roomId))
+  const texas = gameRuntimeRegistry.getTexas(String(roomId))
   if (!texas) {
     response.error(ctx, 2000, '对局不存在')
     return
   }
 
-  const latestMatch = await match.findFirst({
-    where: {
-      roomId,
-      endedAt: null
-    },
-    select: { id: true },
-    orderBy: { startedAt: 'desc' }
-  })
+  const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
 
   const playersOnSeat = texas.room
     .getPlayersBySeatStatus('on-set')
@@ -390,7 +386,7 @@ router.post(matchApi('/currentState'), async (ctx) => {
   }
 
   response.success(ctx, {
-    matchId: latestMatch?.id ?? null,
+    matchId: currentMatchId,
     roomId: Number(roomId),
     status: texas.controller.status,
     stage: texas.controller.stage,

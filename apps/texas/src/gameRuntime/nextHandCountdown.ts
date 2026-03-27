@@ -1,8 +1,14 @@
 import type { WsMessage } from '../ws/ws-event-types'
 
 import { ws } from '../server'
-import { getGame } from './index'
+import { logger } from '../logger'
+import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
 
+/**
+ * 管理“对局间隔”倒计时：
+ * - 广播开始/取消事件
+ * - 按 lock -> deal -> start 三段推进下一手
+ */
 type CountdownState = {
   roomId: number
   lockTimer: NodeJS.Timeout
@@ -15,7 +21,9 @@ type CountdownState = {
 const countdowns = new Map<number, CountdownState>()
 
 const LOCK_DELAY_MS = 3000
+// 房间锁定后等待发牌的时间
 const DEAL_AFTER_LOCK_MS = 2000
+// 发牌后多久开始游戏
 const START_AFTER_DEAL_MS = 2000
 
 type NextHandHooks = {
@@ -45,6 +53,7 @@ export function cancelNextHandCountdown(roomId: number) {
   countdowns.delete(roomId)
 
   broadcastCancelled(roomId)
+  logger.info(`[next-hand-countdown] cancelled, roomId=${roomId}`)
 }
 
 export function registerNextHandHooks(roomId: number, hooks: NextHandHooks) {
@@ -56,22 +65,45 @@ export function unregisterNextHandHooks(roomId: number) {
 }
 
 export function maybeStartNextHandCountdown(roomId: number) {
-  if (countdowns.has(roomId)) return
+  if (countdowns.has(roomId)) {
+    logger.info(
+      `[next-hand-countdown] skip start, already running, roomId=${roomId}`
+    )
+    return
+  }
 
-  const texas = getGame(String(roomId))
-  if (!texas) return
+  const texas = gameRuntimeRegistry.getTexas(String(roomId))
+  if (!texas) {
+    logger.info(
+      `[next-hand-countdown] skip start, runtime missing, roomId=${roomId}`
+    )
+    return
+  }
 
   // 仅在 idle（上一手结束）时允许进入下一手倒计时
-  if ((texas.controller.status as unknown as string) !== 'idle') return
+  if ((texas.controller.status as unknown as string) !== 'idle') {
+    logger.info(
+      `[next-hand-countdown] skip start, status=${String(
+        texas.controller.status
+      )}, roomId=${roomId}`
+    )
+    return
+  }
 
   const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
   if (seatedCount < 2) {
     broadcastCancelled(roomId)
+    logger.info(
+      `[next-hand-countdown] skip start, seatedCount=${seatedCount}, roomId=${roomId}`
+    )
     return
   }
 
   const hooks = hooksMap.get(roomId)
-  if (!hooks) return
+  if (!hooks) {
+    logger.error(`[next-hand-countdown] hooks missing, roomId=${roomId}`)
+    return
+  }
 
   const serverNow = Date.now()
   const lockAt = serverNow + LOCK_DELAY_MS
@@ -87,12 +119,17 @@ export function maybeStartNextHandCountdown(roomId: number) {
     }
   }
   ws.broadcast(String(roomId), startedMsg)
+  logger.info(
+    `[next-hand-countdown] started, roomId=${roomId}, lockAt=${lockAt}, endsAt=${endsAt}`
+  )
 
   const lockTimer = setTimeout(async () => {
     try {
       if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
       await hooks.onLock()
-    } catch {
+      logger.info(`[next-hand-countdown] lock done, roomId=${roomId}`)
+    } catch (e) {
+      logger.error(`[next-hand-countdown] lock failed, roomId=${roomId}`, e)
       cancelNextHandCountdown(roomId)
     }
   }, LOCK_DELAY_MS)
@@ -101,7 +138,9 @@ export function maybeStartNextHandCountdown(roomId: number) {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
     try {
       await hooks.onDeal()
-    } catch {
+      logger.info(`[next-hand-countdown] deal done, roomId=${roomId}`)
+    } catch (e) {
+      logger.error(`[next-hand-countdown] deal failed, roomId=${roomId}`, e)
       cancelNextHandCountdown(roomId)
     }
   }, LOCK_DELAY_MS + DEAL_AFTER_LOCK_MS)
@@ -110,6 +149,10 @@ export function maybeStartNextHandCountdown(roomId: number) {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
     try {
       await hooks.onStart()
+      logger.info(`[next-hand-countdown] start done, roomId=${roomId}`)
+    } catch (e) {
+      logger.error(`[next-hand-countdown] start failed, roomId=${roomId}`, e)
+      cancelNextHandCountdown(roomId)
     } finally {
       countdowns.delete(roomId)
     }

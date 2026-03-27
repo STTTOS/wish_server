@@ -1,10 +1,10 @@
 import { ActionType } from 'texas-poker-core'
 
 import router from '../instance'
-import { getGame } from '../../gameCenter'
 import { apiPrefixWeb } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
+import { gameRuntimeRegistry } from '../game/services/runtimeKit'
 
 const toolsApi = combinePath(apiPrefixWeb)('/action')
 
@@ -25,7 +25,7 @@ router.post(toolsApi('/take'), async (ctx) => {
     return
   }
   const user = ctx.state.user!
-  const texas = getGame(roomId)
+  const texas = gameRuntimeRegistry.getTexas(roomId)
 
   if (!texas) {
     response.error(ctx, 2000, '房间不存在')
