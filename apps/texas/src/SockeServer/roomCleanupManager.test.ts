@@ -4,9 +4,9 @@ import assert from 'node:assert/strict'
 
 import prisma, { room as roomModel } from '../models'
 import { RoomCleanupManager } from './roomCleanupManager'
-import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 
-test('tryCleanupWaitingRoomIfAllOffline soft deletes when all waiting-room sockets offline (members may still exist)', async () => {
+test('tryCleanupWaitingRoomIfAllOffline soft deletes room when all waiting-room sockets offline', async () => {
   const manager = new RoomCleanupManager({
     getWaitingRoomSocketCount: () => 0
   })

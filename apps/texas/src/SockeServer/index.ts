@@ -10,8 +10,9 @@ import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
-import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
+import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
 import {
   SOCKET_IO_PING_TIMEOUT_MS,
   SOCKET_IO_PING_INTERVAL_MS,
@@ -23,7 +24,6 @@ class SocketServer {
   #gameNs: Namespace
   #roomListNs: Namespace
   #waitingRoomNs: Namespace
-  #userIdToSocketIdMap: Map<number, string> = new Map()
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
@@ -51,6 +51,9 @@ class SocketServer {
       getWaitingRoomSocketCount: (roomId) =>
         this.#getSocketsInWaitingRoom(roomId).length
     })
+    setNextHandCountdownBroadcaster((roomId, msg) => {
+      this.broadcastGameRoom(String(roomId), msg)
+    })
 
     this.#setupGameNamespace()
     this.#setupRoomListNamespace()
@@ -59,6 +62,10 @@ class SocketServer {
 
   get io() {
     return this.#io
+  }
+
+  #getGameUserRoomKey(userId: number) {
+    return `game-user:${userId}`
   }
 
   /**
@@ -96,13 +103,12 @@ class SocketServer {
       const userId = Number(query.userId)
       const roomId = Number(query.roomId)
       const roomKey = String(roomId)
+      const userRoomKey = this.#getGameUserRoomKey(userId)
 
       socket.join(roomKey)
+      socket.join(userRoomKey)
       socket.data.userId = userId
       socket.data.roomId = roomId
-
-      // 一个 userId 只保留最后一次游戏连接
-      this.#userIdToSocketIdMap.set(userId, socket.id)
       socket.send({ type: 'initial connect', data: null })
 
       this.#handleGameRoomConnect(roomKey, userId)
@@ -110,7 +116,6 @@ class SocketServer {
       this.#notifyEnteringProgress(roomKey)
 
       const onLeave = () => {
-        this.remove(roomKey, userId)
         this.#handleGameRoomDisconnect(roomKey, userId)
         this.#notifyGameRoomWaiters(roomKey)
         this.#notifyEnteringProgress(roomKey)
@@ -242,8 +247,8 @@ class SocketServer {
     })
   }
 
-  #getSocketById(socketId: string) {
-    return this.#io.sockets.sockets.get(socketId) as Socket | undefined
+  #getSocketByIdInNamespace(namespace: Namespace, socketId: string) {
+    return namespace.sockets.get(socketId) as Socket | undefined
   }
 
   async #guardMaintenance(socket: Socket) {
@@ -263,14 +268,16 @@ class SocketServer {
       this.#waitingRoomNs.adapter.rooms.get(roomId) || []
     )
     return socketIds
-      .map((socketId) => this.#getSocketById(socketId))
+      .map((socketId) =>
+        this.#getSocketByIdInNamespace(this.#waitingRoomNs, socketId)
+      )
       .filter((socket) => !!socket) as Socket[]
   }
 
   #getSocketsInGameRoom(roomId: string) {
     const socketIds = Array.from(this.#gameNs.adapter.rooms.get(roomId) || [])
     return socketIds
-      .map((socketId) => this.#getSocketById(socketId))
+      .map((socketId) => this.#getSocketByIdInNamespace(this.#gameNs, socketId))
       .filter((socket) => !!socket) as Socket[]
   }
 
@@ -288,7 +295,7 @@ class SocketServer {
     const player = texas?.room.getPlayerById(userId)
     if (player && player.onlineStatus !== 'online') {
       player.onlineStatus = 'online'
-      this.broadcast(channel, {
+      this.broadcastGameRoom(channel, {
         type: 'player-status-change',
         data: { user: { id: userId }, status: 'online' as OnlineStatus }
       })
@@ -300,7 +307,7 @@ class SocketServer {
    */
   #handleGameRoomDisconnect(channel: string, userId: number) {
     if (!gameRuntimeRegistry.hasTexas(channel)) return
-    this.broadcast(channel, {
+    this.broadcastGameRoom(channel, {
       type: 'player-status-change',
       data: { user: { id: userId }, status: 'offline' as OnlineStatus }
     })
@@ -312,53 +319,34 @@ class SocketServer {
   }
 
   /**
-   * @description 向所有端广播
+   * @description 向 /game 房间内所有端广播
    */
-  broadcast(roomId: string, data: Parameters<Socket['send']>[0]) {
+  broadcastGameRoom(roomId: string, data: Parameters<Socket['send']>[0]) {
     logger.info(
-      `broadcast, ${this.#getUserIdsInGameRoom(roomId)}, data: ${JSON.stringify(
-        data
-      )}`
+      `broadcastGameRoom, ${this.#getUserIdsInGameRoom(
+        roomId
+      )}, data: ${JSON.stringify(data)}`
     )
     this.#gameNs.to(roomId).emit('message', data)
   }
 
   /**
-   * @description 向除了目标userId的所有端广播
+   * @description 向 /game 指定用户推送消息
    */
-  broadcastExcept(
-    roomId: string,
-    userId: number,
-    data: Parameters<Socket['send']>[0]
-  ) {
-    logger.info(
-      `broadcastExcept, ${this.#getUserIdsInGameRoom(roomId).filter(
-        (id) => id !== userId
-      )}, data: ${JSON.stringify(data)}`
-    )
-    const sockets = this.#getSocketsInGameRoom(roomId)
-    const except = sockets.find((socket) => socket.data.userId === userId)
-    except?.to(roomId).emit('message', data)
+  broadcastGameToUser(userId: number, data: Parameters<Socket['send']>[0]) {
+    logger.info(`broadcastGameToUser, ${userId}, data: ${JSON.stringify(data)}`)
+    const userRoomKey = this.#getGameUserRoomKey(userId)
+    this.#gameNs.to(userRoomKey).emit('message', data)
   }
 
   /**
-   * @description 向指定的端推送消息
+   * @description /game 自定义广播：每个端可收到不同 payload
    */
-  broadcastTo(userId: number, data: Parameters<Socket['send']>[0]) {
-    logger.info(`broadcastTo, ${userId}, data: ${JSON.stringify(data)}`)
-    const socketId = this.#userIdToSocketIdMap.get(userId)
-    if (!socketId) throw new Error('client does not exist')
-    this.#io.to(socketId).emit('message', data)
-  }
-
-  /**
-   * @description 自定义广播方式, 用于向所有端广播时, 每个端的数据有差异时
-   */
-  broadcastEach(
+  broadcastGameEach(
     roomId: string,
     callback: (userId: number) => Parameters<Socket['send']>[0]
   ) {
-    logger.info(`broadcastEach, ${this.#getUserIdsInGameRoom(roomId)}`)
+    logger.info(`broadcastGameEach, ${this.#getUserIdsInGameRoom(roomId)}`)
     this.#getSocketsInGameRoom(roomId).forEach((socket) => {
       const userId = socket.data.userId
       if (!userId) throw new Error('userId doest not exist on socket.data')
@@ -366,14 +354,10 @@ class SocketServer {
     })
   }
 
-  remove(roomId: string, userId: number) {
-    const socketId = this.#userIdToSocketIdMap.get(userId)
-    if (!socketId) return
-
-    const socket = this.#getSocketById(socketId)
-    socket?.leave(roomId)
-    this.#userIdToSocketIdMap.delete(userId)
-  }
+  // remove(roomId: string, userId: number) {
+  //   const userRoomKey = this.#getGameUserRoomKey(userId)
+  //   this.#gameNs.in(userRoomKey).socketsLeave(roomId)
+  // }
 
   /**
    * 房间列表广播（/room-list 命名空间）
@@ -397,8 +381,7 @@ class SocketServer {
   /**
    * 将指定 user 从某个等待房间（/waiting-room namespace 的 Socket.IO room）移除。
    *
-   * 说明：waiting-room 连接不走 #userIdToSocketIdMap（该 map 仅用于 /game），
-   * 因此这里通过 room 内在线 socket 反查并 leave(roomKey)。
+   * waiting-room 不维护 user->socket 映射；这里通过 room 内在线 socket 反查并 leave(roomKey)。
    */
   removeUserFromWaitingRoom(roomId: number, userId: number) {
     const roomKey = String(roomId)
@@ -428,7 +411,7 @@ class SocketServer {
     const tracker = this.#gameEnteringTrackers.get(roomKey)
     if (!tracker) return
 
-    const connectedUserIds = this.getConnectedGameUserIds(roomKey).filter(
+    const connectedUserIds = this.getConnectedGameRoomUserIds(roomKey).filter(
       (id) => tracker.expected.has(id)
     )
     const msg: WsMessage<'game-entering-progress'> = {
@@ -445,18 +428,18 @@ class SocketServer {
   #notifyGameRoomWaiters(roomId: string) {
     this.#gameRoomConnectWaiters.notifyConnected(
       roomId,
-      this.getConnectedGameUserIds(roomId)
+      this.getConnectedGameRoomUserIds(roomId)
     )
   }
 
-  getConnectedGameUserIds(roomId: string): number[] {
+  getConnectedGameRoomUserIds(roomId: string): number[] {
     return this.#getUserIdsInGameRoom(roomId)
   }
 
   /**
    * 等待指定 userId 列表全部建立 /game namespace 连接（事件驱动）
    */
-  waitForGameUsersConnected(
+  waitForGameRoomUsersConnected(
     roomId: string,
     userIds: number[],
     options?: { timeoutMs?: number }
@@ -466,7 +449,7 @@ class SocketServer {
     return this.#gameRoomConnectWaiters.waitForConnected(
       roomId,
       userIds,
-      () => this.getConnectedGameUserIds(roomId),
+      () => this.getConnectedGameRoomUserIds(roomId),
       timeoutMs
     )
   }

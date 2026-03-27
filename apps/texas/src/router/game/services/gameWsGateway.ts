@@ -39,36 +39,36 @@ export class GameWsGateway {
       type: 'game-invalidated',
       data
     }
-    ws.broadcast(roomKey, msg)
+    ws.broadcastGameRoom(roomKey, msg)
   }
 
   notifyActionRequired(
     roomKey: string,
     data: WsMessage<'player-action-required'>['data']
   ) {
-    ws.broadcast(roomKey, { type: 'player-action-required', data })
+    ws.broadcastGameRoom(roomKey, { type: 'player-action-required', data })
   }
 
   notifyActionTaken(
     roomKey: string,
     data: WsMessage<'player-action-taken'>['data']
   ) {
-    ws.broadcast(roomKey, { type: 'player-action-taken', data })
+    ws.broadcastGameRoom(roomKey, { type: 'player-action-taken', data })
   }
 
   notifyStageChanged(
     roomKey: string,
     data: WsMessage<'game-stage-changed'>['data']
   ) {
-    ws.broadcast(roomKey, { type: 'game-stage-changed', data })
+    ws.broadcastGameRoom(roomKey, { type: 'game-stage-changed', data })
   }
 
   notifyGameStart(roomKey: string, data: WsMessage<'game-start'>['data']) {
-    ws.broadcast(roomKey, { type: 'game-start', data })
+    ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }
 
   notifyGameEnd(roomKey: string, data: WsMessage<'game-end'>['data']) {
-    ws.broadcast(roomKey, { type: 'game-end', data })
+    ws.broadcastGameRoom(roomKey, { type: 'game-end', data })
   }
 
   notifyRolesAssigned(
@@ -76,7 +76,7 @@ export class GameWsGateway {
     matchId: number,
     roles: Array<{ userId: number; role: RoleEnum }>
   ) {
-    ws.broadcast(roomKey, {
+    ws.broadcastGameRoom(roomKey, {
       type: 'player-roles-assigned',
       data: { matchId, roles }
     })
@@ -86,7 +86,7 @@ export class GameWsGateway {
     userId: number,
     data: WsMessage<'player-hand-dealt'>['data']
   ) {
-    ws.broadcastTo(userId, { type: 'player-hand-dealt', data })
+    ws.broadcastGameToUser(userId, { type: 'player-hand-dealt', data })
   }
 
   trackEntering(roomId: number, expectedUserIds: number[]) {
@@ -102,6 +102,6 @@ export class GameWsGateway {
     userIds: number[],
     timeoutMs = 20_000
   ) {
-    return ws.waitForGameUsersConnected(roomKey, userIds, { timeoutMs })
+    return ws.waitForGameRoomUsersConnected(roomKey, userIds, { timeoutMs })
   }
 }

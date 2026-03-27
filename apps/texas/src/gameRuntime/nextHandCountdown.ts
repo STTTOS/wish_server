@@ -1,8 +1,7 @@
 import type { WsMessage } from '../ws/ws-event-types'
 
-import { ws } from '../server'
 import { logger } from '../logger'
-import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import {
   NEXT_HAND_LOCK_DELAY_MS,
   NEXT_HAND_DEAL_AFTER_LOCK_MS,
@@ -34,12 +33,45 @@ type NextHandHooks = {
 
 const hooksMap = new Map<number, NextHandHooks>()
 
+type NextHandCountdownMessage =
+  | WsMessage<'next-hand-countdown-started'>
+  | WsMessage<'next-hand-countdown-cancelled'>
+
+type NextHandCountdownBroadcaster = (
+  roomId: number,
+  msg: NextHandCountdownMessage
+) => void
+
+let nextHandCountdownBroadcaster: NextHandCountdownBroadcaster | null = null
+
+/**
+ * 注入 next-hand 倒计时广播实现（通常由 SocketServer 在启动时注册）。
+ */
+export function setNextHandCountdownBroadcaster(
+  broadcaster: NextHandCountdownBroadcaster
+) {
+  nextHandCountdownBroadcaster = broadcaster
+}
+
+function broadcastNextHandCountdown(
+  roomId: number,
+  msg: NextHandCountdownMessage
+) {
+  if (!nextHandCountdownBroadcaster) {
+    logger.warn(
+      `[next-hand-countdown] broadcaster not configured, skip broadcast, roomId=${roomId}, type=${msg.type}`
+    )
+    return
+  }
+  nextHandCountdownBroadcaster(roomId, msg)
+}
+
 function broadcastCancelled(roomId: number) {
   const msg: WsMessage<'next-hand-countdown-cancelled'> = {
     type: 'next-hand-countdown-cancelled',
     data: { roomId }
   }
-  ws.broadcast(String(roomId), msg)
+  broadcastNextHandCountdown(roomId, msg)
 }
 
 export function cancelNextHandCountdown(roomId: number) {
@@ -118,7 +150,7 @@ export function maybeStartNextHandCountdown(roomId: number) {
       serverNow
     }
   }
-  ws.broadcast(String(roomId), startedMsg)
+  broadcastNextHandCountdown(roomId, startedMsg)
   logger.info(
     `[next-hand-countdown] started, roomId=${roomId}, lockAt=${lockAt}, endsAt=${endsAt}`
   )

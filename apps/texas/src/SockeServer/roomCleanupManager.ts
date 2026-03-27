@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { logger } from '../logger'
 import prisma, { room as roomModel } from '../models'
-import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import {
   cancelNextHandCountdown,
   unregisterNextHandHooks
@@ -22,30 +21,30 @@ export class RoomCleanupManager {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async tryCleanupWaitingRoomIfAllOffline(roomId: string) {
-    // const roomIdNumber = Number(roomId)
-    // if (!roomIdNumber) return
-    // if (this.deps.getWaitingRoomSocketCount(roomId) > 0) return
-    // const info = await roomModel.findUnique({
-    //   where: { id: roomIdNumber },
-    //   select: { deletedAt: true, gameStatus: true }
-    // })
-    // if (!info || info.deletedAt) return
-    // if (info.gameStatus !== 'waiting') return
-    // if (gameRuntimeRegistry.hasTexas(roomId)) return
-    // try {
-    //   await prisma.$transaction(async (tx) => {
-    //     await tx.room.update({
-    //       where: { id: roomIdNumber },
-    //       data: { deletedAt: new Date() }
-    //     })
-    //     await tx.roomMember.deleteMany({ where: { roomId: roomIdNumber } })
-    //   })
-    //   logger.info(
-    //     `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`
-    //   )
-    // } catch (e) {
-    //   logger.error('[waiting-room-cleanup] failed', e)
-    // }
+    const roomIdNumber = Number(roomId)
+    if (!roomIdNumber) return
+    if (this.deps.getWaitingRoomSocketCount(roomId) > 0) return
+    const info = await roomModel.findUnique({
+      where: { id: roomIdNumber },
+      select: { deletedAt: true, gameStatus: true }
+    })
+    if (!info || info.deletedAt) return
+    if (info.gameStatus !== 'waiting') return
+    if (gameRuntimeRegistry.hasTexas(roomId)) return
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.room.update({
+          where: { id: roomIdNumber },
+          data: { deletedAt: new Date() }
+        })
+        await tx.roomMember.deleteMany({ where: { roomId: roomIdNumber } })
+      })
+      logger.info(
+        `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`
+      )
+    } catch (e) {
+      logger.error('[waiting-room-cleanup] failed', e)
+    }
   }
 
   /**
