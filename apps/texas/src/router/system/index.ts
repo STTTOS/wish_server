@@ -1,14 +1,18 @@
+import dayjs from 'dayjs'
+
 import router from '../instance'
 import response from '../../utils/response'
-import { apiPrefixWeb } from '../../config'
+import { announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
 import { ERROR_CODE } from '../../constants/errorCodes'
+import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   isMaintenanceEnabled,
   setMaintenanceEnabled
 } from '../../utils/maintenanceSwitch'
 
 const systemApiWeb = combinePath(apiPrefixWeb)('/system')
+const systemApiClient = combinePath(apiPrefixClient)('/system')
 
 const parseEnabled = (value: unknown): boolean | null => {
   if (typeof value === 'boolean') return value
@@ -29,6 +33,56 @@ const parseEnabled = (value: unknown): boolean | null => {
 router.post(systemApiWeb('/maintenance/status'), async (ctx) => {
   const enabled = await isMaintenanceEnabled()
   response.success(ctx, { enabled }, '查询成功')
+})
+
+// 客户端：查询维护开关状态
+router.post(systemApiClient('/maintenance/status'), async (ctx) => {
+  const enabled = await isMaintenanceEnabled()
+  response.success(ctx, { enabled }, '查询成功')
+})
+
+// 客户端：获取当前维护公告（仅返回一条，按 priority desc、publishAt desc）
+router.post(systemApiClient('/maintenanceNotice'), async (ctx) => {
+  const now = new Date()
+  const item = await announcement.findFirst({
+    where: {
+      deletedAt: null,
+      type: 'maintenance',
+      status: 'published',
+      publishAt: { lte: now },
+      OR: [{ expireAt: null }, { expireAt: { gte: now } }]
+    },
+    orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }],
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      summary: true,
+      content: true,
+      actionText: true,
+      actionUrl: true,
+      priority: true,
+      publishAt: true,
+      expireAt: true,
+      updatedAt: true
+    }
+  })
+
+  if (!item) {
+    response.success(ctx, null, '查询成功')
+    return
+  }
+
+  response.success(
+    ctx,
+    {
+      ...item,
+      publishAt: dayjs(item.publishAt).format(timeFormat),
+      expireAt: item.expireAt ? dayjs(item.expireAt).format(timeFormat) : null,
+      updatedAt: dayjs(item.updatedAt).format(timeFormat)
+    },
+    '查询成功'
+  )
 })
 
 // 后台：设置维护开关（管理员）

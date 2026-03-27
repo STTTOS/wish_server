@@ -6,5 +6,9 @@ export const MAINTENANCE_KEY = 'texas:system:maintenance:enabled'
 
 export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
   '/api/client/user/info',
-  '/api/client/user/validList'
+  '/api/client/user/validList',
+  '/api/client/system/maintenance/status',
+  '/api/client/system/maintenanceNotice',
+  '/api/web/system/maintenance/status',
+  '/api/web/system/maintenance/set'
 ] as const
