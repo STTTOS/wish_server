@@ -11,7 +11,9 @@ const adminOnlyPaths = new Set([
   '/api/web/announcement/update',
   '/api/web/announcement/create',
   '/api/web/announcement/changeStatus',
-  '/api/web/announcement/delete'
+  '/api/web/announcement/delete',
+  '/api/web/system/maintenance/status',
+  '/api/web/system/maintenance/set'
 ])
 
 export default async (

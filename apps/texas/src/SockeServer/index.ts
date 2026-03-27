@@ -5,8 +5,10 @@ import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
+import { isAdminUser } from '../utils/isAdminUser'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
+import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
 
@@ -19,6 +21,8 @@ class SocketServer {
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
+  static readonly MAINTENANCE_CODE = 2400
+  static readonly MAINTENANCE_MESSAGE = '系统维护中'
 
   constructor() {
     this.#io = new Server(server, {
@@ -60,7 +64,15 @@ class SocketServer {
    * - query.roomId: number（客户端房间 id，join 的房间名为 String(roomId)）
    */
   #setupGameNamespace() {
-    this.#gameNs.use((socket, next) => {
+    this.#gameNs.use(async (socket, next) => {
+      const maintenanceBlocked = await this.#guardMaintenance(socket)
+      if (maintenanceBlocked) {
+        return next(
+          new Error(
+            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
+          )
+        )
+      }
       const query = socket.handshake.query
       const userId = Number(query.userId)
       const roomId = Number(query.roomId)
@@ -128,7 +140,15 @@ class SocketServer {
    * - 所有连接 join 同一个房间 'client-room-list'
    */
   #setupRoomListNamespace() {
-    this.#roomListNs.use((socket, next) => {
+    this.#roomListNs.use(async (socket, next) => {
+      const maintenanceBlocked = await this.#guardMaintenance(socket)
+      if (maintenanceBlocked) {
+        return next(
+          new Error(
+            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
+          )
+        )
+      }
       const query = socket.handshake.query
       const userId = Number(query.userId)
       if (!userId) {
@@ -176,7 +196,15 @@ class SocketServer {
    * - 实际 join 的房间名即 String(roomId)
    */
   #setupWaitingRoomNamespace() {
-    this.#waitingRoomNs.use((socket, next) => {
+    this.#waitingRoomNs.use(async (socket, next) => {
+      const maintenanceBlocked = await this.#guardMaintenance(socket)
+      if (maintenanceBlocked) {
+        return next(
+          new Error(
+            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
+          )
+        )
+      }
       const query = socket.handshake.query
       const userId = Number(query.userId)
       const roomId = Number(query.roomId)
@@ -224,6 +252,18 @@ class SocketServer {
 
   #getSocketById(socketId: string) {
     return this.#io.sockets.sockets.get(socketId) as Socket | undefined
+  }
+
+  async #guardMaintenance(socket: Socket) {
+    const enabled = await isMaintenanceEnabled()
+    if (!enabled) return false
+    const userId = Number(socket.handshake.query.userId)
+    const adminPassed = await isAdminUser(userId)
+    if (adminPassed) return false
+    logger.info(
+      `ws blocked by maintenance, nsp=${socket.nsp.name}, userId=${userId || 0}`
+    )
+    return true
   }
 
   #getSocketsInWaitingRoom(roomId: string) {

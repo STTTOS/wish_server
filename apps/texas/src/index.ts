@@ -19,6 +19,7 @@ import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
 import customHandle403 from './middleware/customHandle403'
 import loggerMiddleware from './middleware/loggerMiddleware'
+import maintenanceGuard from './middleware/maintenanceGuard'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
@@ -91,6 +92,9 @@ app.use(
     passthrough: true
   })
 )
+
+// Dynamic maintenance switch: HTTP intercept + admin whitelist
+app.use(maintenanceGuard)
 
 // Custom 401 handling
 app.use(customHandle401)
