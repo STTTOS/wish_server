@@ -11,6 +11,7 @@ import {
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
+import { ERROR_CODE } from '../../constants/errorCodes'
 import { announcement, announcementRead } from '../../models'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 
@@ -146,7 +147,7 @@ router.post(announcementApiWeb('/validList'), async (ctx) => {
 router.post(announcementApiClient('/markRead'), async (ctx) => {
   const userId = ctx.state.user?.id
   if (!userId) {
-    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
 
@@ -154,12 +155,12 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
     announcementId?: number | string
   }
   if (!announcementId) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
     return
   }
   const announcementIdNum = Number(announcementId)
   if (Number.isNaN(announcementIdNum)) {
-    response.error(ctx, 400, 'announcementId 格式异常')
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, 'announcementId 格式异常')
     return
   }
 
@@ -175,7 +176,7 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
     select: { id: true }
   })
   if (!exists) {
-    response.error(ctx, 2000, '公告不存在或已失效')
+    response.error(ctx, ERROR_CODE.COMMON_FAIL, '公告不存在或已失效')
     return
   }
 
@@ -210,7 +211,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
     announcementIds?: Array<number | string>
   }
   if (!Array.isArray(announcementIds) || announcementIds.length === 0) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -218,7 +219,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
   for (const id of announcementIds) {
     const idNum = Number(id)
     if (!Number.isInteger(idNum) || idNum <= 0) {
-      response.error(ctx, 400, 'announcementIds 格式异常')
+      response.error(ctx, ERROR_CODE.BAD_REQUEST, 'announcementIds 格式异常')
       return
     }
     idSet.add(idNum)
@@ -238,7 +239,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
   })
   const validIds = validAnnouncements.map((item) => item.id)
   if (validIds.length === 0) {
-    response.error(ctx, 2000, '公告不存在或已失效')
+    response.error(ctx, ERROR_CODE.COMMON_FAIL, '公告不存在或已失效')
     return
   }
 

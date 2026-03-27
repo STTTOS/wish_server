@@ -1,9 +1,9 @@
 import { createClient, type RedisClientType } from 'redis'
 
 import { logger } from '../logger'
+import { MAINTENANCE_KEY } from '../constants/maintenance'
 
 const redisUrl = process.env.REDIS_URL
-export const MAINTENANCE_KEY = 'texas:system:maintenance:enabled'
 
 let redisClient: RedisClientType | null = null
 let redisReady = false

@@ -3,19 +3,11 @@ import { ParameterizedContext } from 'koa'
 
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
-
-// 如下的接口, 即使解析不到用户数据, 也不做401跳转
-const paths = [
-  /^\/api\/client\/user\/sign$/,
-  /^\/api\/web\/user\/login/,
-  /^\/api\/client\/user\/info/,
-  /^\/api\/web\/user\/info/,
-  /^\/api\/client\/user\/info/,
-  /^\/api\/client\/game\/config$/
-]
+import { ERROR_CODE } from '../constants/errorCodes'
+import { PUBLIC_401_PATHS } from '../constants/paths'
 
 export const isPublic401Path = (url: string) =>
-  paths.some((path) => {
+  PUBLIC_401_PATHS.some((path) => {
     if (typeof path === 'string') return toLower(path) === toLower(url)
     return path.test(url)
   })
@@ -32,7 +24,12 @@ const customHandle401 = async (
   }
 
   if (!user) {
-    response.success(ctx, null, '身份凭证无效, 请重新登陆', 401)
+    response.success(
+      ctx,
+      null,
+      '身份凭证无效, 请重新登陆',
+      ERROR_CODE.UNAUTHORIZED
+    )
     return
   }
   await next()

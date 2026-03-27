@@ -11,6 +11,7 @@ import { timeFormat, apiPrefixClient } from '../../config'
 import prisma, { room, user, roomMember } from '../../models'
 import {
   MIN_BB,
+  MAX_PLAYERS_COUNT,
   MIN_THINKING_TIME,
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
@@ -157,8 +158,6 @@ router.post(roomApiClient('/list'), async (ctx) => {
   response.success(ctx, result)
 })
 
-const CLIENT_ROOM_MAX_PLAYERS = 10
-
 // 客户端：通过房间代码加入房间
 router.post(roomApiClient('/join'), async (ctx) => {
   const { roomCode: code }: { roomCode?: string } = ctx.request.body
@@ -190,7 +189,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
     return
   }
 
-  if (roomInfo.members.length >= CLIENT_ROOM_MAX_PLAYERS) {
+  if (roomInfo.members.length >= MAX_PLAYERS_COUNT) {
     response.error(ctx, 2000, '房间已满')
     return
   }
@@ -231,7 +230,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
       const memberCount = await tx.roomMember.count({
         where: { roomId: roomInfo.id }
       })
-      if (memberCount >= CLIENT_ROOM_MAX_PLAYERS) {
+      if (memberCount >= MAX_PLAYERS_COUNT) {
         throw new Error('房间已满')
       }
 

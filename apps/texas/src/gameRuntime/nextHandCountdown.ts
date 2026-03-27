@@ -3,6 +3,11 @@ import type { WsMessage } from '../ws/ws-event-types'
 import { ws } from '../server'
 import { logger } from '../logger'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import {
+  NEXT_HAND_LOCK_DELAY_MS,
+  NEXT_HAND_DEAL_AFTER_LOCK_MS,
+  NEXT_HAND_START_AFTER_DEAL_MS
+} from '../constants/nextHand'
 
 /**
  * 管理“对局间隔”倒计时：
@@ -19,12 +24,6 @@ type CountdownState = {
 }
 
 const countdowns = new Map<number, CountdownState>()
-
-const LOCK_DELAY_MS = 3000
-// 房间锁定后等待发牌的时间
-const DEAL_AFTER_LOCK_MS = 2000
-// 发牌后多久开始游戏
-const START_AFTER_DEAL_MS = 2000
 
 type NextHandHooks = {
   canStart: () => boolean
@@ -106,8 +105,9 @@ export function maybeStartNextHandCountdown(roomId: number) {
   }
 
   const serverNow = Date.now()
-  const lockAt = serverNow + LOCK_DELAY_MS
-  const endsAt = lockAt + DEAL_AFTER_LOCK_MS + START_AFTER_DEAL_MS
+  const lockAt = serverNow + NEXT_HAND_LOCK_DELAY_MS
+  const endsAt =
+    lockAt + NEXT_HAND_DEAL_AFTER_LOCK_MS + NEXT_HAND_START_AFTER_DEAL_MS
 
   const startedMsg: WsMessage<'next-hand-countdown-started'> = {
     type: 'next-hand-countdown-started',
@@ -132,7 +132,7 @@ export function maybeStartNextHandCountdown(roomId: number) {
       logger.error(`[next-hand-countdown] lock failed, roomId=${roomId}`, e)
       cancelNextHandCountdown(roomId)
     }
-  }, LOCK_DELAY_MS)
+  }, NEXT_HAND_LOCK_DELAY_MS)
 
   const dealTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
@@ -143,7 +143,7 @@ export function maybeStartNextHandCountdown(roomId: number) {
       logger.error(`[next-hand-countdown] deal failed, roomId=${roomId}`, e)
       cancelNextHandCountdown(roomId)
     }
-  }, LOCK_DELAY_MS + DEAL_AFTER_LOCK_MS)
+  }, NEXT_HAND_LOCK_DELAY_MS + NEXT_HAND_DEAL_AFTER_LOCK_MS)
 
   const startTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
@@ -156,7 +156,7 @@ export function maybeStartNextHandCountdown(roomId: number) {
     } finally {
       countdowns.delete(roomId)
     }
-  }, LOCK_DELAY_MS + DEAL_AFTER_LOCK_MS + START_AFTER_DEAL_MS)
+  }, NEXT_HAND_LOCK_DELAY_MS + NEXT_HAND_DEAL_AFTER_LOCK_MS + NEXT_HAND_START_AFTER_DEAL_MS)
 
   countdowns.set(roomId, {
     roomId,

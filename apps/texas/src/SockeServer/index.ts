@@ -11,6 +11,12 @@ import { GameEnteringTracker } from './gameEnteringTracker'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
+import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
+import {
+  SOCKET_IO_PING_TIMEOUT_MS,
+  SOCKET_IO_PING_INTERVAL_MS,
+  WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
+} from '../constants/ws'
 
 class SocketServer {
   #io: Server
@@ -21,16 +27,14 @@ class SocketServer {
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
-  static readonly MAINTENANCE_CODE = 2400
-  static readonly MAINTENANCE_MESSAGE = '系统维护中'
 
   constructor() {
     this.#io = new Server(server, {
       cors: { origin: 'https://texas.wishufree.com' },
       // how many ms without a pong packet to consider the connection closed
-      pingTimeout: 8000,
+      pingTimeout: SOCKET_IO_PING_TIMEOUT_MS,
       // how many ms before sending a new ping packet
-      pingInterval: 3000
+      pingInterval: SOCKET_IO_PING_INTERVAL_MS
       // cors: { origin: '*' }
     })
 
@@ -67,11 +71,7 @@ class SocketServer {
     this.#gameNs.use(async (socket, next) => {
       const maintenanceBlocked = await this.#guardMaintenance(socket)
       if (maintenanceBlocked) {
-        return next(
-          new Error(
-            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
-          )
-        )
+        return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
       const query = socket.handshake.query
       const userId = Number(query.userId)
@@ -143,11 +143,7 @@ class SocketServer {
     this.#roomListNs.use(async (socket, next) => {
       const maintenanceBlocked = await this.#guardMaintenance(socket)
       if (maintenanceBlocked) {
-        return next(
-          new Error(
-            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
-          )
-        )
+        return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
       const query = socket.handshake.query
       const userId = Number(query.userId)
@@ -199,11 +195,7 @@ class SocketServer {
     this.#waitingRoomNs.use(async (socket, next) => {
       const maintenanceBlocked = await this.#guardMaintenance(socket)
       if (maintenanceBlocked) {
-        return next(
-          new Error(
-            `${SocketServer.MAINTENANCE_CODE}:${SocketServer.MAINTENANCE_MESSAGE}`
-          )
-        )
+        return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
       const query = socket.handshake.query
       const userId = Number(query.userId)
@@ -469,7 +461,8 @@ class SocketServer {
     userIds: number[],
     options?: { timeoutMs?: number }
   ): Promise<void> {
-    const timeoutMs = options?.timeoutMs ?? 15_000
+    const timeoutMs =
+      options?.timeoutMs ?? WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
     return this.#gameRoomConnectWaiters.waitForConnected(
       roomId,
       userIds,

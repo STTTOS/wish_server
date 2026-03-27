@@ -5,6 +5,7 @@ import router from '../instance'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
+import { ERROR_CODE } from '../../constants/errorCodes'
 import response, { withList } from '../../utils/response'
 import {
   user,
@@ -20,11 +21,11 @@ router.post(matchWebApi('/list'), async (ctx) => {
   const userId = ctx.state.user?.id
   const { current: skip, pageSize: take, time } = ctx.request.body
   if (!userId) {
-    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
   if (!skip || !take) {
-    response.error(ctx, 400, '分页参数错误')
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, '分页参数错误')
     return
   }
 
@@ -33,7 +34,7 @@ router.post(matchWebApi('/list'), async (ctx) => {
     select: { isAdmin: true }
   })
   if (!loginUser) {
-    response.error(ctx, 2000, '用户不存在')
+    response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
     return
   }
 

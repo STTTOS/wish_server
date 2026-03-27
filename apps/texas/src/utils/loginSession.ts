@@ -3,6 +3,7 @@ import { createClient, type RedisClientType } from 'redis'
 
 import { logger } from '../logger'
 import { timeFormat } from '../config'
+import { REDIS_KEY_LOGIN_SESSION } from '../constants/redisKeys'
 
 export type LoginSession = {
   sessionId: string
@@ -25,7 +26,7 @@ const getStore = (scope: LoginScope) => {
 }
 
 const getSessionKey = (userId: number, scope: LoginScope) =>
-  `texas:login:session:${scope}:${userId}`
+  REDIS_KEY_LOGIN_SESSION(scope, userId)
 // 只连一次、并发安全、失败可重试
 const ensureRedisReady = async () => {
   if (!redisUrl || redisReady) return

@@ -4,14 +4,13 @@ import response from '../utils/response'
 import { DefaultState } from '../router/instance'
 import { isAdminUser } from '../utils/isAdminUser'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
+import {
+  MAINTENANCE_CODE,
+  MAINTENANCE_MESSAGE,
+  MAINTENANCE_HTTP_WHITELIST_PATHS
+} from '../constants/maintenance'
 
-const maintenanceWhitelist = new Set([
-  '/api/client/user/info',
-  '/api/client/user/validList'
-])
-
-const MAINTENANCE_CODE = 2400
-const MAINTENANCE_MESSAGE = '系统维护中'
+const maintenanceWhitelist = new Set<string>(MAINTENANCE_HTTP_WHITELIST_PATHS)
 
 export default async (
   ctx: ParameterizedContext<DefaultState>,

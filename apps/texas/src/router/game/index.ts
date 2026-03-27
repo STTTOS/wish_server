@@ -4,6 +4,7 @@ import { roomMember } from '../../models'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { StartGameUseCase } from './services/flow'
+import { ERROR_CODE } from '../../constants/errorCodes'
 import { apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   gameRuntimeRegistry,
@@ -45,7 +46,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body ?? {}
   const ownerId = ctx.state.user!.id
   if (!roomId || !Number.isInteger(roomId)) {
-    response.error(ctx, 400, '参数异常：需要 roomId')
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
 
