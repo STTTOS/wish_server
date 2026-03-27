@@ -21,6 +21,11 @@ export class RoomCleanupManager {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async tryCleanupWaitingRoomIfAllOffline(roomId: string) {
+    logger.info(
+      `[room-cleanup] tryCleanupWaitingRoomIfAllOffline, roomId=${roomId}`,
+      'socket count',
+      this.deps.getWaitingRoomSocketCount(roomId)
+    )
     const roomIdNumber = Number(roomId)
     if (!roomIdNumber) return
     if (this.deps.getWaitingRoomSocketCount(roomId) > 0) return
