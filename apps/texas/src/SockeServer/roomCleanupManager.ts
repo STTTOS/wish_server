@@ -8,6 +8,7 @@ import {
 
 type RoomCleanupManagerDeps = {
   getWaitingRoomSocketCount: (roomId: string) => number
+  onWaitingRoomDeleted?: (roomId: number) => void
 }
 
 /**
@@ -47,6 +48,7 @@ export class RoomCleanupManager {
       logger.info(
         `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`
       )
+      this.deps.onWaitingRoomDeleted?.(roomIdNumber)
     } catch (e) {
       logger.error('[waiting-room-cleanup] failed', e)
     }

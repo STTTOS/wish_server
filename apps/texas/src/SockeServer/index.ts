@@ -49,7 +49,13 @@ class SocketServer {
     this.#waitingRoomNs = this.#io.of('/waiting-room')
     this.#roomCleanupManager = new RoomCleanupManager({
       getWaitingRoomSocketCount: (roomId) =>
-        this.#getSocketsInWaitingRoom(roomId).length
+        this.#getSocketsInWaitingRoom(roomId).length,
+      onWaitingRoomDeleted: (roomId) => {
+        this.broadcastRoomList({
+          type: 'room-list-room-deleted',
+          data: { roomId }
+        })
+      }
     })
     setNextHandCountdownBroadcaster((roomId, msg) => {
       this.broadcastGameRoom(String(roomId), msg)

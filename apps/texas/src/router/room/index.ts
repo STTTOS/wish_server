@@ -108,6 +108,25 @@ router.post(roomApiClient('/create'), async (ctx) => {
     data: { roomId: res.id, userId: userInfo.id }
   })
 
+  ws.broadcastRoomList({
+    type: 'room-list-room-created',
+    data: {
+      id: res.id,
+      code: res.code,
+      owner: {
+        id: userInfo.id,
+        name: userInfo.name,
+        avatarUrl: userInfo.avatarUrl,
+        avatarKey: userInfo.avatarKey
+      },
+      initialChips: res.initialChips,
+      thinkingTime: res.thinkingTime,
+      lowestBetAmount: res.lowestBetAmount,
+      createdAt: dayjs(res.createdAt).format(timeFormat),
+      memberCount: 1
+    }
+  } satisfies RoomWsMessage<'room-list-room-created'>)
+
   response.success(ctx, { roomId: res.id, roomCode }, '房间创建成功')
 })
 

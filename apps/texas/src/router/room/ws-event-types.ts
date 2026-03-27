@@ -34,6 +34,22 @@ export type WsRoomListRoomDeletedData = {
   roomId: number
 }
 
+export type WsRoomListRoomCreatedData = {
+  id: number
+  code: string
+  owner: {
+    id: number
+    name: string
+    avatarUrl: string | null
+    avatarKey: string
+  }
+  initialChips: number
+  thinkingTime: number
+  lowestBetAmount: number
+  createdAt: string
+  memberCount: number
+}
+
 export type RoomWsEventDataMap = {
   // /waiting-room
   'waiting-room-member-joined': WsWaitingRoomMemberJoinedData
@@ -43,6 +59,7 @@ export type RoomWsEventDataMap = {
   // /room-list
   'room-list-member-count-changed': WsRoomListMemberCountChangedData
   'room-list-room-deleted': WsRoomListRoomDeletedData
+  'room-list-room-created': WsRoomListRoomCreatedData
 }
 
 export type RoomWsEventType = keyof RoomWsEventDataMap
