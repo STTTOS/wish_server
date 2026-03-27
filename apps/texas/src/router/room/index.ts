@@ -473,13 +473,12 @@ router.post(roomApiClient('/kick'), async (ctx) => {
     return
   }
 
-  // 立刻取消被踢用户对 waiting-room 房间的订阅，避免继续收到房间广播
-  ws.removeUserFromWaitingRoom(roomId, targetUserId)
-
   ws.broadcastWaitingRoom(roomId, {
     type: 'waiting-room-member-left',
     data: { userId: targetUserId }
   } satisfies RoomWsMessage<'waiting-room-member-left'>)
+  // 先广播离开事件给客户端，再移除其 waiting-room 订阅
+  ws.removeUserFromWaitingRoom(roomId, targetUserId)
   ws.broadcastRoomList({
     type: 'room-list-member-count-changed',
     data: {
