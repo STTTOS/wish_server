@@ -1,5 +1,5 @@
 import { logger } from '../logger'
-import { room as roomModel } from '../models'
+import prisma, { room as roomModel } from '../models'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeKit'
 import {
   cancelNextHandCountdown,
@@ -34,9 +34,12 @@ export class RoomCleanupManager {
     if (gameRuntimeRegistry.hasTexas(roomId)) return
 
     try {
-      await roomModel.update({
-        where: { id: roomIdNumber },
-        data: { deletedAt: new Date() }
+      await prisma.$transaction(async (tx) => {
+        await tx.room.update({
+          where: { id: roomIdNumber },
+          data: { deletedAt: new Date() }
+        })
+        await tx.roomMember.deleteMany({ where: { roomId: roomIdNumber } })
       })
       logger.info(
         `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`

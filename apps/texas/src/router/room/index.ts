@@ -1,3 +1,5 @@
+import type { RoomWsMessage } from './ws-event-types'
+
 import dayjs from 'dayjs'
 import { isNil } from 'ramda'
 import { Prisma } from '@prisma/texas-client'
@@ -272,18 +274,18 @@ router.post(roomApiClient('/join'), async (ctx) => {
     isOwner: roomInfo.ownerId === joinUser.id
   }
   ws.broadcastWaitingRoom(roomInfo.id, {
-    type: 'client-room-member-joined',
+    type: 'waiting-room-member-joined',
     data: memberPayload
-  })
+  } satisfies RoomWsMessage<'waiting-room-member-joined'>)
 
   // 更新房间列表中的实时人数
   ws.broadcastRoomList({
-    type: 'client-room-member-count-changed',
+    type: 'room-list-member-count-changed',
     data: {
       roomId: roomInfo.id,
       memberCount: memberCountAfterJoin
     }
-  })
+  } satisfies RoomWsMessage<'room-list-member-count-changed'>)
 
   response.success(ctx, null, '加入成功')
 })
@@ -370,32 +372,32 @@ router.post(roomApiClient('/quit'), async (ctx) => {
 
   if (newOwnerId != null) {
     ws.broadcastWaitingRoom(roomId, {
-      type: 'client-room-owner-changed',
+      type: 'waiting-room-owner-changed',
       data: {
         oldOwnerId: userId,
         newOwnerId
       }
-    })
+    } satisfies RoomWsMessage<'waiting-room-owner-changed'>)
   }
 
   ws.broadcastWaitingRoom(roomId, {
-    type: 'client-room-member-left',
+    type: 'waiting-room-member-left',
     data: { userId }
-  })
+  } satisfies RoomWsMessage<'waiting-room-member-left'>)
   if (deletedRoom) {
     ws.broadcastRoomList({
-      type: 'client-room-deleted',
+      type: 'room-list-room-deleted',
       data: { roomId }
-    })
+    } satisfies RoomWsMessage<'room-list-room-deleted'>)
   } else {
     // 非最后一人退出时，更新房间列表中的实时人数
     ws.broadcastRoomList({
-      type: 'client-room-member-count-changed',
+      type: 'room-list-member-count-changed',
       data: {
         roomId,
         memberCount: restCount
       }
-    })
+    } satisfies RoomWsMessage<'room-list-member-count-changed'>)
   }
 
   response.success(ctx, null, '已退出房间')
@@ -475,16 +477,16 @@ router.post(roomApiClient('/kick'), async (ctx) => {
   ws.removeUserFromWaitingRoom(roomId, targetUserId)
 
   ws.broadcastWaitingRoom(roomId, {
-    type: 'client-room-member-left',
+    type: 'waiting-room-member-left',
     data: { userId: targetUserId }
-  })
+  } satisfies RoomWsMessage<'waiting-room-member-left'>)
   ws.broadcastRoomList({
-    type: 'client-room-member-count-changed',
+    type: 'room-list-member-count-changed',
     data: {
       roomId,
       memberCount: memberCountAfterKick
     }
-  })
+  } satisfies RoomWsMessage<'room-list-member-count-changed'>)
 
   response.success(ctx, null, '已踢出该玩家')
 })
