@@ -71,6 +71,7 @@ export class StartGameUseCase {
       this.wsGateway.untrackEntering(roomId)
 
       const texas = createTexasAndSeatPlayers({ roomInfo, members, ownerId })
+      await delay(3000)
       const matchInfo = await createInitialMatchAndNotifyEntered({
         roomId,
         roomInfo,
