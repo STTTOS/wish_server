@@ -12,5 +12,6 @@ export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
   '/api/web/system/maintenance/status',
   '/api/web/system/maintenance/set',
   '/api/web/user/logout',
-  '/api/web/user/info'
+  '/api/web/user/info',
+  '/api/web/user/login'
 ] as const
