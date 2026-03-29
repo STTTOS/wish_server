@@ -20,6 +20,12 @@ export type WsWaitingRoomMemberLeftData = {
   userId: number
 }
 
+/** WS 层在线状态（杀进程、断网等）；成员仍在 DB 中，与 HTTP 退房的 member-left 不同 */
+export type WsWaitingRoomMemberPresenceData = {
+  userId: number
+  online: boolean
+}
+
 export type WsWaitingRoomOwnerChangedData = {
   oldOwnerId: number
   newOwnerId: number
@@ -54,6 +60,7 @@ export type RoomWsEventDataMap = {
   // /waiting-room
   'waiting-room-member-joined': WsWaitingRoomMemberJoinedData
   'waiting-room-member-left': WsWaitingRoomMemberLeftData
+  'waiting-room-member-presence': WsWaitingRoomMemberPresenceData
   'waiting-room-owner-changed': WsWaitingRoomOwnerChangedData
 
   // /room-list

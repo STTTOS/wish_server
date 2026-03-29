@@ -1,4 +1,5 @@
 import type { WsMessage } from '../ws/ws-event-types'
+import type { RoomWsMessage } from '../router/room/ws-event-types'
 
 import { OnlineStatus } from 'texas-poker-core'
 import { Server, Socket, Namespace } from 'socket.io'
@@ -256,6 +257,17 @@ class SocketServer {
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
 
+      const userId = socket.data.userId as number
+      if (typeof userId === 'number') {
+        this.#maybeBroadcastWaitingRoomPresence(
+          roomKey,
+          roomId,
+          userId,
+          socket.id,
+          true
+        )
+      }
+
       socket.on('disconnect', (reason) => {
         logger.info(
           '[/waiting-room] client disconnect, id:',
@@ -263,12 +275,12 @@ class SocketServer {
           'reason',
           reason
         )
-        void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
+        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
 
       socket.on('error', (error) => {
         logger.error('[/waiting-room] WebSocket connect error:', error)
-        void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
+        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
     })
   }
@@ -298,6 +310,45 @@ class SocketServer {
         this.#getSocketByIdInNamespace(this.#waitingRoomNs, socketId)
       )
       .filter((socket) => !!socket) as Socket[]
+  }
+
+  /**
+   * 多终端时：仅当该用户在房间内已无其它 waiting-room 连接时广播，避免误报掉线/上线。
+   */
+  #maybeBroadcastWaitingRoomPresence(
+    roomKey: string,
+    roomIdNumber: number,
+    userId: number,
+    socketId: string,
+    online: boolean
+  ) {
+    const peers = this.#getSocketsInWaitingRoom(roomKey).filter(
+      (s) => (s.data.userId as number) === userId && s.id !== socketId
+    )
+    if (peers.length > 0) return
+    const msg: RoomWsMessage<'waiting-room-member-presence'> = {
+      type: 'waiting-room-member-presence',
+      data: { userId, online }
+    }
+    this.broadcastWaitingRoom(roomIdNumber, msg)
+  }
+
+  #onWaitingRoomSocketDropped(
+    socket: Socket,
+    roomKey: string,
+    roomIdNumber: number
+  ) {
+    const userId = socket.data.userId as number
+    if (typeof userId === 'number') {
+      this.#maybeBroadcastWaitingRoomPresence(
+        roomKey,
+        roomIdNumber,
+        userId,
+        socket.id,
+        false
+      )
+    }
+    void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
   }
 
   #getSocketsInGameRoom(roomId: string) {
@@ -419,6 +470,20 @@ class SocketServer {
       `[waiting-room] removeUserFromWaitingRoom, roomId=${roomId}, userId=${userId}, sockets=${targets.length}`
     )
     targets.forEach((socket) => socket.leave(roomKey))
+  }
+
+  /**
+   * 当前在 `/waiting-room` 且已 join 该 `roomId` 的用户集合（与 `waiting-room-member-presence` 同源，非 DB）。
+   * 供 HTTP 成员列表等接口补齐「是否在等待房 WS 在线」。
+   */
+  getWaitingRoomOnlineUserIds(roomId: number): Set<number> {
+    const roomKey = String(roomId)
+    const ids = new Set<number>()
+    for (const socket of this.#getSocketsInWaitingRoom(roomKey)) {
+      const uid = socket.data.userId as number | undefined
+      if (typeof uid === 'number') ids.add(uid)
+    }
+    return ids
   }
 
   trackGameEntering(roomIdNumber: number, expectedUserIds: number[]) {

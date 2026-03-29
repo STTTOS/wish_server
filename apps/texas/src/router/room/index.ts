@@ -625,13 +625,17 @@ router.post(roomApiClient('/members'), async (ctx) => {
     orderBy: { joinedAt: 'asc' }
   })
 
+  const waitingRoomOnline = ws.getWaitingRoomOnlineUserIds(roomId)
+
   const result = members.map(({ joinedAt, user: u }) => ({
     userId: u.id,
     name: u.name,
     avatarUrl: u.avatarUrl,
     avatarKey: u.avatarKey,
     joinedAt: dayjs(joinedAt).format(timeFormat),
-    isOwner: roomInfo.ownerId === u.id
+    isOwner: roomInfo.ownerId === u.id,
+    /** 是否在本房间 `/waiting-room` 命名空间有活跃连接（杀进程/断网后为 false，与 WS presence 一致） */
+    isWaitingRoomOnline: waitingRoomOnline.has(u.id)
   }))
 
   response.success(ctx, result)
