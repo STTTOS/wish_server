@@ -125,6 +125,7 @@ class SocketServer {
    */
   #setupGameNamespace() {
     this.#gameNs.use(async (socket, next) => {
+      this.#logWsConnectHandshake('/game', socket)
       const userId = await resolveWsUserFromHandshake(socket.handshake)
       if (!userId) {
         logger.error(
@@ -158,9 +159,6 @@ class SocketServer {
     })
 
     this.#gameNs.on('connection', (socket) => {
-      this.#logWsConnectHandshake('/game', socket)
-      logger.info('[/game] 新的客户端连接, url', socket.handshake.url)
-
       const query = socket.handshake.query
       const userId = socket.data.userId as number
       const roomId = Number(query.roomId)
@@ -207,6 +205,7 @@ class SocketServer {
    */
   #setupRoomListNamespace() {
     this.#roomListNs.use(async (socket, next) => {
+      this.#logWsConnectHandshake('/room-list', socket)
       const userId = await resolveWsUserFromHandshake(socket.handshake)
       if (!userId) {
         logger.error(
@@ -228,9 +227,6 @@ class SocketServer {
     })
 
     this.#roomListNs.on('connection', (socket) => {
-      this.#logWsConnectHandshake('/room-list', socket)
-      logger.info('[/room-list] 新的客户端连接, url', socket.handshake.url)
-
       socket.join('client-room-list')
       socket.send({ type: 'initial connect', data: null })
 
@@ -258,6 +254,7 @@ class SocketServer {
    */
   #setupWaitingRoomNamespace() {
     this.#waitingRoomNs.use(async (socket, next) => {
+      this.#logWsConnectHandshake('/waiting-room', socket)
       const userId = await resolveWsUserFromHandshake(socket.handshake)
       if (!userId) {
         logger.error(
@@ -291,8 +288,6 @@ class SocketServer {
     })
 
     this.#waitingRoomNs.on('connection', (socket) => {
-      this.#logWsConnectHandshake('/waiting-room', socket)
-      logger.info('[/waiting-room] 新的客户端连接, url', socket.handshake.url)
       const query = socket.handshake.query
       const roomId = Number(query.roomId)
       const roomKey = String(roomId)
