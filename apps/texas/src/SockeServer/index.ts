@@ -8,6 +8,7 @@ import { logger } from '../logger'
 import { isAdminUser } from '../utils/isAdminUser'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
+import { resolveWsUserFromHandshake } from '../utils/wsAuth'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
@@ -77,19 +78,31 @@ class SocketServer {
   /**
    * /game 命名空间：与德州扑克对局相关的 WS 连接
    * 约定：
-   * - query.userId: number
+   * - auth.token / query.token / Authorization Bearer：与 HTTP 相同的登录 JWT
    * - query.roomId: number（客户端房间 id，join 的房间名为 String(roomId)）
    */
   #setupGameNamespace() {
     this.#gameNs.use(async (socket, next) => {
+      const userId = await resolveWsUserFromHandshake(socket.handshake)
+      if (!userId) {
+        logger.error(
+          `[/game] websocket connect url:${socket.handshake.url}(missing or invalid token), connection refused`
+        )
+        return next(
+          new Error(
+            'parameters to establish connection are invalid, connection refused'
+          )
+        )
+      }
+      socket.data.userId = userId
+
       const maintenanceBlocked = await this.#guardMaintenance(socket)
       if (maintenanceBlocked) {
         return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
       const query = socket.handshake.query
-      const userId = Number(query.userId)
       const roomId = Number(query.roomId)
-      if (!userId || !roomId || !Number.isFinite(roomId)) {
+      if (!roomId || !Number.isFinite(roomId)) {
         logger.error(
           `[/game] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -106,14 +119,13 @@ class SocketServer {
       logger.info('[/game] 新的客户端连接, url', socket.handshake.url)
 
       const query = socket.handshake.query
-      const userId = Number(query.userId)
+      const userId = socket.data.userId as number
       const roomId = Number(query.roomId)
       const roomKey = String(roomId)
       const userRoomKey = this.#getGameUserRoomKey(userId)
 
       socket.join(roomKey)
       socket.join(userRoomKey)
-      socket.data.userId = userId
       socket.data.roomId = roomId
       socket.send({ type: 'initial connect', data: null })
 
@@ -147,20 +159,15 @@ class SocketServer {
   /**
    * /room-list 命名空间：房间列表订阅
    * 约定：
-   * - query.userId: number
+   * - auth.token / query.token / Authorization Bearer：与 HTTP 相同的登录 JWT
    * - 所有连接 join 同一个房间 'client-room-list'
    */
   #setupRoomListNamespace() {
     this.#roomListNs.use(async (socket, next) => {
-      const maintenanceBlocked = await this.#guardMaintenance(socket)
-      if (maintenanceBlocked) {
-        return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
-      }
-      const query = socket.handshake.query
-      const userId = Number(query.userId)
+      const userId = await resolveWsUserFromHandshake(socket.handshake)
       if (!userId) {
         logger.error(
-          `[/room-list] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
+          `[/room-list] websocket connect url:${socket.handshake.url}(missing or invalid token), connection refused`
         )
         return next(
           new Error(
@@ -168,15 +175,18 @@ class SocketServer {
           )
         )
       }
+      socket.data.userId = userId
+
+      const maintenanceBlocked = await this.#guardMaintenance(socket)
+      if (maintenanceBlocked) {
+        return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
+      }
       next()
     })
 
     this.#roomListNs.on('connection', (socket) => {
       logger.info('[/room-list] 新的客户端连接, url', socket.handshake.url)
-      const query = socket.handshake.query
-      const userId = Number(query.userId)
 
-      socket.data.userId = userId
       socket.join('client-room-list')
       socket.send({ type: 'initial connect', data: null })
 
@@ -198,20 +208,32 @@ class SocketServer {
   /**
    * /waiting-room 命名空间：客户端房间/等待房间订阅
    * 约定：
-   * - query.userId: number
+   * - auth.token / query.token / Authorization Bearer：与 HTTP 相同的登录 JWT
    * - query.roomId: number（客户端房间 id）
    * - 实际 join 的房间名即 String(roomId)
    */
   #setupWaitingRoomNamespace() {
     this.#waitingRoomNs.use(async (socket, next) => {
+      const userId = await resolveWsUserFromHandshake(socket.handshake)
+      if (!userId) {
+        logger.error(
+          `[/waiting-room] websocket connect url:${socket.handshake.url}(missing or invalid token), connection refused`
+        )
+        return next(
+          new Error(
+            'parameters to establish connection are invalid, connection refused'
+          )
+        )
+      }
+      socket.data.userId = userId
+
       const maintenanceBlocked = await this.#guardMaintenance(socket)
       if (maintenanceBlocked) {
         return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
       const query = socket.handshake.query
-      const userId = Number(query.userId)
       const roomId = Number(query.roomId)
-      if (!userId || !roomId || !Number.isFinite(roomId)) {
+      if (!roomId || !Number.isFinite(roomId)) {
         logger.error(
           `[/waiting-room] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -227,11 +249,9 @@ class SocketServer {
     this.#waitingRoomNs.on('connection', (socket) => {
       logger.info('[/waiting-room] 新的客户端连接, url', socket.handshake.url)
       const query = socket.handshake.query
-      const userId = Number(query.userId)
       const roomId = Number(query.roomId)
       const roomKey = String(roomId)
 
-      socket.data.userId = userId
       socket.data.roomId = roomId
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
@@ -260,11 +280,11 @@ class SocketServer {
   async #guardMaintenance(socket: Socket) {
     const enabled = await isMaintenanceEnabled()
     if (!enabled) return false
-    const userId = Number(socket.handshake.query.userId)
+    const userId = socket.data.userId as number | undefined
     const adminPassed = await isAdminUser(userId)
     if (adminPassed) return false
     logger.info(
-      `ws blocked by maintenance, nsp=${socket.nsp.name}, userId=${userId || 0}`
+      `ws blocked by maintenance, nsp=${socket.nsp.name}, userId=${userId ?? 0}`
     )
     return true
   }

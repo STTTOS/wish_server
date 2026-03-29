@@ -9,35 +9,37 @@
 
 ## 1. 建立连接
 
+### 1.0 鉴权（`/waiting-room`、`/room-list`、`/game` 相同）
+
+连接时须携带与 HTTP 一致的 **登录 JWT**（登录接口返回的 `token`）。服务端会校验 JWT，并按 `sessionId` 与当前登录态比对（单端登录与 HTTP 一致）。
+
+任选一种方式传 token：**`auth: { token }`**（推荐）、**`query.token`**，或握手 **`Authorization: Bearer <token>`**（视运行环境是否支持）。
+
 ### 1.1 订阅等待房间（成员进出等）
 
-等待房间使用 **`/waiting-room` 命名空间**，URL 为 `WS_BASE + '/waiting-room'`，只需要传 `userId` 和 `roomId` 即可，服务端会把当前连接加入对应房间频道。
+等待房间使用 **`/waiting-room` 命名空间**，URL 为 `WS_BASE + '/waiting-room'`，传 **token** 与 **`roomId`**，服务端会把当前连接加入对应房间频道。
 
 ```js
 import { io } from 'socket.io-client'
 
 const WS_BASE = 'https://your-texas-api.com' // 与 texas 服务一致
-const userId = 当前用户 id
+const token = 登录接口返回的 token
 const roomId = 当前房间 id（数字）
 
 // 订阅等待房间
 const socket = io(`${WS_BASE}/waiting-room`, {
-  query: {
-    userId,
-    roomId
-  }
+  auth: { token },
+  query: { roomId }
 })
 ```
 
 ### 1.2 订阅房间列表（人数变化、房间删除）
 
-房间列表使用 **`/room-list` 命名空间**，URL 为 `WS_BASE + '/room-list'`，只需要传 `userId`。
+房间列表使用 **`/room-list` 命名空间**，URL 为 `WS_BASE + '/room-list'`，只需传 **token**。
 
 ```js
 const listSocket = io(`${WS_BASE}/room-list`, {
-  query: {
-    userId: 当前用户 id
-  }
+  auth: { token }
 })
 
 listSocket.on('message', (payload) => {
