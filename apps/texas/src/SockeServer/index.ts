@@ -59,7 +59,7 @@ class SocketServer {
         this.broadcastRoomList({
           type: 'room-list-room-deleted',
           data: { roomId }
-        })
+        } satisfies RoomWsMessage<'room-list-room-deleted'>)
       }
     })
     setNextHandCountdownBroadcaster((roomId, msg) => {

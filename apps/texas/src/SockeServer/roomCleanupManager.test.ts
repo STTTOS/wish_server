@@ -7,8 +7,12 @@ import { RoomCleanupManager } from './roomCleanupManager'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 
 test('tryCleanupWaitingRoomIfAllOffline soft deletes room when all waiting-room sockets offline', async () => {
+  let deletedNotified: number | null = null
   const manager = new RoomCleanupManager({
-    getWaitingRoomSocketCount: () => 0
+    getWaitingRoomSocketCount: () => 0,
+    onWaitingRoomDeleted: (roomId) => {
+      deletedNotified = roomId
+    }
   })
 
   const roomModelAny = roomModel as unknown as {
@@ -56,6 +60,7 @@ test('tryCleanupWaitingRoomIfAllOffline soft deletes room when all waiting-room 
     await manager.tryCleanupWaitingRoomIfAllOffline('100')
     assert.equal(updateCalled, 1)
     assert.equal(deleteMembersCalled, 1)
+    assert.equal(deletedNotified, 100)
   } finally {
     roomModelAny.findUnique = originFindUnique
     prismaAny.$transaction = originTransaction
@@ -65,7 +70,8 @@ test('tryCleanupWaitingRoomIfAllOffline soft deletes room when all waiting-room 
 
 test('tryCleanupWaitingRoomIfAllOffline does nothing when socketCount > 0', async () => {
   const manager = new RoomCleanupManager({
-    getWaitingRoomSocketCount: () => 1
+    getWaitingRoomSocketCount: () => 1,
+    onWaitingRoomDeleted: () => void 0
   })
 
   const roomModelAny = roomModel as unknown as {

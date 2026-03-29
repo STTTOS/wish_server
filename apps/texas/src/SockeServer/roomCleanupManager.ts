@@ -8,7 +8,11 @@ import {
 
 type RoomCleanupManagerDeps = {
   getWaitingRoomSocketCount: (roomId: string) => number
-  onWaitingRoomDeleted?: (roomId: number) => void
+  /**
+   * waiting-room 全离线软删房间成功后调用：须向 `/room-list` 推送
+   * `{ type: 'room-list-room-deleted', data: { roomId } }`，与 HTTP 退出最后一人一致。
+   */
+  onWaitingRoomDeleted: (roomId: number) => void
 }
 
 /**
@@ -48,7 +52,7 @@ export class RoomCleanupManager {
       logger.info(
         `[waiting-room-cleanup] all offline, soft-deleted room ${roomIdNumber}`
       )
-      this.deps.onWaitingRoomDeleted?.(roomIdNumber)
+      this.deps.onWaitingRoomDeleted(roomIdNumber)
     } catch (e) {
       logger.error('[waiting-room-cleanup] failed', e)
     }
