@@ -76,6 +76,47 @@ class SocketServer {
     return `game-user:${userId}`
   }
 
+  /** 日志用：脱敏 token 类字段，避免整段 JWT 落盘 */
+  #redactHandshakeForLog(handshake: Socket['handshake']) {
+    const redact = (v: unknown): unknown => {
+      if (typeof v === 'string' && v.length > 12) {
+        return `${v.slice(0, 4)}…(${v.length})…${v.slice(-4)}`
+      }
+      if (Array.isArray(v)) return v.map(redact)
+      return v
+    }
+    const query: Record<string, unknown> = { ...handshake.query }
+    for (const k of ['token', 'access_token', 'password']) {
+      if (k in query) query[k] = redact(query[k])
+    }
+    let auth: Record<string, unknown> | undefined
+    if (handshake.auth && typeof handshake.auth === 'object') {
+      auth = { ...(handshake.auth as Record<string, unknown>) }
+      for (const k of ['token', 'access_token', 'password']) {
+        if (k in auth) auth[k] = redact(auth[k])
+      }
+    }
+    return {
+      url: handshake.url,
+      address: handshake.address,
+      issued: handshake.issued,
+      query,
+      auth,
+      authorizationHeaderPresent: Boolean(
+        typeof handshake.headers.authorization === 'string' &&
+          handshake.headers.authorization.length > 0
+      )
+    }
+  }
+
+  #logWsConnectHandshake(nspLabel: string, socket: Socket) {
+    logger.info(
+      `[${nspLabel}] connect handshake socketId=${socket.id} ${JSON.stringify(
+        this.#redactHandshakeForLog(socket.handshake)
+      )}`
+    )
+  }
+
   /**
    * /game 命名空间：与德州扑克对局相关的 WS 连接
    * 约定：
@@ -117,6 +158,7 @@ class SocketServer {
     })
 
     this.#gameNs.on('connection', (socket) => {
+      this.#logWsConnectHandshake('/game', socket)
       logger.info('[/game] 新的客户端连接, url', socket.handshake.url)
 
       const query = socket.handshake.query
@@ -186,6 +228,7 @@ class SocketServer {
     })
 
     this.#roomListNs.on('connection', (socket) => {
+      this.#logWsConnectHandshake('/room-list', socket)
       logger.info('[/room-list] 新的客户端连接, url', socket.handshake.url)
 
       socket.join('client-room-list')
@@ -248,6 +291,7 @@ class SocketServer {
     })
 
     this.#waitingRoomNs.on('connection', (socket) => {
+      this.#logWsConnectHandshake('/waiting-room', socket)
       logger.info('[/waiting-room] 新的客户端连接, url', socket.handshake.url)
       const query = socket.handshake.query
       const roomId = Number(query.roomId)
