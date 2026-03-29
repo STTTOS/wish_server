@@ -309,7 +309,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
   response.success(ctx, null, '加入成功')
 })
 
-// 客户端：退出房间
+// 客户端：退出房间（幂等：房间已删、或已不在成员表中、或重复调用均返回成功）
 router.post(roomApiClient('/quit'), async (ctx) => {
   const { roomCode }: { roomCode?: string } = ctx.request.body
   const userId = ctx.state.user!.id
@@ -318,21 +318,34 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     return
   }
 
+  const code = roomCode.trim().toUpperCase()
   const roomInfo = await room.findUnique({
-    where: {
-      code: roomCode.trim().toUpperCase()
-    }
+    where: { code }
   })
-  if (!roomInfo || roomInfo.deletedAt) {
+  if (!roomInfo) {
     response.error(ctx, 2000, '房间不存在')
     return
   }
 
   const roomId = roomInfo.id
+
+  if (roomInfo.deletedAt) {
+    ws.removeUserFromWaitingRoom(roomId, userId)
+    response.success(ctx, null, '已退出房间')
+    return
+  }
+
+  if (roomInfo.gameStatus !== 'waiting') {
+    response.error(ctx, 2000, '仅等待房间状态支持退出房间')
+    return
+  }
+
   const compoundKey = { roomId, userId }
   let restCount = 0
   let deletedRoom = false
   let newOwnerId: number | null = null
+  let quitNoop = false
+
   try {
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomId} FOR UPDATE`
@@ -341,7 +354,10 @@ router.post(roomApiClient('/quit'), async (ctx) => {
         where: { id: roomId },
         select: { ownerId: true, gameStatus: true, deletedAt: true }
       })
-      if (!latestRoom || latestRoom.deletedAt) throw new Error('房间不存在')
+      if (!latestRoom || latestRoom.deletedAt) {
+        quitNoop = true
+        return
+      }
       if (latestRoom.gameStatus !== 'waiting') {
         throw new Error('仅等待房间状态支持退出房间')
       }
@@ -349,7 +365,10 @@ router.post(roomApiClient('/quit'), async (ctx) => {
       const member = await tx.roomMember.findUnique({
         where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
       })
-      if (!member) throw new Error('你不在该房间中')
+      if (!member) {
+        quitNoop = true
+        return
+      }
 
       const memberCount = await tx.roomMember.count({ where: { roomId } })
       if (latestRoom.ownerId === userId && memberCount > 1) {
@@ -386,8 +405,13 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     return
   }
 
-  // 立刻取消该用户对 waiting-room 房间的订阅，避免继续收到房间广播
+  // 取消该用户对 waiting-room 的订阅；幂等路径与正常退出都需要
   ws.removeUserFromWaitingRoom(roomId, userId)
+
+  if (quitNoop) {
+    response.success(ctx, null, '已退出房间')
+    return
+  }
 
   if (newOwnerId != null) {
     ws.broadcastWaitingRoom(roomId, {
