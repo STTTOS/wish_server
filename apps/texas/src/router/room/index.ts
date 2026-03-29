@@ -541,14 +541,14 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     return
   }
 
-  // 取消该用户对 waiting-room 的订阅；幂等路径与正常退出都需要
-  ws.removeUserFromWaitingRoom(roomId, userId)
-
   if (quitNoop) {
+    // 确保db & socket状态一致
+    ws.removeUserFromWaitingRoom(roomId, userId)
     response.success(ctx, null, '已退出房间')
     return
   }
 
+  // 先广播「成员离开 / 房主变更 / 列表人数」，再 removeUserFromWaitingRoom，避免先触发 presence 离线再出现 member-left
   if (newOwnerId != null) {
     ws.broadcastWaitingRoom(roomId, {
       type: 'waiting-room-owner-changed',
@@ -579,6 +579,7 @@ router.post(roomApiClient('/quit'), async (ctx) => {
     } satisfies RoomWsMessage<'room-list-member-count-changed'>)
   }
 
+  ws.removeUserFromWaitingRoom(roomId, userId)
   response.success(ctx, null, '已退出房间')
 })
 
