@@ -9,12 +9,15 @@ import { logger } from '../logger'
 import { isAdminUser } from '../utils/isAdminUser'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
-import { resolveWsUserFromHandshake } from '../utils/wsAuth'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
+import {
+  resolveWsUserFromHandshake,
+  getWsRoomIdFromHandshakeAuth
+} from '../utils/wsAuth'
 import {
   SOCKET_IO_PING_TIMEOUT_MS,
   SOCKET_IO_PING_INTERVAL_MS,
@@ -121,7 +124,7 @@ class SocketServer {
    * /game 命名空间：与德州扑克对局相关的 WS 连接
    * 约定：
    * - auth.token / query.token / Authorization Bearer：与 HTTP 相同的登录 JWT
-   * - query.roomId: number（客户端房间 id，join 的房间名为 String(roomId)）
+   * - auth.roomId: number|string（客户端房间 id，join 的房间名为 String(roomId)）
    */
   #setupGameNamespace() {
     this.#gameNs.use(async (socket, next) => {
@@ -143,9 +146,8 @@ class SocketServer {
       if (maintenanceBlocked) {
         return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
-      const query = socket.handshake.query
-      const roomId = Number(query.roomId)
-      if (!roomId || !Number.isFinite(roomId)) {
+      const roomId = getWsRoomIdFromHandshakeAuth(socket.handshake)
+      if (roomId == null) {
         logger.error(
           `[/game] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -155,19 +157,18 @@ class SocketServer {
           )
         )
       }
+      socket.data.roomId = roomId
       next()
     })
 
     this.#gameNs.on('connection', (socket) => {
-      const query = socket.handshake.query
       const userId = socket.data.userId as number
-      const roomId = Number(query.roomId)
+      const roomId = socket.data.roomId as number
       const roomKey = String(roomId)
       const userRoomKey = this.#getGameUserRoomKey(userId)
 
       socket.join(roomKey)
       socket.join(userRoomKey)
-      socket.data.roomId = roomId
       socket.send({ type: 'initial connect', data: null })
 
       this.#handleGameRoomConnect(roomKey, userId)
@@ -249,7 +250,7 @@ class SocketServer {
    * /waiting-room 命名空间：客户端房间/等待房间订阅
    * 约定：
    * - auth.token / query.token / Authorization Bearer：与 HTTP 相同的登录 JWT
-   * - query.roomId: number（客户端房间 id）
+   * - auth.roomId: number|string（客户端房间 id）
    * - 实际 join 的房间名即 String(roomId)
    */
   #setupWaitingRoomNamespace() {
@@ -272,9 +273,8 @@ class SocketServer {
       if (maintenanceBlocked) {
         return next(new Error(`${MAINTENANCE_CODE}:${MAINTENANCE_MESSAGE}`))
       }
-      const query = socket.handshake.query
-      const roomId = Number(query.roomId)
-      if (!roomId || !Number.isFinite(roomId)) {
+      const roomId = getWsRoomIdFromHandshakeAuth(socket.handshake)
+      if (roomId == null) {
         logger.error(
           `[/waiting-room] websocket connect url:${socket.handshake.url}(parameters error), connection refused`
         )
@@ -284,15 +284,14 @@ class SocketServer {
           )
         )
       }
+      socket.data.roomId = roomId
       next()
     })
 
     this.#waitingRoomNs.on('connection', (socket) => {
-      const query = socket.handshake.query
-      const roomId = Number(query.roomId)
+      const roomId = socket.data.roomId as number
       const roomKey = String(roomId)
 
-      socket.data.roomId = roomId
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
 

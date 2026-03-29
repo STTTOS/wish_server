@@ -40,6 +40,26 @@ export function getWsTokenFromHandshake(
 }
 
 /**
+ * 仅从 handshake.auth 读取 roomId（客户端约定放在 auth 中）。
+ */
+export function getWsRoomIdFromHandshakeAuth(
+  handshake: Socket['handshake']
+): number | null {
+  const auth = handshake.auth
+  if (!auth || typeof auth !== 'object' || !('roomId' in auth)) return null
+
+  const raw = (auth as { roomId?: unknown }).roomId
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return Math.trunc(raw)
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const roomId = Number(raw.trim())
+    if (Number.isFinite(roomId) && roomId > 0) return Math.trunc(roomId)
+  }
+  return null
+}
+
+/**
  * 校验 JWT 且 session 与 Redis/内存中当前登录态一致（单端登录）。
  */
 export async function verifyWsLoginToken(
