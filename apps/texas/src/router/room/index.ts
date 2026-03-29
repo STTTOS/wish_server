@@ -1,3 +1,4 @@
+import type { Context } from 'koa'
 import type { RoomWsMessage } from './ws-event-types'
 
 import dayjs from 'dayjs'
@@ -9,6 +10,7 @@ import { ws } from '../../server'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { generateRoomCode } from '../../utils/roomCode'
+import { ERROR_CODE } from '../../constants/errorCodes'
 import { timeFormat, apiPrefixClient } from '../../config'
 import prisma, { room, user, roomMember } from '../../models'
 import {
@@ -19,6 +21,140 @@ import {
 } from '../../constants/game'
 
 const roomApiClient = combinePath(apiPrefixClient)('/room')
+
+type RoomMemberClientRow = {
+  userId: number
+  name: string
+  avatarUrl: string | null
+  avatarKey: string
+  joinedAt: string
+  isOwner: boolean
+  /** 是否在等待房或游戏房任一 WS 通道在线（加入房间、展示谁在场时以此为准） */
+  isOnline: boolean
+  /** 是否仅在 `/waiting-room` 在线（对局内用户多为 false，需结合 `isOnline`） */
+  isWaitingRoomOnline: boolean
+}
+
+async function buildRoomMembersClientList(
+  roomId: number,
+  ownerId: number
+): Promise<RoomMemberClientRow[]> {
+  const members = await roomMember.findMany({
+    where: { roomId },
+    include: { user: true },
+    orderBy: { joinedAt: 'asc' }
+  })
+  const waitingRoomOnline = ws.getWaitingRoomOnlineUserIds(roomId)
+  const gameRoomOnline = new Set(ws.getConnectedGameRoomUserIds(String(roomId)))
+  return members.map(({ joinedAt, user: u }) => {
+    const onWaiting = waitingRoomOnline.has(u.id)
+    const onGame = gameRoomOnline.has(u.id)
+    return {
+      userId: u.id,
+      name: u.name,
+      avatarUrl: u.avatarUrl,
+      avatarKey: u.avatarKey,
+      joinedAt: dayjs(joinedAt).format(timeFormat),
+      isOwner: ownerId === u.id,
+      isOnline: onWaiting || onGame,
+      isWaitingRoomOnline: onWaiting
+    }
+  })
+}
+
+function buildRoomSummaryForClient(roomInfo: {
+  id: number
+  code: string
+  gameStatus: string
+  isPrivate: boolean
+  thinkingTime: number
+  initialChips: number
+  lowestBetAmount: number
+  owner: {
+    id: number
+    name: string
+    avatarUrl: string | null
+    avatarKey: string
+  }
+}) {
+  return {
+    id: roomInfo.id,
+    code: roomInfo.code,
+    gameStatus: roomInfo.gameStatus,
+    owner: roomInfo.owner,
+    isPrivate: roomInfo.isPrivate,
+    thinkingTime: roomInfo.thinkingTime,
+    initialChips: roomInfo.initialChips,
+    lowestBetAmount: roomInfo.lowestBetAmount
+  }
+}
+
+/**
+ * 成员列表（含 WS 在线态）+ 可选附带房间摘要。
+ */
+async function handleRoomMembersRequest(
+  ctx: Context,
+  input: {
+    roomCode: string | undefined
+    userId: number
+    includeRoom: boolean
+    notInRoomMessage: string
+  }
+) {
+  const { roomCode, userId, includeRoom, notInRoomMessage } = input
+
+  if (!roomCode || !roomCode.trim()) {
+    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常：需要 roomCode')
+    return
+  }
+
+  const roomInfo = await room.findUnique({
+    where: {
+      code: roomCode.trim().toUpperCase()
+    },
+    include: {
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          avatarKey: true
+        }
+      }
+    }
+  })
+  if (!roomInfo || roomInfo.deletedAt) {
+    response.error(ctx, ERROR_CODE.COMMON_FAIL, '房间不存在')
+    return
+  }
+
+  const roomId = roomInfo.id
+
+  const selfMember = await roomMember.findUnique({
+    where: {
+      // eslint-disable-next-line camelcase
+      roomId_userId: {
+        roomId,
+        userId
+      }
+    }
+  })
+  if (!selfMember) {
+    response.error(ctx, ERROR_CODE.FORBIDDEN, notInRoomMessage)
+    return
+  }
+
+  const members = await buildRoomMembersClientList(roomId, roomInfo.ownerId)
+
+  if (includeRoom) {
+    response.success(ctx, {
+      room: buildRoomSummaryForClient(roomInfo),
+      members
+    })
+  } else {
+    response.success(ctx, members)
+  }
+}
 
 /**
  * 客户端创建房间
@@ -568,6 +704,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     thinkingTime,
     lowestBetAmount,
     owner,
+    gameStatus,
     initialChips
   } = roomInfo
 
@@ -575,6 +712,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     id,
     code,
     owner,
+    gameStatus,
     isPrivate,
     thinkingTime,
     initialChips,
@@ -582,61 +720,26 @@ router.post(roomApiClient('/detail'), async (ctx) => {
   })
 })
 
-// 客户端：查询房间下所有成员
+/**
+ * 客户端：查询房间成员列表（含 `isOnline`：等待房或游戏房 WS 任一连线即 true）。
+ *
+ * Body:
+ * - `roomCode`（必填）
+ * - `includeRoom`（可选）`true` 时 `data` 为 `{ room, members }`，否则 `data` 仅为成员数组
+ *
+ * 房间阶段与本地 UI 是否一致请用 `GET/POST .../room/detail` 等看 `gameStatus`，勿再依赖本接口做场景 gate。
+ */
 router.post(roomApiClient('/members'), async (ctx) => {
-  const { roomCode }: { roomCode?: string } = ctx.request.body
+  const { roomCode, includeRoom } = ctx.request.body as {
+    roomCode?: string
+    includeRoom?: unknown
+  }
   const userId = ctx.state.user!.id
 
-  if (!roomCode || !roomCode.trim()) {
-    response.error(ctx, 400, '参数异常：需要 roomCode')
-    return
-  }
-
-  const roomInfo = await room.findUnique({
-    where: {
-      code: roomCode.trim().toUpperCase()
-    }
+  await handleRoomMembersRequest(ctx, {
+    roomCode,
+    userId,
+    includeRoom: Boolean(includeRoom),
+    notInRoomMessage: '无权查看该房间成员'
   })
-  if (!roomInfo || roomInfo.deletedAt) {
-    response.error(ctx, 2000, '房间不存在')
-    return
-  }
-
-  const roomId = roomInfo.id
-
-  const selfMember = await roomMember.findUnique({
-    // Prisma 复合唯一键名为 roomId_userId，非 camelCase
-    where: {
-      // eslint-disable-next-line camelcase
-      roomId_userId: {
-        roomId,
-        userId
-      }
-    }
-  })
-  if (!selfMember) {
-    response.error(ctx, 403, '无权查看该房间成员')
-    return
-  }
-
-  const members = await roomMember.findMany({
-    where: { roomId },
-    include: { user: true },
-    orderBy: { joinedAt: 'asc' }
-  })
-
-  const waitingRoomOnline = ws.getWaitingRoomOnlineUserIds(roomId)
-
-  const result = members.map(({ joinedAt, user: u }) => ({
-    userId: u.id,
-    name: u.name,
-    avatarUrl: u.avatarUrl,
-    avatarKey: u.avatarKey,
-    joinedAt: dayjs(joinedAt).format(timeFormat),
-    isOwner: roomInfo.ownerId === u.id,
-    /** 是否在本房间 `/waiting-room` 命名空间有活跃连接（杀进程/断网后为 false，与 WS presence 一致） */
-    isWaitingRoomOnline: waitingRoomOnline.has(u.id)
-  }))
-
-  response.success(ctx, result)
 })
