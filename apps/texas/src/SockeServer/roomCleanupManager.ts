@@ -76,6 +76,7 @@ export class RoomCleanupManager {
     if (players.length === 0) {
       safeClearCountdown()
       gameRuntimeRegistry.destroyRuntime(roomId)
+      await this.#resetRoomGameStatusToWaiting(roomIdNumber)
       await this.tryCleanupWaitingRoomIfAllOffline(roomId)
       return
     }
@@ -86,6 +87,26 @@ export class RoomCleanupManager {
     safeClearCountdown()
     gameRuntimeRegistry.destroyRuntime(roomId)
     logger.info(`[room-cleanup] all offline, removed room ${roomId}`)
+    await this.#resetRoomGameStatusToWaiting(roomIdNumber)
     await this.tryCleanupWaitingRoomIfAllOffline(roomId)
+  }
+
+  /**
+   * 运行时已销毁后把 DB 拉回 waiting，与 join/quit 等路由约定一致。
+   * 不走 transitionRoomGameStatus：清理路径允许从 in_hand/between_hands/entering 等直接落回 waiting。
+   */
+  async #resetRoomGameStatusToWaiting(roomIdNumber: number) {
+    if (!roomIdNumber) return
+    try {
+      await roomModel.update({
+        where: { id: roomIdNumber },
+        data: { gameStatus: 'waiting' }
+      })
+      logger.info(
+        `[room-cleanup] room ${roomIdNumber} gameStatus -> waiting after runtime destroyed`
+      )
+    } catch (e) {
+      logger.error('[room-cleanup] reset gameStatus to waiting failed', e)
+    }
   }
 }
