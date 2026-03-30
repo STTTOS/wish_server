@@ -3,7 +3,7 @@ import { ParameterizedContext } from 'koa'
 
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
-import { ERROR_CODE } from '../constants/errorCodes'
+import { HTTP_STATUS } from '../constants/httpStatus'
 import { PUBLIC_401_PATHS } from '../constants/paths'
 
 export const isPublic401Path = (url: string) =>
@@ -24,12 +24,7 @@ const customHandle401 = async (
   }
 
   if (!user) {
-    response.success(
-      ctx,
-      null,
-      '身份凭证无效, 请重新登陆',
-      ERROR_CODE.UNAUTHORIZED
-    )
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
   await next()

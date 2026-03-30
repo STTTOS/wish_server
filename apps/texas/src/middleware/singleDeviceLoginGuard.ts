@@ -3,7 +3,7 @@ import type { DefaultState } from '../router/instance'
 
 import response from '../utils/response'
 import { isPublic401Path } from './customHandle401'
-import { ERROR_CODE } from '../constants/errorCodes'
+import { HTTP_STATUS } from '../constants/httpStatus'
 import { getLoginSession, type LoginScope } from '../utils/loginSession'
 
 /**
@@ -39,14 +39,14 @@ export default async (
 
   const latestSession = await getLoginSession(parsedUser.id, scope)
   if (!latestSession) {
-    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '登录已失效，请重新登录')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '登录已失效，请重新登录')
     return
   }
 
   if (latestSession.sessionId !== parsedUser.sessionId) {
     response.error(
       ctx,
-      ERROR_CODE.UNAUTHORIZED,
+      HTTP_STATUS.UNAUTHORIZED,
       '账号已在其他设备登录，请重新登录'
     )
     return

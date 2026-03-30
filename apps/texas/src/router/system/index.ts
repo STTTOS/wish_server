@@ -4,7 +4,7 @@ import router from '../instance'
 import response from '../../utils/response'
 import { announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   isMaintenanceEnabled,
@@ -94,7 +94,7 @@ router.post(systemApiWeb('/maintenance/set'), async (ctx) => {
   if (enabled == null) {
     response.error(
       ctx,
-      ERROR_CODE.BAD_REQUEST,
+      HTTP_STATUS.BAD_REQUEST,
       '参数异常：enabled 必须为 true/false 或 1/0'
     )
     return
@@ -102,7 +102,7 @@ router.post(systemApiWeb('/maintenance/set'), async (ctx) => {
 
   const ok = await setMaintenanceEnabled(enabled)
   if (!ok) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '维护开关设置失败')
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '维护开关设置失败')
     return
   }
 

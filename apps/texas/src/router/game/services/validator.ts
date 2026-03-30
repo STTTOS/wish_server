@@ -1,6 +1,7 @@
 import type { StartGameValidationResult } from './types'
 
 import { GameWsGateway } from './gameWsGateway'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { roomMember, room as roomModel } from '../../../models'
 
 /**
@@ -15,16 +16,20 @@ export async function validateStartGameRequest(
     include: { owner: true }
   })
   if (!roomInfo || roomInfo.deletedAt) {
-    return { ok: false, code: 2000, message: '房间不存在' }
+    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '房间不存在' }
   }
   if (roomInfo.ownerId !== ownerId) {
-    return { ok: false, code: 403, message: '仅房主可开始游戏' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.FORBIDDEN,
+      message: '仅房主可开始游戏'
+    }
   }
   const roomGameStatus = roomInfo.gameStatus
   if (roomGameStatus !== 'waiting') {
     return {
       ok: false,
-      code: 2100,
+      status: HTTP_STATUS.CONFLICT,
       message: '房间已开始或正在进入游戏中'
     }
   }
@@ -35,7 +40,11 @@ export async function validateStartGameRequest(
     orderBy: { joinedAt: 'asc' }
   })
   if (members.length < 2) {
-    return { ok: false, code: 2100, message: '人数不足，无法开始游戏' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.CONFLICT,
+      message: '人数不足，无法开始游戏'
+    }
   }
 
   return { ok: true, data: { roomInfo, members } }

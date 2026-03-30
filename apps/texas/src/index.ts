@@ -1,6 +1,7 @@
 /* eslint-disable camelcase */
 
 /* eslint-disable no-console */
+import crypto from 'crypto'
 import { join } from 'path'
 import cors from '@koa/cors'
 import koaJwt from 'koa-jwt'
@@ -13,17 +14,26 @@ import historyApiFallback from 'koa2-connect-history-api-fallback'
 import router from './router'
 import { logger } from './logger'
 import { app, server } from './server'
-import response from './utils/response'
 import rateLimit from './middleware/rateLimit'
+import { HTTP_STATUS } from './constants/httpStatus'
 import { port, cacheTime as maxAge } from './config'
 import customHandle401 from './middleware/customHandle401'
 import customHandle403 from './middleware/customHandle403'
 import loggerMiddleware from './middleware/loggerMiddleware'
 import maintenanceGuard from './middleware/maintenanceGuard'
+import { respondFromApiResult } from './utils/respondFromApiResult'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
 // import { match, matchStageTimeRecord, playerHand, record, win } from './models'
+
+// 每个请求生成 traceId，便于全链路排查
+app.use(async (ctx, next) => {
+  const traceId = crypto.randomUUID()
+  ;(ctx.state as { traceId?: string }).traceId = traceId
+  ctx.set('x-trace-id', traceId)
+  await next()
+})
 
 //统一错误处理
 app.use(async (ctx, next) => {
@@ -31,9 +41,23 @@ app.use(async (ctx, next) => {
     await next()
   } catch (error) {
     if (error instanceof TexasError) {
-      response.error(ctx, error.code, error.message, error.payload ?? null)
+      respondFromApiResult(ctx, {
+        ok: false,
+        status:
+          typeof error.code === 'number' &&
+          error.code >= 400 &&
+          error.code < 600
+            ? error.code
+            : HTTP_STATUS.BAD_REQUEST,
+        message: error.message,
+        details: error.payload ?? null
+      })
     } else {
-      response.error(ctx, 500, '系统异常')
+      respondFromApiResult(ctx, {
+        ok: false,
+        status: HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        message: '系统异常'
+      })
     }
     logger.error(error)
   }

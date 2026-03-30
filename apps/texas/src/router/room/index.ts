@@ -10,7 +10,9 @@ import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { room, user, roomMember } from '../../models'
 import { generateRoomCode } from '../../utils/roomCode'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import { timeFormat, apiPrefixClient } from '../../config'
+import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
   MIN_BB,
   MIN_THINKING_TIME,
@@ -43,7 +45,7 @@ router.post(roomApiClient('/create'), async (ctx) => {
   }: Prisma.RoomCreateInput = ctx.request.body
   const userId = ctx.state.user!.id
   if ([lowestBetAmount, thinkingTime, isPrivate, initialChips].some(isNil)) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -53,17 +55,21 @@ router.post(roomApiClient('/create'), async (ctx) => {
     }
   })
   if (!userInfo) {
-    response.error(ctx, 2100, '玩家不存在, 无法创建房间')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '玩家不存在, 无法创建房间')
     return
   }
 
   if (thinkingTime < MIN_THINKING_TIME) {
-    response.error(ctx, 2100, `思考时间不可小于${MIN_THINKING_TIME}s`)
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      `思考时间不可小于${MIN_THINKING_TIME}s`
+    )
     return
   }
 
   if (!Number.isInteger(lowestBetAmount) || lowestBetAmount < MIN_BB) {
-    response.error(ctx, 2100, '盲注金额异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '盲注金额异常')
     return
   }
 
@@ -73,7 +79,7 @@ router.post(roomApiClient('/create'), async (ctx) => {
   ) {
     response.error(
       ctx,
-      2100,
+      HTTP_STATUS.BAD_REQUEST,
       `初始筹码必须为整数且大于等于大盲注的${INITIAL_CHIPS_MIN_BB_MULTIPLIER}倍`
     )
     return
@@ -89,7 +95,11 @@ router.post(roomApiClient('/create'), async (ctx) => {
     }
   })
   if (joinedRoom) {
-    response.error(ctx, 2100, '你已在房间中, 请先退出后再创建房间')
+    response.error(
+      ctx,
+      HTTP_STATUS.CONFLICT,
+      '你已在房间中, 请先退出后再创建房间'
+    )
     return
   }
 
@@ -100,7 +110,7 @@ router.post(roomApiClient('/create'), async (ctx) => {
     }
   })
   if (roomExisted) {
-    response.error(ctx, 2100, '不可重复创建房间')
+    response.error(ctx, HTTP_STATUS.CONFLICT, '不可重复创建房间')
     return
   }
 
@@ -202,12 +212,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
     userId
   })
 
-  if (!result.ok) {
-    response.error(ctx, result.code, result.message)
-    return
-  }
-
-  response.success(ctx, null, '加入成功')
+  respondFromApiResult(ctx, result, { okMessage: '加入成功', okData: null })
 })
 
 // 客户端：退出房间（幂等：房间已删、或已不在成员表中、或重复调用均返回成功）
@@ -216,12 +221,7 @@ router.post(roomApiClient('/quit'), async (ctx) => {
   const userId = ctx.state.user!.id
 
   const result = await roomQuitFacade.execute({ roomCode, userId })
-  if (!result.ok) {
-    response.error(ctx, result.code, result.message)
-    return
-  }
-
-  response.success(ctx, null, '已退出房间')
+  respondFromApiResult(ctx, result, { okMessage: '已退出房间', okData: null })
 })
 
 // 客户端：房主踢人
@@ -237,13 +237,7 @@ router.post(roomApiClient('/kick'), async (ctx) => {
     targetUserId,
     operatorId
   })
-
-  if (!result.ok) {
-    response.error(ctx, result.code, result.message)
-    return
-  }
-
-  response.success(ctx, null, '已踢出该玩家')
+  respondFromApiResult(ctx, result, { okMessage: '已踢出该玩家', okData: null })
 })
 
 // 客户端：查询房间详情（思考时间、是否公开、大盲注）
@@ -251,7 +245,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
   const { roomCode }: { roomCode?: string } = ctx.request.body
 
   if (!roomCode || !roomCode.trim()) {
-    response.error(ctx, 400, '参数异常：需要 roomCode')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomCode')
     return
   }
 
@@ -271,7 +265,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     }
   })
   if (!roomInfo || roomInfo.deletedAt) {
-    response.error(ctx, 2000, '房间不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
     return
   }
   const {
@@ -310,7 +304,7 @@ router.post(roomApiClient('/members'), async (ctx) => {
     userId
   })
   if (!result.ok) {
-    response.error(ctx, result.code, result.message)
+    respondFromApiResult(ctx, result)
     return
   }
   response.success(ctx, result.data.members)

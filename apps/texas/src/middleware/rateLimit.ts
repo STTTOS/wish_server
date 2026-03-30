@@ -2,7 +2,7 @@ import type { ParameterizedContext } from 'koa'
 
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
-import { ERROR_CODE } from '../constants/errorCodes'
+import { HTTP_STATUS } from '../constants/httpStatus'
 
 type LimitRule = {
   pattern: RegExp
@@ -88,7 +88,7 @@ export default async (
     ctx.set('Retry-After', String(retryAfterSeconds))
     response.error(
       ctx,
-      ERROR_CODE.TOO_MANY_REQUESTS,
+      HTTP_STATUS.TOO_MANY_REQUESTS,
       `请求过于频繁，请 ${retryAfterSeconds} 秒后重试`
     )
     return

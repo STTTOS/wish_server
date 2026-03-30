@@ -3,6 +3,7 @@ import type { WaitingRoomGateway } from './waitingRoomGateway'
 
 import prisma from '../../../models'
 import { validateRoomQuitAuth } from './roomQuitValidator'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomQuitResult = ApiVoidResult
 
@@ -31,7 +32,7 @@ export class RoomQuitFacade {
         auth.data.roomId,
         input.userId
       )
-      return { ok: true, data: undefined }
+      return { ok: true, data: null }
     }
 
     const { roomId } = auth.data
@@ -100,14 +101,17 @@ export class RoomQuitFacade {
     } catch (e) {
       return {
         ok: false,
-        code: 2000,
+        status:
+          e instanceof Error && e.message === '仅等待房间状态支持退出房间'
+            ? HTTP_STATUS.CONFLICT
+            : HTTP_STATUS.INTERNAL_SERVER_ERROR,
         message: e instanceof Error ? e.message : '退出房间失败'
       }
     }
 
     if (txRes.quitNoop) {
       this.waitingRoomGateway.removeUserFromWaitingRoom(roomId, input.userId)
-      return { ok: true, data: undefined }
+      return { ok: true, data: null }
     }
 
     // 先广播「成员离开 / 房主变更 / 列表人数」，再 removeUserFromWaitingRoom
@@ -132,6 +136,6 @@ export class RoomQuitFacade {
     }
 
     this.waitingRoomGateway.removeUserFromWaitingRoom(roomId, input.userId)
-    return { ok: true, data: undefined }
+    return { ok: true, data: null }
   }
 }

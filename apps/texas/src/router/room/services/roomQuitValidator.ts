@@ -1,6 +1,7 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
 import { room } from '../../../models'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomQuitAuthData = { roomId: number; isRoomDeleted: boolean }
 export type RoomQuitAuthResult = ApiResult<RoomQuitAuthData>
@@ -17,7 +18,11 @@ export async function validateRoomQuitAuth(input: {
   const { roomCode } = input
 
   if (typeof roomCode !== 'string' || !roomCode.trim()) {
-    return { ok: false, code: 400, message: '参数异常：需要 roomCode' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.BAD_REQUEST,
+      message: '参数异常：需要 roomCode'
+    }
   }
 
   const code = roomCode.trim().toUpperCase()
@@ -27,7 +32,7 @@ export async function validateRoomQuitAuth(input: {
   })
 
   if (!roomInfo) {
-    return { ok: false, code: 2000, message: '房间不存在' }
+    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '房间不存在' }
   }
 
   if (roomInfo.deletedAt) {
@@ -37,7 +42,7 @@ export async function validateRoomQuitAuth(input: {
   if (roomInfo.gameStatus !== 'waiting') {
     return {
       ok: false,
-      code: 2000,
+      status: HTTP_STATUS.CONFLICT,
       message: '仅等待房间状态支持退出房间'
     }
   }

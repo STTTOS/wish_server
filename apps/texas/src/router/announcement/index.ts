@@ -11,7 +11,7 @@ import {
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import { announcement, announcementRead } from '../../models'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 
@@ -147,7 +147,7 @@ router.post(announcementApiWeb('/validList'), async (ctx) => {
 router.post(announcementApiClient('/markRead'), async (ctx) => {
   const userId = ctx.state.user?.id
   if (!userId) {
-    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
 
@@ -155,12 +155,12 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
     announcementId?: number | string
   }
   if (!announcementId) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
   const announcementIdNum = Number(announcementId)
   if (Number.isNaN(announcementIdNum)) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, 'announcementId 格式异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'announcementId 格式异常')
     return
   }
 
@@ -176,7 +176,7 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
     select: { id: true }
   })
   if (!exists) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '公告不存在或已失效')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在或已失效')
     return
   }
 
@@ -211,7 +211,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
     announcementIds?: Array<number | string>
   }
   if (!Array.isArray(announcementIds) || announcementIds.length === 0) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -219,7 +219,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
   for (const id of announcementIds) {
     const idNum = Number(id)
     if (!Number.isInteger(idNum) || idNum <= 0) {
-      response.error(ctx, ERROR_CODE.BAD_REQUEST, 'announcementIds 格式异常')
+      response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'announcementIds 格式异常')
       return
     }
     idSet.add(idNum)
@@ -239,7 +239,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
   })
   const validIds = validAnnouncements.map((item) => item.id)
   if (validIds.length === 0) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '公告不存在或已失效')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在或已失效')
     return
   }
 
@@ -314,7 +314,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
     type !== '' &&
     !isAnnouncementType(type)
   ) {
-    response.error(ctx, 400, 'type 不合法')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 不合法')
     return
   }
   if (
@@ -323,7 +323,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
     status !== '' &&
     !isAnnouncementStatus(status)
   ) {
-    response.error(ctx, 400, 'status 不合法')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'status 不合法')
     return
   }
 
@@ -337,7 +337,11 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
       expireAtDate = parseToDate(expireAt, 'expireAt')
     }
   } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '参数异常'
+    )
     return
   }
 
@@ -426,7 +430,7 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
 router.post(announcementApiWeb('/detail'), async (ctx) => {
   const { id } = ctx.request.body ?? {}
   if (!id) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -438,7 +442,7 @@ router.post(announcementApiWeb('/detail'), async (ctx) => {
   })
 
   if (!data) {
-    response.error(ctx, 404, '公告不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在')
     return
   }
 
@@ -484,12 +488,12 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
   } = (ctx.request.body ?? {}) as Record<string, unknown>
 
   if ([id, title, summary, content, publishAt].some((value) => !value)) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
   const idNum = Number(id)
   if (Number.isNaN(idNum)) {
-    response.error(ctx, 400, 'id 格式异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'id 格式异常')
     return
   }
 
@@ -498,7 +502,7 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
     (item) => String(item).trim()
   )
   if ([titleText, summaryText, contentText].some(isEmpty)) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
   data.title = titleText
@@ -516,7 +520,11 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
   try {
     data.priority = parsePriority(priority)
   } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '参数异常'
+    )
     return
   }
 
@@ -526,16 +534,20 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
     publishAtDate = parseToDate(publishAt, 'publishAt')
     expireAtDate = parseToDate(expireAt, 'expireAt')
   } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '参数异常'
+    )
     return
   }
   if (!publishAtDate) {
-    response.error(ctx, 400, 'publishAt 不可为空')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'publishAt 不可为空')
     return
   }
   const timeErr = validateExpireAfterPublish(publishAtDate, expireAtDate)
   if (timeErr) {
-    response.error(ctx, 400, timeErr)
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, timeErr)
     return
   }
   data.publishAt = publishAtDate
@@ -546,7 +558,7 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
     select: { id: true }
   })
   if (!exists) {
-    response.error(ctx, 404, '公告不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在')
     return
   }
 
@@ -584,12 +596,12 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
 
   // type 需要是 Prisma 枚举值，运行时无法完全校验，至少保证必填字段存在
   if ([type, title, summary, content, publishAt].some((value) => !value)) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
   if (!isAnnouncementType(type)) {
-    response.error(ctx, 400, 'type 不合法')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 不合法')
     return
   }
 
@@ -597,7 +609,7 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     (item) => String(item).trim()
   )
   if ([titleText, summaryText, contentText].some(isEmpty)) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -609,17 +621,21 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     publishAtDate = parseToDate(publishAt, 'publishAt')
     expireAtDate = parseToDate(expireAt, 'expireAt')
   } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '参数异常'
+    )
     return
   }
   if (!publishAtDate) {
-    response.error(ctx, 400, 'publishAt 不可为空')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'publishAt 不可为空')
     return
   }
 
   const createTimeErr = validateExpireAfterPublish(publishAtDate, expireAtDate)
   if (createTimeErr) {
-    response.error(ctx, 400, createTimeErr)
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, createTimeErr)
     return
   }
 
@@ -630,7 +646,11 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
   try {
     priorityValue = parsePriority(priority)
   } catch (e) {
-    response.error(ctx, 400, e instanceof Error ? e.message : '参数异常')
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '参数异常'
+    )
     return
   }
 
@@ -666,7 +686,7 @@ router.post(announcementApiWeb('/changeStatus'), async (ctx) => {
   const { id, status } = ctx.request.body ?? {}
 
   if (!id || (status !== 'published' && status !== 'disabled')) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -686,7 +706,7 @@ router.post(announcementApiWeb('/changeStatus'), async (ctx) => {
 router.post(announcementApiWeb('/delete'), async (ctx) => {
   const { id } = ctx.request.body ?? {}
   if (!id) {
-    response.error(ctx, 400, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
@@ -695,12 +715,12 @@ router.post(announcementApiWeb('/delete'), async (ctx) => {
     select: { id: true, status: true }
   })
   if (!target) {
-    response.error(ctx, 404, '公告不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在')
     return
   }
 
   if (target.status === 'published') {
-    response.error(ctx, 2000, '已发布公告不可删除')
+    response.error(ctx, HTTP_STATUS.CONFLICT, '已发布公告不可删除')
     return
   }
 

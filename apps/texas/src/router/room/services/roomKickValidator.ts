@@ -1,7 +1,7 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
 import { room } from '../../../models'
-import { ERROR_CODE } from '../../../constants/errorCodes'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomKickAuthData = { roomId: number }
 export type RoomKickAuthResult = ApiResult<RoomKickAuthData>
@@ -20,7 +20,7 @@ export async function validateRoomKickAuth(input: {
   ) {
     return {
       ok: false,
-      code: ERROR_CODE.BAD_REQUEST,
+      status: HTTP_STATUS.BAD_REQUEST,
       message: '参数异常：需要 roomCode 和 targetUserId'
     }
   }
@@ -32,23 +32,31 @@ export async function validateRoomKickAuth(input: {
   })
 
   if (!roomInfo || roomInfo.deletedAt) {
-    return { ok: false, code: 2000, message: '房间不存在' }
+    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '房间不存在' }
   }
 
   if (roomInfo.gameStatus !== 'waiting') {
     return {
       ok: false,
-      code: 2100,
+      status: HTTP_STATUS.CONFLICT,
       message: '仅等待房间状态支持踢人'
     }
   }
 
   if (roomInfo.ownerId !== operatorId) {
-    return { ok: false, code: 403, message: '仅房主可以踢人' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.FORBIDDEN,
+      message: '仅房主可以踢人'
+    }
   }
 
   if (roomInfo.ownerId === targetUserId) {
-    return { ok: false, code: 400, message: '不能踢出房主' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.BAD_REQUEST,
+      message: '不能踢出房主'
+    }
   }
 
   return { ok: true, data: { roomId: roomInfo.id } }

@@ -3,7 +3,7 @@ import type { ParameterizedContext } from 'koa'
 import { user } from '../models'
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
-import { ERROR_CODE } from '../constants/errorCodes'
+import { HTTP_STATUS } from '../constants/httpStatus'
 import { ADMIN_ONLY_PATHS } from '../constants/paths'
 
 const adminOnlyPaths = new Set<string>(ADMIN_ONLY_PATHS)
@@ -21,7 +21,7 @@ export default async (
   const userId = ctx.state.user?.id
   if (!userId) {
     // 理论上 customHandle401 会先拦住未登录请求
-    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
 
@@ -31,7 +31,7 @@ export default async (
   })
 
   if (!admin?.isAdmin) {
-    response.error(ctx, ERROR_CODE.FORBIDDEN, '无权限')
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权限')
     return
   }
 

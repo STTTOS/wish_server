@@ -1,7 +1,7 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
 import { room, roomMember } from '../../../models'
-import { ERROR_CODE } from '../../../constants/errorCodes'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomMembersAuthData = { roomId: number; ownerId: number }
 export type RoomMembersAuthResult = ApiResult<RoomMembersAuthData>
@@ -20,7 +20,7 @@ export async function validateRoomMembersAuth(input: {
   if (!roomCode || !roomCode.trim()) {
     return {
       ok: false,
-      code: ERROR_CODE.BAD_REQUEST,
+      status: HTTP_STATUS.BAD_REQUEST,
       message: '参数异常：需要 roomCode'
     }
   }
@@ -32,7 +32,7 @@ export async function validateRoomMembersAuth(input: {
   if (!roomInfo || roomInfo.deletedAt) {
     return {
       ok: false,
-      code: ERROR_CODE.COMMON_FAIL,
+      status: HTTP_STATUS.NOT_FOUND,
       message: '房间不存在'
     }
   }
@@ -49,7 +49,7 @@ export async function validateRoomMembersAuth(input: {
   if (!selfMember) {
     return {
       ok: false,
-      code: ERROR_CODE.FORBIDDEN,
+      status: HTTP_STATUS.FORBIDDEN,
       message: '无权查看该房间成员'
     }
   }

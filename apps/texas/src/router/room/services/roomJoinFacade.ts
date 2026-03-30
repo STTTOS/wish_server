@@ -8,6 +8,7 @@ import prisma from '../../../models'
 import { timeFormat } from '../../../config'
 import { validateRoomJoinAuth } from './roomJoinValidator'
 import { MAX_PLAYERS_COUNT } from '../../../constants/game'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomJoinResult = ApiVoidResult
 
@@ -28,7 +29,7 @@ export class RoomJoinFacade {
 
     type RoomJoinTxResult =
       | { joinedNoop: true }
-      | { ok: false; code: number; message: string }
+      | { ok: false; status: number; message: string }
       | {
           joined: true
           memberCountAfterJoin: number
@@ -46,7 +47,7 @@ export class RoomJoinFacade {
       if (!latestRoom || latestRoom.deletedAt) {
         return {
           ok: false,
-          code: 2000,
+          status: HTTP_STATUS.NOT_FOUND,
           message: '房间不存在或房间代码错误'
         }
       }
@@ -54,14 +55,14 @@ export class RoomJoinFacade {
       if (latestRoom.gameStatus !== 'waiting') {
         return {
           ok: false,
-          code: 2100,
+          status: HTTP_STATUS.CONFLICT,
           message: '仅等待房间状态支持加入房间'
         }
       }
 
       const memberCount = await tx.roomMember.count({ where: { roomId } })
       if (memberCount >= MAX_PLAYERS_COUNT) {
-        return { ok: false, code: 2000, message: '房间已满' }
+        return { ok: false, status: HTTP_STATUS.CONFLICT, message: '房间已满' }
       }
 
       const alreadyInRoom = await tx.roomMember.findUnique({
@@ -83,7 +84,7 @@ export class RoomJoinFacade {
       if (inOtherRoomLatest) {
         return {
           ok: false,
-          code: 2000,
+          status: HTTP_STATUS.CONFLICT,
           message: '你已在其他房间中，请先退出后再加入'
         }
       }
@@ -100,12 +101,12 @@ export class RoomJoinFacade {
     })
 
     if ('joinedNoop' in txRes) {
-      return { ok: true, data: undefined }
+      return { ok: true, data: null }
     }
 
     if (!('joined' in txRes)) {
       // ok:false 分支
-      return { ok: false, code: txRes.code, message: txRes.message }
+      return { ok: false, status: txRes.status, message: txRes.message }
     }
 
     const memberPayload: WsWaitingRoomMemberJoinedData = {
@@ -126,6 +127,6 @@ export class RoomJoinFacade {
       txRes.memberCountAfterJoin
     )
 
-    return { ok: true, data: undefined }
+    return { ok: true, data: null }
   }
 }

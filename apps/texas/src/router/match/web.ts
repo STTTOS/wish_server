@@ -5,7 +5,7 @@ import router from '../instance'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import {
   user,
@@ -21,11 +21,11 @@ router.post(matchWebApi('/list'), async (ctx) => {
   const userId = ctx.state.user?.id
   const { current: skip, pageSize: take, time } = ctx.request.body
   if (!userId) {
-    response.error(ctx, ERROR_CODE.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
   if (!skip || !take) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '分页参数错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
     return
   }
 
@@ -34,7 +34,7 @@ router.post(matchWebApi('/list'), async (ctx) => {
     select: { isAdmin: true }
   })
   if (!loginUser) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
     return
   }
 
@@ -109,11 +109,11 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
   const userId = ctx.state.user?.id
   const id = Number(ctx.params.id)
   if (!userId) {
-    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
   if (isNaN(id)) {
-    response.error(ctx, 400, '参数错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
   const loginUser = await user.findUnique({
@@ -121,7 +121,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
     select: { isAdmin: true }
   })
   if (!loginUser) {
-    response.error(ctx, 2000, '用户不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
     return
   }
 
@@ -166,7 +166,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
     }
   })
   if (!detail) {
-    response.error(ctx, 404, '对局不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
   if (!loginUser.isAdmin) {
@@ -174,7 +174,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
       (record) => record.userId === userId
     )
     if (!participated) {
-      response.error(ctx, 403, '无权限查看该对局')
+      response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权限查看该对局')
       return
     }
   }
@@ -215,7 +215,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
 router.post(matchWebApi('/error/:id'), async (ctx) => {
   const id = Number(ctx.params.id)
   if (isNaN(id)) {
-    response.error(ctx, 400, '参数错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
   const list = await matchError.findMany({
@@ -237,7 +237,7 @@ router.post(matchWebApi('/records/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
 
   if (isNaN(matchId)) {
-    response.error(ctx, 400, '参数错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
   const list = await betRecord.findMany({
@@ -251,7 +251,7 @@ router.post(matchWebApi('/records/:matchId'), async (ctx) => {
 router.post(matchWebApi('/players/:matchId'), async (ctx) => {
   const matchId = Number(ctx.params.matchId)
   if (isNaN(matchId)) {
-    response.error(ctx, 400, '参数错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
   const list = await playerMatchRecord.findMany({

@@ -11,7 +11,7 @@ import { getToken } from '../../utils/login'
 import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import {
   setLoginSession,
   getLoginSession,
@@ -39,7 +39,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
     password: Prisma.UserCreateInput['password']
   } = ctx.request.body
   if (!username || !password) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
   const sessionId = uuidv4()
@@ -63,7 +63,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
       )
     } else {
       // 密码错误
-      response.error(ctx, ERROR_CODE.BUSINESS_VALIDATION, '密码错误')
+      response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '密码错误')
     }
   } else {
     const ramdomName = `用户_${sessionId.slice(0, 6)}_${dayjs().format(
@@ -109,11 +109,11 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
         }
 
         if (targets.includes('name')) {
-          response.error(ctx, ERROR_CODE.USER_NAME_EXISTS, '用户昵称已存在')
+          response.error(ctx, HTTP_STATUS.CONFLICT, '用户昵称已存在')
         } else if (targets.includes('username')) {
-          response.error(ctx, ERROR_CODE.USER_USERNAME_EXISTS, '用户名已存在')
+          response.error(ctx, HTTP_STATUS.CONFLICT, '用户名已存在')
         } else {
-          response.error(ctx, ERROR_CODE.USER_INFO_EXISTS, '用户信息已存在')
+          response.error(ctx, HTTP_STATUS.CONFLICT, '用户信息已存在')
         }
       } else {
         throw error
@@ -139,18 +139,18 @@ router.post(userWebApi('/login'), async (ctx) => {
     password: Prisma.UserCreateInput['password']
   } = ctx.request.body
   if (!username || !password) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
     return
   }
 
   const target = await user.findFirst({ where: { username } })
   if (!target) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
     return
   }
 
   if (target.password !== password) {
-    response.error(ctx, ERROR_CODE.BUSINESS_VALIDATION, '密码错误')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '密码错误')
     return
   }
 
@@ -200,7 +200,7 @@ router.post(userClientApi('/logout'), async (ctx) => {
 router.post(userClientApi('/setName'), async (ctx) => {
   const { name }: { name: Prisma.UserCreateInput['name'] } = ctx.request.body
   if (!name) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '名称不可为空')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '名称不可为空')
     return
   }
 
@@ -215,12 +215,12 @@ router.post(userClientApi('/setName'), async (ctx) => {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
-        response.error(ctx, ERROR_CODE.USER_NAME_EXISTS, '用户昵称已存在')
+        response.error(ctx, HTTP_STATUS.CONFLICT, '用户昵称已存在')
         return
       }
 
       if (error.code === 'P2025') {
-        response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
+        response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
         return
       }
     }
@@ -261,7 +261,7 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
     }
   })
   if (!userInfo) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
   } else {
     const { createdAt, ...rest } = userInfo
     response.success(ctx, {
@@ -293,7 +293,7 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
     typeof avatarKey !== 'string' ||
     avatarKey.trim().length === 0
   ) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '请传入有效的 avatarKey')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '请传入有效的 avatarKey')
     return
   }
 
@@ -311,7 +311,7 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2025'
     ) {
-      response.error(ctx, ERROR_CODE.COMMON_FAIL, '用户不存在')
+      response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
       return
     }
     throw error
@@ -375,7 +375,7 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
   }
 
   if (Object.keys(data).length === 0) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '请至少传入一个设置项')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '请至少传入一个设置项')
     return
   }
 

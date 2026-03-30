@@ -4,8 +4,9 @@ import { roomMember } from '../../models'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { StartGameUseCase } from './services/flow'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import { apiPrefixWeb, apiPrefixClient } from '../../config'
+import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
   gameRuntimeRegistry,
   getCurrentMatchIdWithFallback
@@ -46,13 +47,13 @@ router.post(gameClientApi('/entring'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body ?? {}
   const ownerId = ctx.state.user!.id
   if (!roomId || !Number.isInteger(roomId)) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常：需要 roomId')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
 
   const requested = await startGameUseCase.requestStart(roomId, ownerId)
   if (!requested.ok) {
-    response.error(ctx, requested.code, requested.message)
+    respondFromApiResult(ctx, requested)
     return
   }
 
@@ -75,7 +76,7 @@ router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
     ? gameRuntimeRegistry.getTexas(String(roomId))
     : undefined
   if (!roomId || !texas) {
-    response.success(ctx, 2100, '对局不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
 

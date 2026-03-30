@@ -5,7 +5,7 @@ import dayjs from 'dayjs'
 import './web'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
-import { ERROR_CODE } from '../../constants/errorCodes'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import {
@@ -197,7 +197,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   const { matchId }: { matchId?: number } = ctx.request.body ?? {}
 
   if (!matchId) {
-    response.error(ctx, ERROR_CODE.BAD_REQUEST, '参数异常：需要 matchId')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 matchId')
     return
   }
 
@@ -250,7 +250,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     }
   })
   if (!matchInfo) {
-    response.error(ctx, ERROR_CODE.COMMON_FAIL, '对局不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
 
@@ -261,7 +261,7 @@ router.post(matchApi('/detail'), async (ctx) => {
     }
   })
   if (!participated) {
-    response.error(ctx, ERROR_CODE.FORBIDDEN, '无权查看该对局')
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权查看该对局')
     return
   }
 
@@ -352,13 +352,13 @@ router.post(matchApi('/currentState'), async (ctx) => {
   })
   const roomId = membership?.roomId
   if (!roomId) {
-    response.error(ctx, 2000, '当前不在对局房间中')
+    response.error(ctx, HTTP_STATUS.CONFLICT, '当前不在对局房间中')
     return
   }
 
   const texas = gameRuntimeRegistry.getTexas(String(roomId))
   if (!texas) {
-    response.error(ctx, 2000, '对局不存在')
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
 

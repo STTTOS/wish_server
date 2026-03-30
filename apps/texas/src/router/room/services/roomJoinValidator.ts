@@ -1,7 +1,7 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
 import { room, user } from '../../../models'
-import { ERROR_CODE } from '../../../constants/errorCodes'
+import { HTTP_STATUS } from '../../../constants/httpStatus'
 
 export type RoomJoinAuthData = {
   roomId: number
@@ -29,7 +29,11 @@ export async function validateRoomJoinAuth(input: {
   const { roomCode, userId } = input
 
   if (!roomCode || !roomCode.trim()) {
-    return { ok: false, code: 400, message: '房间代码不能为空' }
+    return {
+      ok: false,
+      status: HTTP_STATUS.BAD_REQUEST,
+      message: '房间代码不能为空'
+    }
   }
 
   const roomInfo = await room.findUnique({
@@ -40,7 +44,7 @@ export async function validateRoomJoinAuth(input: {
   if (!roomInfo || roomInfo.deletedAt) {
     return {
       ok: false,
-      code: ERROR_CODE.COMMON_FAIL,
+      status: HTTP_STATUS.NOT_FOUND,
       message: '房间不存在或房间代码错误'
     }
   }
@@ -48,7 +52,7 @@ export async function validateRoomJoinAuth(input: {
   if (roomInfo.gameStatus !== 'waiting') {
     return {
       ok: false,
-      code: ERROR_CODE.BUSINESS_VALIDATION,
+      status: HTTP_STATUS.CONFLICT,
       message: '仅等待房间状态支持加入房间'
     }
   }
@@ -59,7 +63,7 @@ export async function validateRoomJoinAuth(input: {
   })
 
   if (!joinUser) {
-    return { ok: false, code: ERROR_CODE.COMMON_FAIL, message: '用户不存在' }
+    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '用户不存在' }
   }
 
   return {
