@@ -128,27 +128,8 @@ export class RoomCreateFacade {
             error instanceof Prisma.PrismaClientKnownRequestError &&
             error.code === 'P2002'
           ) {
-            const metaTarget = error.meta?.target
-            const targets: string[] = []
-            if (Array.isArray(metaTarget)) {
-              targets.push(...metaTarget)
-            } else if (typeof metaTarget === 'string') {
-              targets.push(metaTarget)
-            }
-            // 仅在 owner 唯一约束冲突下做“返回已有房间”的幂等兜底；
-            // 其他唯一冲突（如 roomCode）保持冲突错误，避免错误语义被吞掉。
-            const isActiveOwnerConflict = targets.some(
-              (target) =>
-                target.includes('Room_activeOwnerId_key') ||
-                target.includes('activeOwnerId')
-            )
-            if (!isActiveOwnerConflict) {
-              return {
-                ok: false as const,
-                status: HTTP_STATUS.CONFLICT,
-                message: '创建房间冲突,请重试'
-              }
-            }
+            // 并发冲突统一回查 owner 的有效房间：
+            // 查到则幂等成功，查不到再返回冲突。
             const existed = await tx.room.findFirst({
               where: { activeOwnerId: userId },
               select: { id: true, code: true }
