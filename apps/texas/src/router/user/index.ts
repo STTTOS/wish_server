@@ -63,7 +63,9 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
       )
     } else {
       // 密码错误
-      response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '密码错误')
+      response.error(ctx, HTTP_STATUS.BAD_REQUEST, '密码错误', {
+        type: 'INVALID_CREDENTIALS'
+      })
     }
   } else {
     const ramdomName = `用户_${sessionId.slice(0, 6)}_${dayjs().format(
@@ -150,7 +152,9 @@ router.post(userWebApi('/login'), async (ctx) => {
   }
 
   if (target.password !== password) {
-    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '密码错误')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '密码错误', {
+      type: 'INVALID_CREDENTIALS'
+    })
     return
   }
 
