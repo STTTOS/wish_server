@@ -123,7 +123,8 @@ export class RoomQuitFacade {
     }
 
     this.waitingRoomGateway.broadcastWaitingRoomMemberLeft(roomId, {
-      userId: input.userId
+      userId: input.userId,
+      reason: 'quit'
     })
 
     if (txRes.deletedRoom) {

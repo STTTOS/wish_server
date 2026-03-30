@@ -93,7 +93,9 @@ export class RoomKickFacade {
         return { ok: true, data: null }
       case 'kicked':
         this.waitingRoomGateway.broadcastWaitingRoomMemberLeft(roomId, {
-          userId: targetUserId
+          userId: targetUserId,
+          reason: 'kick',
+          operatorId: input.operatorId
         })
         // 先广播离开事件给客户端，再移除其 waiting-room 订阅
         this.waitingRoomGateway.removeUserFromWaitingRoom(roomId, targetUserId)

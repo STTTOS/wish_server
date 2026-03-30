@@ -18,6 +18,9 @@ export type WsWaitingRoomMemberJoinedData = {
 
 export type WsWaitingRoomMemberLeftData = {
   userId: number
+  reason: 'quit' | 'kick'
+  /** 仅 reason=kick 时存在（执行踢人操作的用户） */
+  operatorId?: number
 }
 
 /** WS 层在线状态（杀进程、断网等）；成员仍在 DB 中，与 HTTP 退房的 member-left 不同 */
