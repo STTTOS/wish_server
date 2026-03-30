@@ -1,27 +1,18 @@
-import type { RoomWsMessage } from './ws-event-types'
-
 import dayjs from 'dayjs'
-import { isNil } from 'ramda'
-import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
 import { ws } from '../../server'
+import { room } from '../../models'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
-import { room, user, roomMember } from '../../models'
-import { generateRoomCode } from '../../utils/roomCode'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { timeFormat, apiPrefixClient } from '../../config'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
-  MIN_BB,
-  MIN_THINKING_TIME,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER
-} from '../../constants/game'
-import {
   RoomJoinFacade,
   RoomQuitFacade,
   RoomKickFacade,
+  RoomCreateFacade,
   RoomMembersFacade,
   WaitingRoomGateway
 } from './services/flow'
@@ -29,6 +20,7 @@ import {
 const roomApiClient = combinePath(apiPrefixClient)('/room')
 
 const roomMembersFacade = new RoomMembersFacade(new WaitingRoomGateway(ws))
+const roomCreateFacade = new RoomCreateFacade(new WaitingRoomGateway(ws))
 const roomJoinFacade = new RoomJoinFacade(new WaitingRoomGateway(ws))
 const roomQuitFacade = new RoomQuitFacade(new WaitingRoomGateway(ws))
 const roomKickFacade = new RoomKickFacade(new WaitingRoomGateway(ws))
@@ -37,118 +29,17 @@ const roomKickFacade = new RoomKickFacade(new WaitingRoomGateway(ws))
  * 客户端创建房间
  */
 router.post(roomApiClient('/create'), async (ctx) => {
-  const {
+  const userId = ctx.state.user!.id
+  const { lowestBetAmount, thinkingTime, isPrivate, initialChips } = (ctx
+    .request.body ?? {}) as Record<string, unknown>
+  const result = await roomCreateFacade.execute({
+    userId,
     lowestBetAmount,
     thinkingTime,
     isPrivate,
     initialChips
-  }: Prisma.RoomCreateInput = ctx.request.body
-  const userId = ctx.state.user!.id
-  if ([lowestBetAmount, thinkingTime, isPrivate, initialChips].some(isNil)) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常')
-    return
-  }
-
-  const userInfo = await user.findUnique({
-    where: {
-      id: userId
-    }
   })
-  if (!userInfo) {
-    response.error(ctx, HTTP_STATUS.NOT_FOUND, '玩家不存在, 无法创建房间')
-    return
-  }
-
-  if (thinkingTime < MIN_THINKING_TIME) {
-    response.error(
-      ctx,
-      HTTP_STATUS.BAD_REQUEST,
-      `思考时间不可小于${MIN_THINKING_TIME}s`
-    )
-    return
-  }
-
-  if (!Number.isInteger(lowestBetAmount) || lowestBetAmount < MIN_BB) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '盲注金额异常')
-    return
-  }
-
-  if (
-    !Number.isInteger(initialChips) ||
-    initialChips! < lowestBetAmount * INITIAL_CHIPS_MIN_BB_MULTIPLIER
-  ) {
-    response.error(
-      ctx,
-      HTTP_STATUS.BAD_REQUEST,
-      `初始筹码必须为整数且大于等于大盲注的${INITIAL_CHIPS_MIN_BB_MULTIPLIER}倍`
-    )
-    return
-  }
-
-  // 如果用户已经在其他房间中，则不可再创建房间
-  const joinedRoom = await roomMember.findFirst({
-    where: {
-      userId,
-      room: {
-        deletedAt: null
-      }
-    }
-  })
-  if (joinedRoom) {
-    response.error(
-      ctx,
-      HTTP_STATUS.CONFLICT,
-      '你已在房间中, 请先退出后再创建房间'
-    )
-    return
-  }
-
-  const roomExisted = await room.findFirst({
-    where: {
-      ownerId: userId,
-      deletedAt: null
-    }
-  })
-  if (roomExisted) {
-    response.error(ctx, HTTP_STATUS.CONFLICT, '不可重复创建房间')
-    return
-  }
-
-  const roomCode = generateRoomCode()
-  const res = await room.create({
-    data: {
-      code: roomCode,
-      isPrivate,
-      thinkingTime,
-      lowestBetAmount,
-      initialChips,
-      ownerId: userInfo.id
-    }
-  })
-  await roomMember.create({
-    data: { roomId: res.id, userId: userInfo.id }
-  })
-
-  ws.broadcastRoomList({
-    type: 'room-list-room-created',
-    data: {
-      id: res.id,
-      code: res.code,
-      owner: {
-        id: userInfo.id,
-        name: userInfo.name,
-        avatarUrl: userInfo.avatarUrl,
-        avatarKey: userInfo.avatarKey
-      },
-      initialChips: res.initialChips,
-      thinkingTime: res.thinkingTime,
-      lowestBetAmount: res.lowestBetAmount,
-      createdAt: dayjs(res.createdAt).format(timeFormat),
-      memberCount: 1
-    }
-  } satisfies RoomWsMessage<'room-list-room-created'>)
-
-  response.success(ctx, { roomId: res.id, roomCode }, '房间创建成功')
+  respondFromApiResult(ctx, result, { okMessage: '房间创建成功' })
 })
 
 // 客户端获取房间列表

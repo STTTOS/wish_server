@@ -1,6 +1,7 @@
 import type SocketServer from '../../../SockeServer'
 import type {
   RoomWsMessage,
+  WsRoomListRoomCreatedData,
   WsRoomListRoomDeletedData,
   WsWaitingRoomMemberLeftData,
   WsWaitingRoomMemberJoinedData,
@@ -72,6 +73,14 @@ export class WaitingRoomGateway {
     const data: WsRoomListRoomDeletedData = { roomId }
     const msg: RoomWsMessage<'room-list-room-deleted'> = {
       type: 'room-list-room-deleted',
+      data
+    }
+    this.socket.broadcastRoomList(msg)
+  }
+
+  broadcastRoomListRoomCreated(data: WsRoomListRoomCreatedData) {
+    const msg: RoomWsMessage<'room-list-room-created'> = {
+      type: 'room-list-room-created',
       data
     }
     this.socket.broadcastRoomList(msg)

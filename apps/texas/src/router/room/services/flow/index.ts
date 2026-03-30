@@ -3,6 +3,8 @@
  */
 export { WaitingRoomGateway } from '../waitingRoomGateway'
 export { RoomMembersFacade } from '../roomMembersFacade'
+export { RoomCreateFacade } from '../roomCreateFacade'
+export type { RoomCreateResult } from '../roomCreateFacade'
 export { RoomJoinFacade } from '../roomJoinFacade'
 export type { RoomJoinResult } from '../roomJoinFacade'
 export { RoomQuitFacade } from '../roomQuitFacade'
