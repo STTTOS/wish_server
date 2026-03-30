@@ -28,10 +28,10 @@ export class RoomJoinFacade {
     const { roomId, joinUser } = auth.data
 
     type RoomJoinTxResult =
-      | { joinedNoop: true }
-      | { ok: false; status: number; message: string }
+      | { kind: 'noop' }
+      | { kind: 'fail'; status: number; message: string }
       | {
-          joined: true
+          kind: 'joined'
           memberCountAfterJoin: number
           ownerId: number
         }
@@ -46,7 +46,7 @@ export class RoomJoinFacade {
 
       if (!latestRoom || latestRoom.deletedAt) {
         return {
-          ok: false,
+          kind: 'fail',
           status: HTTP_STATUS.NOT_FOUND,
           message: '房间不存在或房间代码错误'
         }
@@ -54,7 +54,7 @@ export class RoomJoinFacade {
 
       if (latestRoom.gameStatus !== 'waiting') {
         return {
-          ok: false,
+          kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
           message: '仅等待房间状态支持加入房间'
         }
@@ -62,7 +62,11 @@ export class RoomJoinFacade {
 
       const memberCount = await tx.roomMember.count({ where: { roomId } })
       if (memberCount >= MAX_PLAYERS_COUNT) {
-        return { ok: false, status: HTTP_STATUS.CONFLICT, message: '房间已满' }
+        return {
+          kind: 'fail',
+          status: HTTP_STATUS.CONFLICT,
+          message: '房间已满'
+        }
       }
 
       const alreadyInRoom = await tx.roomMember.findUnique({
@@ -72,7 +76,7 @@ export class RoomJoinFacade {
       })
       if (alreadyInRoom) {
         // 幂等：重复加入同一房间，视为 no-op，返回成功但不广播、不增人数
-        return { joinedNoop: true }
+        return { kind: 'noop' }
       }
 
       const inOtherRoomLatest = await tx.roomMember.findFirst({
@@ -83,7 +87,7 @@ export class RoomJoinFacade {
       })
       if (inOtherRoomLatest) {
         return {
-          ok: false,
+          kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
           message: '你已在其他房间中，请先退出后再加入'
         }
@@ -94,19 +98,19 @@ export class RoomJoinFacade {
       })
 
       return {
-        joined: true,
+        kind: 'joined',
         memberCountAfterJoin: memberCount + 1,
         ownerId: latestRoom.ownerId
       }
     })
 
-    if ('joinedNoop' in txRes) {
-      return { ok: true, data: null }
-    }
-
-    if (!('joined' in txRes)) {
-      // ok:false 分支
-      return { ok: false, status: txRes.status, message: txRes.message }
+    switch (txRes.kind) {
+      case 'noop':
+        return { ok: true, data: null }
+      case 'fail':
+        return { ok: false, status: txRes.status, message: txRes.message }
+      case 'joined':
+        break
     }
 
     const memberPayload: WsWaitingRoomMemberJoinedData = {
