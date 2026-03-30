@@ -91,7 +91,7 @@ export class RoomQuitFacade {
         if (restCount === 0) {
           await tx.room.update({
             where: { id: roomId },
-            data: { deletedAt: new Date() }
+            data: { deletedAt: new Date(), activeOwnerId: null }
           })
           deletedRoom = true
         }

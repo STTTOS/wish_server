@@ -2,6 +2,7 @@ import type { ApiResult } from '../../../utils/apiResult'
 import type { WaitingRoomGateway } from './waitingRoomGateway'
 
 import dayjs from 'dayjs'
+import { Prisma } from '@prisma/texas-client'
 
 import prisma from '../../../models'
 import { timeFormat } from '../../../config'
@@ -23,83 +24,175 @@ export class RoomCreateFacade {
     const { userId, isPrivate, thinkingTime, lowestBetAmount, initialChips } =
       validated.data
 
-    const created = await prisma.$transaction(async (tx) => {
-      const userInfo = await tx.user.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, avatarUrl: true, avatarKey: true }
-      })
-      if (!userInfo) {
-        return {
-          ok: false as const,
-          status: HTTP_STATUS.NOT_FOUND,
-          message: '玩家不存在, 无法创建房间'
+    type TxRes =
+      | { ok: false; status: number; message: string }
+      | {
+          ok: true
+          kind: 'existing'
+          data: { roomId: number; roomCode: string }
+        }
+      | {
+          ok: true
+          kind: 'created'
+          data: {
+            roomId: number
+            roomCode: string
+            createdAt: Date
+            owner: {
+              id: number
+              name: string
+              avatarUrl: string | null
+              avatarKey: string
+            }
+          }
+        }
+
+    const txRes = await prisma.$transaction<TxRes>(
+      async (tx): Promise<TxRes> => {
+        const userInfo = await tx.user.findUnique({
+          where: { id: userId },
+          select: { id: true, name: true, avatarUrl: true, avatarKey: true }
+        })
+        if (!userInfo) {
+          return {
+            ok: false as const,
+            status: HTTP_STATUS.NOT_FOUND,
+            message: '玩家不存在, 无法创建房间'
+          }
+        }
+
+        const joinedRoom = await tx.roomMember.findFirst({
+          where: {
+            userId,
+            room: { deletedAt: null }
+          },
+          select: {
+            room: {
+              select: {
+                id: true,
+                code: true,
+                ownerId: true
+              }
+            }
+          }
+        })
+        if (joinedRoom) {
+          if (joinedRoom.room.ownerId === userId) {
+            // 幂等：用户已在自己房间中，重复创建直接返回同一个房间
+            return {
+              ok: true as const,
+              kind: 'existing' as const,
+              data: {
+                roomId: joinedRoom.room.id,
+                roomCode: joinedRoom.room.code
+              }
+            }
+          }
+
+          return {
+            ok: false as const,
+            status: HTTP_STATUS.CONFLICT,
+            message: '你已在房间中, 请先退出后再创建房间'
+          }
+        }
+
+        const roomCode = generateRoomCode()
+        try {
+          const createdRoom = await tx.room.create({
+            data: {
+              code: roomCode,
+              isPrivate,
+              thinkingTime,
+              lowestBetAmount,
+              initialChips,
+              ownerId: userInfo.id,
+              activeOwnerId: userInfo.id
+            }
+          })
+          await tx.roomMember.create({
+            data: { roomId: createdRoom.id, userId: userInfo.id }
+          })
+
+          return {
+            ok: true as const,
+            kind: 'created' as const,
+            data: {
+              roomId: createdRoom.id,
+              roomCode,
+              createdAt: createdRoom.createdAt,
+              owner: userInfo
+            }
+          }
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            const metaTarget = error.meta?.target
+            const targets: string[] = []
+            if (Array.isArray(metaTarget)) {
+              targets.push(...metaTarget)
+            } else if (typeof metaTarget === 'string') {
+              targets.push(metaTarget)
+            }
+            // 仅在 owner 唯一约束冲突下做“返回已有房间”的幂等兜底；
+            // 其他唯一冲突（如 roomCode）保持冲突错误，避免错误语义被吞掉。
+            const isActiveOwnerConflict = targets.some(
+              (target) =>
+                target.includes('Room_activeOwnerId_key') ||
+                target.includes('activeOwnerId')
+            )
+            if (!isActiveOwnerConflict) {
+              return {
+                ok: false as const,
+                status: HTTP_STATUS.CONFLICT,
+                message: '创建房间冲突,请重试'
+              }
+            }
+            const existed = await tx.room.findFirst({
+              where: { activeOwnerId: userId },
+              select: { id: true, code: true }
+            })
+            if (existed) {
+              // 并发冲突下幂等：唯一约束命中后返回已存在房间
+              return {
+                ok: true as const,
+                kind: 'existing' as const,
+                data: {
+                  roomId: existed.id,
+                  roomCode: existed.code
+                }
+              }
+            }
+            return {
+              ok: false as const,
+              status: HTTP_STATUS.CONFLICT,
+              message: '创建房间冲突,请重试'
+            }
+          }
+          throw error
         }
       }
+    )
 
-      const joinedRoom = await tx.roomMember.findFirst({
-        where: {
-          userId,
-          room: { deletedAt: null }
-        }
-      })
-      if (joinedRoom) {
-        return {
-          ok: false as const,
-          status: HTTP_STATUS.CONFLICT,
-          message: '你已在房间中, 请先退出后再创建房间'
-        }
-      }
-
-      const roomExisted = await tx.room.findFirst({
-        where: { ownerId: userId, deletedAt: null }
-      })
-      if (roomExisted) {
-        return {
-          ok: false as const,
-          status: HTTP_STATUS.CONFLICT,
-          message: '不可重复创建房间'
-        }
-      }
-
-      const roomCode = generateRoomCode()
-      const createdRoom = await tx.room.create({
-        data: {
-          code: roomCode,
-          isPrivate,
-          thinkingTime,
-          lowestBetAmount,
-          initialChips,
-          ownerId: userInfo.id
-        }
-      })
-      await tx.roomMember.create({
-        data: { roomId: createdRoom.id, userId: userInfo.id }
-      })
-
-      return {
-        ok: true as const,
-        data: {
-          roomId: createdRoom.id,
-          roomCode,
-          room: createdRoom,
-          owner: userInfo
-        }
-      }
-    })
-
-    if (!created.ok) {
-      return created
+    if (!txRes.ok) {
+      return txRes
     }
-    const { room, owner, roomId, roomCode } = created.data
-    const { id, code, createdAt } = room
+    if (txRes.kind === 'existing') {
+      return {
+        ok: true,
+        data: { roomId: txRes.data.roomId, roomCode: txRes.data.roomCode }
+      }
+    }
+    const { owner, roomId, roomCode, createdAt } = txRes.data
 
     this.waitingRoomGateway.broadcastRoomListRoomCreated({
-      id,
-      code,
+      id: roomId,
+      code: roomCode,
       owner,
-      initialChips: room.initialChips,
-      thinkingTime: room.thinkingTime,
-      lowestBetAmount: room.lowestBetAmount,
+      initialChips,
+      thinkingTime,
+      lowestBetAmount,
       createdAt: dayjs(createdAt).format(timeFormat),
       memberCount: 1
     })

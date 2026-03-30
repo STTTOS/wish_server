@@ -133,6 +133,8 @@ model Room {
   isPrivate       Boolean
   // 房主
   ownerId         Int
+  // 仅未软删房间写入 ownerId；软删时置空。用于保证“一个用户最多一个有效房间”。
+  activeOwnerId   Int?           @unique
   owner           User           @relation(fields: [ownerId], references: [id])
   Match           Match[]
   members         RoomMember[]
