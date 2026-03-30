@@ -71,7 +71,7 @@ socket.on('message', (payload) => {
 
   switch (type) {
     case 'client-room-member-joined':
-      // 有人加入，data 与 /room/members 单条一致
+      // 有人加入；HTTP `POST .../room/members` 单条还含 isOnline / isWaitingRoomOnline
       // { userId, name, avatarUrl, avatarKey, joinedAt, isOwner }
       setMemberList((prev) => [...prev, data])
       break
@@ -112,3 +112,37 @@ socket.on('message', (payload) => {
 | ---------------------------------- | -------------- | --------------------------------------------- |
 | `client-room-member-count-changed` | 某房间人数变化 | `{ roomId, memberCount }`，更新该房间显示人数 |
 | `client-room-deleted`              | 某房间被删除   | `{ roomId }`，从列表中移除该房间              |
+
+---
+
+## 5. 命名空间 `/waiting-room`（与当前服务端实现一致）
+
+**握手参数**：`roomId` 须让服务端能读到——优先放在 **`auth`** 里，与 `token` 同级，例如 `auth: { ...buildAuth(), roomId: String(roomId) }`。  
+若使用 **同一 `Manager` 先连了其它命名空间再连 `/waiting-room`**，仅靠 `query: { roomId }` 往往**不会**进入 `handshake.query`（Socket.IO v4 复用 Engine 时 query 只保留首次 URL），会导致服务端报「parameters error」。`/game` 同样优先读 **`auth.roomId`**。
+
+以下事件均在 **`/waiting-room`** 上通过 **`message`** 推送（payload `{ type, data }`）。文档前文的 `client-room-*` 为旧称，实现侧类型名为 `waiting-room-*`。
+
+| type                                                                                    | 说明                                                         | data                                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `waiting-room-member-joined`                                                            | 有人通过 HTTP 加入房间                                       | `userId, name, avatarUrl, avatarKey, joinedAt, isOwner`（无在线字段；全量请拉 `POST .../room/members`）                                                |
+| `waiting-room-member-left`                                                              | 有人**退出房间**（HTTP quit / 踢人），DB 已无该成员          | `{ userId }`，应从本地成员列表**移除**                                                                                                                 |
+| `waiting-room-member-presence`                                                          | **仅 WS 层**：杀进程、断网、切后台断连等；**成员仍在房间内** | `{ userId, online: boolean }`：`false` 表示暂无本房间的 waiting-room 连接；`true` 表示该用户在本房间**重新连上** waiting-room（含重开 App 后首次连上） |
+| `waiting-room-owner-changed`                                                            | 房主变更                                                     | `{ oldOwnerId, newOwnerId }`                                                                                                                           |
+| `game-entering` / `game-entering-progress` / `game-entering-failed` / `game-entered` 等 | 开局流程                                                     | 见对局相关文档                                                                                                                                         |
+
+**多终端**：同一 `userId` 在**同一房间**下若仍有其它终端保持 `/waiting-room` 连接，则**不会**因其中一条断开而收到 `online: false`，避免误报。
+
+---
+
+## 6. App 杀进程或重开后的建议协作
+
+**客户端**
+
+1. **先 REST 再信 WS**：用 **`POST /api/client/room/members`**（`roomCode` 必填），`data` 为成员数组；成员项含 **`isOnline`**、**`isWaitingRoomOnline`**。房间摘要用 **`.../room/detail`**。拉完再建 `/waiting-room` WS，之后靠 `presence` 做增量即可。
+2. **再建立 `/waiting-room`**（或依赖 Socket.IO 自动重连后仍在本房间 `roomId` 上订阅）。连上后会收到 `initial connect`；其它成员会收到该用户的 `waiting-room-member-presence` 且 `online: true`（若满足「该用户在本房仅这一条连接」）。
+3. **UI 区分**：`member-left` → 从列表删掉；`presence` 且 `online: false` → 仅显示「离线」等，**不**删人；`online: true` → 取消离线态。
+
+**服务端**
+
+- 新连接只做现有握手（JWT + `roomId`）与 join，**不必**新增接口；上线推送由本次连接逻辑自动发出。
+- 成员是否在房仍以 **DB / HTTP** 为准；WS 断开**不会**单独删成员（除非走原有「全员 waiting-room 离线 + 等待中房间」清理策略）。

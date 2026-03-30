@@ -1,5 +1,6 @@
 import type { Texas } from 'texas-poker-core'
 import type { GameWsGateway } from './gameWsGateway'
+import type { ApiResult } from '../../../utils/apiResult'
 import type { GameRuntimeRegistry } from './runtimeRegistry'
 
 export type StartRoomInfo = {
@@ -28,9 +29,7 @@ export type StartGameValidatedContext = {
   members: StartRoomMember[]
 }
 
-export type StartGameValidationResult =
-  | { ok: true; data: StartGameValidatedContext }
-  | { ok: false; code: number; msg: string }
+export type StartGameValidationResult = ApiResult<StartGameValidatedContext>
 
 export type MatchRollbackManager = {
   /** 记录某一手开局快照（用于作废回滚和客户端恢复） */

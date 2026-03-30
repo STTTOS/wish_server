@@ -52,7 +52,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
 
   const requested = await startGameUseCase.requestStart(roomId, ownerId)
   if (!requested.ok) {
-    response.error(ctx, requested.code, requested.msg)
+    response.error(ctx, requested.code, requested.message)
     return
   }
 

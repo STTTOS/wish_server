@@ -15,14 +15,18 @@ export async function validateStartGameRequest(
     include: { owner: true }
   })
   if (!roomInfo || roomInfo.deletedAt) {
-    return { ok: false, code: 2000, msg: '房间不存在' }
+    return { ok: false, code: 2000, message: '房间不存在' }
   }
   if (roomInfo.ownerId !== ownerId) {
-    return { ok: false, code: 403, msg: '仅房主可开始游戏' }
+    return { ok: false, code: 403, message: '仅房主可开始游戏' }
   }
   const roomGameStatus = roomInfo.gameStatus
   if (roomGameStatus !== 'waiting') {
-    return { ok: false, code: 2100, msg: '房间已开始或正在进入游戏中' }
+    return {
+      ok: false,
+      code: 2100,
+      message: '房间已开始或正在进入游戏中'
+    }
   }
 
   const members = await roomMember.findMany({
@@ -31,7 +35,7 @@ export async function validateStartGameRequest(
     orderBy: { joinedAt: 'asc' }
   })
   if (members.length < 2) {
-    return { ok: false, code: 2100, msg: '人数不足，无法开始游戏' }
+    return { ok: false, code: 2100, message: '人数不足，无法开始游戏' }
   }
 
   return { ok: true, data: { roomInfo, members } }
