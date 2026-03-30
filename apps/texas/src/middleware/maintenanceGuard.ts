@@ -34,5 +34,8 @@ export default async (
     return
   }
 
-  response.error(ctx, MAINTENANCE_CODE, MAINTENANCE_MESSAGE)
+  response.error(ctx, MAINTENANCE_CODE, MAINTENANCE_MESSAGE, {
+    type: 'MAINTENANCE',
+    enabled: true
+  })
 }
