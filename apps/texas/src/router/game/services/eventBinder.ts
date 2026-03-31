@@ -1,5 +1,7 @@
 import type { BindTexasLifecycleParams } from './types'
 
+import { isFatalTexasErrorCode } from 'texas-poker-core'
+
 import { logger } from '../../../logger'
 import {
   match,
@@ -25,6 +27,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
   const getRuntime = () => runtimeRegistry.getOrThrow(roomKey)
 
   texas.onError(async (error) => {
+    if (!isFatalTexasErrorCode(error.code)) {
+      logger.error('non-fatal texas error in game lifecycle', error)
+      return
+    }
+
     try {
       await matchError.create({
         data: {
