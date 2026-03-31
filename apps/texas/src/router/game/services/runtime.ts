@@ -38,10 +38,11 @@ export function createTexasAndSeatPlayers(params: {
  */
 export async function createInitialMatchAndNotifyEntered(params: {
   roomId: number
+  userIds: number[]
   roomInfo: StartRoomInfo
   wsGateway?: GameWsGateway
 }) {
-  const { roomId, roomInfo, wsGateway = new GameWsGateway() } = params
+  const { roomId, userIds, roomInfo, wsGateway = new GameWsGateway() } = params
   const matchInfo = await match.create({
     data: {
       roomId,
@@ -49,6 +50,6 @@ export async function createInitialMatchAndNotifyEntered(params: {
       startedAt: new Date()
     }
   })
-  wsGateway.notifyEntered(roomId, matchInfo.id)
+  wsGateway.notifyEntered(roomId, matchInfo.id, userIds)
   return matchInfo
 }

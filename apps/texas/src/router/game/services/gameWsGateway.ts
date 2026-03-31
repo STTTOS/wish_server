@@ -1,5 +1,6 @@
 import type { RoleEnum } from 'texas-poker-core'
 import type { WsMessage } from '../../../ws/ws-event-types'
+import type { RoomWsMessage } from '../../room/ws-event-types'
 
 import { ws } from '../../../server'
 
@@ -7,10 +8,10 @@ import { ws } from '../../../server'
  * Game WS 网关：封装“开始游戏流程”相关的 WS 发送与等待动作。
  */
 export class GameWsGateway {
-  notifyEntered(roomId: number, matchId: number) {
+  notifyEntered(roomId: number, matchId: number, userIds: number[]) {
     const msg: WsMessage<'game-entered'> = {
       type: 'game-entered',
-      data: { roomId, matchId }
+      data: { roomId, matchId, userIds }
     }
     ws.broadcastWaitingRoom(roomId, msg)
   }
@@ -23,12 +24,12 @@ export class GameWsGateway {
     ws.broadcastWaitingRoom(roomId, msg)
   }
 
-  notifyEnteringFailed(roomId: number, reason: string) {
-    const msg: WsMessage<'game-entering-failed'> = {
-      type: 'game-entering-failed',
-      data: { roomId, reason }
+  notifyEnteringResolved(data: WsMessage<'game-entering-resolved'>['data']) {
+    const msg: WsMessage<'game-entering-resolved'> = {
+      type: 'game-entering-resolved',
+      data
     }
-    ws.broadcastWaitingRoom(roomId, msg)
+    ws.broadcastWaitingRoom(data.roomId, msg)
   }
 
   notifyGameInvalidated(
@@ -103,5 +104,57 @@ export class GameWsGateway {
     timeoutMs = 20_000
   ) {
     return ws.waitForGameRoomUsersConnected(roomKey, userIds, { timeoutMs })
+  }
+
+  getConnectedGameRoomUserIds(roomKey: string) {
+    return ws.getConnectedGameRoomUserIds(roomKey)
+  }
+
+  broadcastWaitingRoomMemberLeft(
+    roomId: number,
+    data: RoomWsMessage<'waiting-room-member-left'>['data']
+  ) {
+    const msg: RoomWsMessage<'waiting-room-member-left'> = {
+      type: 'waiting-room-member-left',
+      data
+    }
+    ws.broadcastWaitingRoom(roomId, msg)
+  }
+
+  broadcastWaitingRoomOwnerChanged(
+    roomId: number,
+    data: RoomWsMessage<'waiting-room-owner-changed'>['data']
+  ) {
+    const msg: RoomWsMessage<'waiting-room-owner-changed'> = {
+      type: 'waiting-room-owner-changed',
+      data
+    }
+    ws.broadcastWaitingRoom(roomId, msg)
+  }
+
+  broadcastRoomListMemberCountChanged(
+    data: RoomWsMessage<'room-list-member-count-changed'>['data']
+  ) {
+    const msg: RoomWsMessage<'room-list-member-count-changed'> = {
+      type: 'room-list-member-count-changed',
+      data
+    }
+    ws.broadcastRoomList(msg)
+  }
+
+  broadcastRoomListRoomDeleted(roomId: number) {
+    const msg: RoomWsMessage<'room-list-room-deleted'> = {
+      type: 'room-list-room-deleted',
+      data: { roomId }
+    }
+    ws.broadcastRoomList(msg)
+  }
+
+  removeUserFromWaitingRoom(roomId: number, userId: number) {
+    ws.removeUserFromWaitingRoom(roomId, userId)
+  }
+
+  disconnectUserRoomSockets(roomId: number, userId: number) {
+    ws.disconnectUserRoomSockets(roomId, userId)
   }
 }

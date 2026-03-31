@@ -510,6 +510,23 @@ class SocketServer {
     targets.forEach((socket) => socket.leave(roomKey))
   }
 
+  disconnectUserRoomSockets(roomId: number, userId: number) {
+    const roomKey = String(roomId)
+    const waitingTargets = this.#getSocketsInWaitingRoom(roomKey).filter(
+      (s) => (s.data.userId as number) === userId
+    )
+    const gameTargets = this.#getSocketsInGameRoom(roomKey).filter(
+      (s) => (s.data.userId as number) === userId
+    )
+    const targets = [...waitingTargets, ...gameTargets]
+    if (targets.length === 0) return
+
+    logger.info(
+      `[room-socket-disconnect] roomId=${roomId}, userId=${userId}, sockets=${targets.length}`
+    )
+    targets.forEach((socket) => socket.disconnect(true))
+  }
+
   /**
    * 当前在 `/waiting-room` 且已 join 该 `roomId` 的用户集合（与 `waiting-room-member-presence` 同源，非 DB）。
    * 供 HTTP 成员列表等接口补齐「是否在等待房 WS 在线」。

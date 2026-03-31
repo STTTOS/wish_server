@@ -93,14 +93,18 @@ export type WsGameEnteringProgressData = {
   connectedUserIds: number[]
 }
 
-export type WsGameEnteringFailedData = {
-  roomId: number
-  reason: string
-}
-
 export type WsGameEnteredData = {
   roomId: number
   matchId: number
+  userIds: number[]
+}
+
+export type WsGameEnteringResolvedData = {
+  roomId: number
+  outcome: 'back_waiting_room' | 'destroy_room'
+  connectedUserIds: number[]
+  kickedUserIds: number[]
+  ownerId: number | null
 }
 
 export type WsGameInvalidatedData = {
@@ -129,8 +133,8 @@ export type WsNextHandCountdownCancelledData = {
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
-  'game-entering-failed': WsGameEnteringFailedData
   'game-entered': WsGameEnteredData
+  'game-entering-resolved': WsGameEnteringResolvedData
   'game-invalidated': WsGameInvalidatedData
   'next-hand-countdown-started': WsNextHandCountdownStartedData
   'next-hand-countdown-cancelled': WsNextHandCountdownCancelledData

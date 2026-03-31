@@ -47,17 +47,6 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 }
 ```
 
-### `game-entering-failed`
-
-用途：进入流程失败通知。
-
-```ts
-{
-  roomId: number
-  reason: string
-}
-```
-
 ### `game-entered`
 
 用途：进入成功并创建首手对局。
@@ -66,6 +55,21 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 {
   roomId: number
   matchId: number
+  userIds: number[]
+}
+```
+
+### `game-entering-resolved`
+
+用途：连接超时后的最终决策（回退等待房 or 销毁房间）。
+
+```ts
+{
+  roomId: number
+  outcome: 'back_waiting_room' | 'destroy_room'
+  connectedUserIds: number[]
+  kickedUserIds: number[]
+  ownerId: number | null
 }
 ```
 
@@ -241,8 +245,8 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 type WsEventType =
   | 'game-entering'
   | 'game-entering-progress'
-  | 'game-entering-failed'
   | 'game-entered'
+  | 'game-entering-resolved'
   | 'game-invalidated'
   | 'next-hand-countdown-started'
   | 'next-hand-countdown-cancelled'
