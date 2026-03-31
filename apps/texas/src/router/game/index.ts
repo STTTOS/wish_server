@@ -1,11 +1,13 @@
 /* eslint-disable camelcase */
+import type { ActionType } from 'texas-poker-core'
+
 import router from '../instance'
 import { roomMember } from '../../models'
 import response from '../../utils/response'
+import { apiPrefixClient } from '../../config'
 import combinePath from '../../utils/combinePath'
-import { StartGameUseCase } from './services/flow'
 import { HTTP_STATUS } from '../../constants/httpStatus'
-import { apiPrefixWeb, apiPrefixClient } from '../../config'
+import { StartGameUseCase, TakeActionUseCase } from './services/flow'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
   gameRuntimeRegistry,
@@ -20,9 +22,9 @@ import {
   INITIAL_CHIPS_MIN_BB_MULTIPLIER
 } from '../../constants/game'
 
-const toolsApi = combinePath(apiPrefixWeb)('/game')
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
+const takeActionUseCase = new TakeActionUseCase()
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
@@ -65,7 +67,7 @@ router.post(gameClientApi('/entring'), async (ctx) => {
 })
 
 // 用户重连后获取当前对局的状态
-router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
+router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
   const userId = ctx.state.user!.id
   const membership = await roomMember.findFirst({
     where: { userId, room: { deletedAt: null } },
@@ -131,4 +133,19 @@ router.post(toolsApi('/fetchCurrentGameState'), async (ctx) => {
     matchInfo,
     activePlayerInfo
   })
+})
+
+router.post(gameClientApi('/takeAction'), async (ctx) => {
+  const {
+    actionType,
+    amount = 0
+  }: { actionType?: ActionType; amount?: number } = ctx.request.body ?? {}
+  const userId = ctx.state.user!.id
+
+  const result = await takeActionUseCase.execute({
+    userId,
+    actionType: actionType as ActionType,
+    amount: Number(amount)
+  })
+  respondFromApiResult(ctx, result, { okMessage: '行动已提交' })
 })
