@@ -73,7 +73,10 @@ router.post(matchApi('/list'), async (ctx) => {
   ])
 
   const listForResponse = records
-    .sort((a, b) => a.match.startedAt.getTime() - b.match.endedAt!.getTime())
+    .sort(
+      (a, b) =>
+        (a.match.startedAt?.getTime() ?? 0) - (b.match.endedAt?.getTime() ?? 0)
+    )
     .map(({ match, ...restRecord }) => {
       const {
         id: matchId,
@@ -88,7 +91,7 @@ router.post(matchApi('/list'), async (ctx) => {
         matchId,
         roomCode,
         initialChips,
-        startedAt: dayjs(startedAt).format(timeFormat),
+        startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
         endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
       }
     })
@@ -254,10 +257,9 @@ router.post(matchApi('/detail'), async (ctx) => {
     return
   }
 
-  const participated = await playerMatchRecord.findFirst({
+  const participated = await playerMatchRecord.findUnique({
     where: {
-      matchId,
-      userId
+      matchId_userId: { matchId, userId }
     }
   })
   if (!participated) {
@@ -334,8 +336,8 @@ router.post(matchApi('/detail'), async (ctx) => {
     roomCode,
     initialChips,
     memberCount: playerMatchRecords.length,
-    startedAt: dayjs(startedAt).format(timeFormat),
-    endedAt: dayjs(endedAt).format(timeFormat),
+    startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
+    endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null,
     settleRecords,
     actionRecords
   })

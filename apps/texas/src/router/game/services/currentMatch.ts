@@ -11,7 +11,7 @@ export async function getCurrentMatchIdWithFallback(roomId: number) {
   const latestMatch = await match.findFirst({
     where: { roomId, endedAt: null },
     select: { id: true },
-    orderBy: { startedAt: 'desc' }
+    orderBy: [{ startedAt: 'desc' }, { id: 'desc' }]
   })
   return latestMatch?.id ?? null
 }

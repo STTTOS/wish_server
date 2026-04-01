@@ -456,6 +456,7 @@ class SocketServer {
 
   /**
    * @description /game 自定义广播：每个端可收到不同 payload
+   * 缺少 userId 的 socket（握手未完成、断线竞态等）仅跳过并打日志，避免中断整房推送。
    */
   broadcastGameEach(
     roomId: string,
@@ -463,8 +464,13 @@ class SocketServer {
   ) {
     logger.info(`broadcastGameEach, ${this.#getUserIdsInGameRoom(roomId)}`)
     this.#getSocketsInGameRoom(roomId).forEach((socket) => {
-      const userId = socket.data.userId
-      if (!userId) throw new Error('userId doest not exist on socket.data')
+      const userId = socket.data.userId as number | undefined
+      if (typeof userId !== 'number') {
+        logger.warn(
+          `[broadcastGameEach] skip socket without userId, roomId=${roomId}, socketId=${socket.id}`
+        )
+        return
+      }
       this.#io.to(socket.id).emit('message', callback(userId))
     })
   }

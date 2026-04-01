@@ -45,9 +45,12 @@ export function createMatchRollbackManager(params: {
     source: 'engine_error' | 'insufficient_players',
     reason: string
   ) => {
-    const matchIdToInvalidate =
-      runtimeRegistry.getOrThrow(roomKey).currentMatchId
-    if (!matchIdToInvalidate || invalidatedMatchIds.has(matchIdToInvalidate))
+    const runtime = runtimeRegistry.getOrThrow(roomKey)
+    const matchIdToInvalidate = runtime.currentMatchId
+    if (
+      matchIdToInvalidate == null ||
+      invalidatedMatchIds.has(matchIdToInvalidate)
+    )
       return
     invalidatedMatchIds.add(matchIdToInvalidate)
 
@@ -63,6 +66,7 @@ export function createMatchRollbackManager(params: {
         matchError.deleteMany({ where: { matchId: matchIdToInvalidate } })
       ])
       await match.delete({ where: { id: matchIdToInvalidate } })
+      runtime.currentMatchId = null
     } catch (rollbackErr) {
       logger.error('[match-invalidated] rollback failed', rollbackErr)
     }

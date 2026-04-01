@@ -1,20 +1,28 @@
+import type { Player } from 'texas-poker-core'
 import type { BindTexasLifecycleParams } from './types'
 
+import { Prisma } from '@prisma/texas-client'
 import { isFatalTexasErrorCode } from 'texas-poker-core'
 
 import { logger } from '../../../logger'
 import {
+  registerNextHandHooks,
+  maybeStartNextHandCountdown
+} from '../../../gameRuntime/nextHandCountdown'
+import prisma, {
   match,
   betRecord,
   matchError,
   room as roomModel,
   matchStageTimeRecord
 } from '../../../models'
-import {
-  registerNextHandHooks,
-  cancelNextHandCountdown,
-  maybeStartNextHandCountdown
-} from '../../../gameRuntime/nextHandCountdown'
+
+function rankSignatureForDb(player: Player): string | null {
+  const sig = player.rankSignature
+  if (sig == null) return null
+  if (typeof sig === 'string') return sig
+  return JSON.stringify(sig)
+}
 
 /**
  * 绑定 Texas 生命周期事件：
@@ -26,19 +34,57 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
 
   const getRuntime = () => runtimeRegistry.getOrThrow(roomKey)
 
+  registerNextHandHooks(roomId, {
+    canStart: () =>
+      (texas.controller.status as unknown as string) === 'idle' &&
+      texas.room.getPlayersBySeatStatus('on-set').length >= 2,
+    onLock: async () => {
+      const next = await match.create({
+        data: {
+          roomId,
+          lowestBetAmount: roomInfo.lowestBetAmount
+        }
+      })
+      runtimeRegistry.setCurrentMatchId(roomKey, next.id)
+      await roomModel.update({
+        where: { id: roomId },
+        data: { gameStatus: 'between_hands' }
+      })
+      texas.resetBeforeGameStart()
+      texas.setPlayerRoles()
+      // 下一手 onLock：必须等本手角色 upsert 落库并 notify 后再打开局快照。
+      // dealCards 只在 onLock 全部完成后的定时回调里执行，不会早于这里。
+      await getRuntime().rolesAssignedPersistence
+      getRuntime().rollbackManager.snapshotPlayersAtHandStart(
+        getRuntime().currentMatchId!
+      )
+    },
+    onDeal: () => texas.dealCards(),
+    onStart: async () => {
+      await texas.controller.start()
+      await roomModel.update({
+        where: { id: roomId },
+        data: { gameStatus: 'in_hand' }
+      })
+    }
+  })
+
   texas.onError(async (error) => {
     if (!isFatalTexasErrorCode(error.code)) {
       logger.error('non-fatal texas error in game lifecycle', error)
       return
     }
 
+    const matchIdForLog = getRuntime().currentMatchId
     try {
-      await matchError.create({
-        data: {
-          matchId: getRuntime().currentMatchId,
-          info: JSON.stringify(error)
-        }
-      })
+      if (matchIdForLog != null) {
+        await matchError.create({
+          data: {
+            matchId: matchIdForLog,
+            info: JSON.stringify(error)
+          }
+        })
+      }
     } catch (e) {
       logger.error('write matchError failed', e)
     }
@@ -55,12 +101,12 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
   })
 
   texas.onPreAction(({ userId, restrict, allowedActions }) => {
-    const player = texas.room.getPlayerById(userId)
+    const matchId = getRuntime().currentMatchId
+    if (matchId == null) return
     const serverNow = Date.now()
-    const thinkingTimeMs =
-      (player?.thinkingTime ?? roomInfo.thinkingTime) * 1000
+    const thinkingTimeMs = roomInfo.thinkingTime
     wsGateway.notifyActionRequired(roomKey, {
-      matchId: getRuntime().currentMatchId,
+      matchId,
       userId,
       serverNow,
       deadlineAt: serverNow + thinkingTimeMs,
@@ -70,6 +116,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
   })
 
   texas.onAction(async (player) => {
+    const matchId = getRuntime().currentMatchId
+    if (matchId == null) return
     const action = player.getAction()!
     const actionType = action.type
     const amount = Number(action.payload?.value ?? 0)
@@ -79,11 +127,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
         actionType,
         amount,
         stage: texas.controller.stage,
-        matchId: getRuntime().currentMatchId
+        matchId
       }
     })
     wsGateway.notifyActionTaken(roomKey, {
-      matchId: getRuntime().currentMatchId,
+      matchId,
       userId: player.getUserInfo().id,
       actionType,
       amount,
@@ -94,31 +142,35 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
   })
 
   texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
+    const matchId = getRuntime().currentMatchId
+    if (matchId == null) return
     await matchStageTimeRecord.update({
       where: {
         matchId_stage: {
-          matchId: getRuntime().currentMatchId,
+          matchId,
           stage: lastStage
         }
       },
       data: { endAt: new Date() }
     })
     await matchStageTimeRecord.create({
-      data: { matchId: getRuntime().currentMatchId, stage }
+      data: { matchId, stage }
     })
     wsGateway.notifyStageChanged(roomKey, {
-      matchId: getRuntime().currentMatchId,
+      matchId,
       stage,
       pokesToReveal: commonPokes
     })
   })
 
   texas.onGameStart(async () => {
+    const matchId = getRuntime().currentMatchId
+    if (matchId == null) return
     await matchStageTimeRecord.create({
-      data: { matchId: getRuntime().currentMatchId, stage: 'pre_flop' }
+      data: { matchId, stage: 'pre_flop' }
     })
     wsGateway.notifyGameStart(roomKey, {
-      matchId: getRuntime().currentMatchId,
+      matchId,
       stage: texas.controller.stage,
       pool: texas.pool.totalAmount,
       defaultBets: texas.getDefaultBet().map((b) => ({
@@ -129,135 +181,212 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     })
   })
 
-  registerNextHandHooks(roomId, {
-    canStart: () =>
-      (texas.controller.status as unknown as string) === 'idle' &&
-      texas.room.getPlayersBySeatStatus('on-set').length >= 2,
-    onLock: async () => {
-      const next = await match.create({
-        data: {
-          roomId,
-          lowestBetAmount: roomInfo.lowestBetAmount,
-          startedAt: new Date()
-        }
-      })
-      runtimeRegistry.setCurrentMatchId(roomKey, next.id)
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'between_hands' }
-      })
-      texas.resetBeforeGameStart()
-      texas.setPlayerRoles()
-      getRuntime().rollbackManager.snapshotPlayersAtHandStart(
-        getRuntime().currentMatchId
-      )
-    },
-    onDeal: () => texas.dealCards(),
-    onStart: async () => {
-      await texas.controller.start()
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'in_hand' }
-      })
-    }
-  })
-
-  texas.onGameEnd((params) => {
-    void (async () => {
-      try {
-        texas.settle()
-        const currentMatchId = getRuntime().currentMatchId
-        const seated = texas.room.getPlayersBySeatStatus('on-set')
-        const strengthSorted = seated
-          .filter((p) => p.getStatus() !== 'out')
-          .map((p) => p.rankStrength)
-          .sort((a, b) => b - a)
-        const rankOf = (strength: number) =>
-          Math.max(1, strengthSorted.indexOf(strength) + 1)
-        const bestRankCategory =
-          params.bestRankCategory ??
-          seated.find((p) => p.rankCategory)?.rankCategory
-        if (!bestRankCategory) {
-          throw new Error('bestRankCategory missing on game end')
-        }
-        const settleList = seated.map((p) => ({
-          userId: p.getUserInfo().id,
-          balance: p.balance,
-          wager: p.wager,
-          rank: rankOf(p.rankStrength),
-          isAllIn: p.getStatus() === 'allIn',
-          isFold: p.getStatus() === 'out',
-          handPokes: p.getHandPokes(),
-          rankCategory: p.rankCategory ?? bestRankCategory
-        }))
-        const commonPokes = texas.dealer.deck.getPokes().commonPokes
-        await match.update({
-          where: { id: currentMatchId },
-          data: {
-            endedAt: new Date(),
-            endStage: params.currentStage,
-            commonPokes,
-            bestRankCategory,
-            bestPokes: params.bestPokes ?? undefined,
-            totalBetAmount: seated.reduce(
-              (s, p) => s + (p.totalBetAmount ?? 0),
-              0
-            )
+  texas.onGameEnd(
+    ({
+      bestPokes,
+      restCommonPokes,
+      currentStage: endStage,
+      bestRankCategory
+    }) => {
+      void (async () => {
+        try {
+          texas.settle()
+          const currentMatchId = getRuntime().currentMatchId
+          if (currentMatchId == null) {
+            logger.error('onGameEnd skipped: currentMatchId is null')
+            return
           }
-        })
-        wsGateway.notifyGameEnd(roomKey, {
-          matchId: currentMatchId,
-          settleList,
-          pokesToReveal: commonPokes,
-          endStage: params.currentStage,
-          bestRankCategory,
-          gameDuration: Math.floor(
-            (Date.now() - getRuntime().matchStartedAt) / 1000
-          ),
-          bestPokes: params.bestPokes ?? [],
-          totalBetAmount: seated.reduce(
-            (s, p) => s + (p.totalBetAmount ?? 0),
-            0
-          )
-        })
+          const seated = texas.room.getPlayersBySeatStatus('on-set')
+          const strengthSorted = seated
+            .map((p) => p.rankStrength)
+            .sort((a, b) => b - a)
 
-        if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
-          cancelNextHandCountdown(roomId)
-          await getRuntime().rollbackManager.invalidateAndRollbackMatch(
-            'insufficient_players',
-            '对局结束时在座人数不足2人，本手作废'
-          )
-        } else {
+          const rankOf = (strength: number) =>
+            Math.max(1, strengthSorted.indexOf(strength) + 1)
+
+          const buildSettleListForViewer = (viewerUserId: number) =>
+            seated.map((p) => {
+              const userId = p.getUserInfo().id
+              const isFold = p.getStatus() === 'out'
+              let handPokes = p.getHandPokes()
+              if (viewerUserId !== userId && isFold) {
+                handPokes = []
+              }
+              return {
+                userId,
+                balance: p.balance,
+                wager: p.wager,
+                rank: rankOf(p.rankStrength),
+                isAllIn: p.getStatus() === 'allIn',
+                isFold,
+                handPokes,
+                rankCategory: p.rankCategory
+              }
+            })
+          const totalBetAmount = texas.pool.totalAmount
+          const commonPokes = texas.dealer.deck.getPokes().commonPokes
+          const gameEndAt = new Date()
+          await match.update({
+            where: { id: currentMatchId },
+            data: {
+              commonPokes,
+              bestRankCategory,
+              endedAt: gameEndAt,
+              endStage,
+              bestPokes,
+              totalBetAmount
+            }
+          })
+
+          await prisma.$transaction(async (tx) => {
+            for (const p of seated) {
+              const userId = p.getUserInfo().id
+              const isFold = p.getStatus() === 'out'
+              const isAllIn = p.getStatus() === 'allIn'
+              const settleFields = {
+                wager: p.wager,
+                rankCategory: p.rankCategory ?? null,
+                rankSignature: rankSignatureForDb(p),
+                rankStrength: p.rankStrength,
+                totalBetAmount: Math.round(p.totalBetAmount ?? 0),
+                isFold,
+                isAllIn
+              }
+              try {
+                await tx.playerMatchRecord.update({
+                  where: {
+                    matchId_userId: {
+                      matchId: currentMatchId,
+                      userId
+                    }
+                  },
+                  data: settleFields
+                })
+              } catch (e) {
+                if (
+                  e instanceof Prisma.PrismaClientKnownRequestError &&
+                  e.code === 'P2025'
+                ) {
+                  logger.error(
+                    `[onGameEnd] playerMatchRecord missing matchId=${currentMatchId} userId=${userId}`
+                  )
+                } else {
+                  throw e
+                }
+              }
+            }
+          })
+
+          wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
+            matchId: currentMatchId,
+            settleList: buildSettleListForViewer(viewerUserId),
+            endStage,
+            // 使用 pramas 抛出的剩余公共牌，而不是 texas.dealer.deck.getPokes().commonPokes
+            pokesToReveal: restCommonPokes,
+            bestRankCategory,
+            gameDuration: Math.floor(
+              (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
+            ),
+            // 如果翻牌前除一位玩家都弃牌了, 这个字段本应该为[]
+            // 这个是通用属性, 不应该暴露最大玩家的牌
+            bestPokes: bestPokes ?? [],
+            totalBetAmount
+          }))
+
           getRuntime().rollbackManager.clearInvalidatedFlag(currentMatchId)
           getRuntime().rollbackManager.clearSnapshot(currentMatchId)
-        }
 
-        await roomModel.update({
-          where: { id: roomId },
-          data: { gameStatus: 'between_hands' }
-        })
-        maybeStartNextHandCountdown(roomId)
-      } catch (e) {
-        logger.error('onGameEnd handler failed', e)
-      }
-    })()
-  })
+          await roomModel.update({
+            where: { id: roomId },
+            data: { gameStatus: 'between_hands' }
+          })
+          maybeStartNextHandCountdown(roomId)
+        } catch (e) {
+          logger.error('onGameEnd handler failed', e)
+        }
+      })()
+    }
+  )
 
   texas.onRolesAssigned(({ players }) => {
-    wsGateway.notifyRolesAssigned(
-      roomKey,
-      getRuntime().currentMatchId,
-      players.map((p) => ({ userId: p.userId, role: p.role }))
-    )
+    getRuntime().matchStartedAt = Date.now()
+    const currentMatchId = getRuntime().currentMatchId
+    if (currentMatchId == null) {
+      logger.error('onRolesAssigned skipped: currentMatchId is null')
+      return
+    }
+
+    void match
+      .update({
+        where: { id: currentMatchId },
+        data: { startedAt: new Date() }
+      })
+      .catch((e) => logger.error('match.startedAt update failed', e))
+
+    const persist = prisma
+      .$transaction(
+        players.map((p) =>
+          prisma.playerMatchRecord.upsert({
+            where: {
+              matchId_userId: {
+                matchId: currentMatchId,
+                userId: p.userId
+              }
+            },
+            create: {
+              matchId: currentMatchId,
+              userId: p.userId,
+              role: p.role,
+              handPokes: []
+            },
+            update: { role: p.role }
+          })
+        )
+      )
+      .then(() => {
+        wsGateway.notifyRolesAssigned(
+          roomKey,
+          currentMatchId,
+          players.map((p) => ({ userId: p.userId, role: p.role }))
+        )
+      })
+      .catch((e) => {
+        logger.error('playerMatchRecord create on roles assigned failed', e)
+        throw e
+      })
+
+    getRuntime().rolesAssignedPersistence = persist
   })
 
   texas.onDealCards(({ players }) => {
-    players.forEach((p) => {
-      wsGateway.notifyHandDealtToUser(p.userId, {
-        matchId: getRuntime().currentMatchId,
-        roomId,
-        handPokes: p.handPokes
+    const matchId = getRuntime().currentMatchId
+    if (matchId == null) {
+      logger.error('onDealCards skipped: currentMatchId is null')
+      return
+    }
+    void prisma
+      .$transaction(
+        players.map((p) =>
+          prisma.playerMatchRecord.update({
+            where: {
+              matchId_userId: { matchId, userId: p.userId }
+            },
+            data: { handPokes: p.handPokes }
+          })
+        )
+      )
+      .then(() => {
+        getRuntime().rolesAssignedPersistence = Promise.resolve()
+        players.forEach((p) => {
+          wsGateway.notifyHandDealtToUser(p.userId, {
+            matchId,
+            roomId,
+            handPokes: p.handPokes
+          })
+        })
       })
-    })
+      .catch((e) =>
+        logger.error('playerMatchRecord handPokes update on deal failed', e)
+      )
   })
 }

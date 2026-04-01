@@ -69,7 +69,7 @@ export type WsGameEndSettleItem = {
   isAllIn: boolean
   isFold: boolean
   handPokes: Poke[]
-  rankCategory: RankCategory
+  rankCategory?: RankCategory
 }
 
 export type WsGameEndData = {
@@ -77,7 +77,7 @@ export type WsGameEndData = {
   settleList: WsGameEndSettleItem[]
   pokesToReveal: Poke[]
   endStage: StageEnum
-  bestRankCategory: RankCategory
+  bestRankCategory?: RankCategory
   gameDuration: number
   bestPokes: Array<Poke[]>
   totalBetAmount: number

@@ -24,7 +24,8 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
     texas: fakeTexas,
     currentMatchId: 100,
     matchStartedAt: Date.now(),
-    rollbackManager: noopRollbackManager
+    rollbackManager: noopRollbackManager,
+    rolesAssignedPersistence: Promise.resolve()
   })
 
   assert.equal(registry.hasTexas('1'), true)
@@ -45,7 +46,8 @@ test('GameRuntimeRegistry current match read/write', () => {
     texas: fakeTexas,
     currentMatchId: 200,
     matchStartedAt: Date.now(),
-    rollbackManager: noopRollbackManager
+    rollbackManager: noopRollbackManager,
+    rolesAssignedPersistence: Promise.resolve()
   })
 
   assert.equal(registry.getCurrentMatchId('2'), 200)

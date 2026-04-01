@@ -258,13 +258,15 @@ model PlayerMatchRecord {
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
+
+  @@unique([matchId, userId])
 }
 
 // 对局信息
 model Match {
   id              Int               @id @default(autoincrement())
-  // 对局开始的时间
-  startedAt       DateTime          @default(now())
+  // 对局开始时间：在 setPlayerRoles / onRolesAssigned 时写入
+  startedAt       DateTime?
   // 对局结束的时间
   endedAt         DateTime?
   // 总的下注额度

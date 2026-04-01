@@ -72,6 +72,19 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'game-end', data })
   }
 
+  /**
+   * 结算广播：同一事件类型，按连接用户掩码 payload（如弃牌者仅本人可见 handPokes）。
+   */
+  notifyGameEndPerViewer(
+    roomKey: string,
+    buildData: (viewerUserId: number) => WsMessage<'game-end'>['data']
+  ) {
+    ws.broadcastGameEach(roomKey, (viewerUserId) => ({
+      type: 'game-end' as const,
+      data: buildData(viewerUserId)
+    }))
+  }
+
   notifyRolesAssigned(
     roomKey: string,
     matchId: number,

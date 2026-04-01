@@ -380,7 +380,8 @@ export class StartGameUseCase {
       texas,
       currentMatchId,
       matchStartedAt: Date.now(),
-      rollbackManager
+      rollbackManager,
+      rolesAssignedPersistence: Promise.resolve()
     })
 
     bindTexasLifecycleEvents({
@@ -394,14 +395,19 @@ export class StartGameUseCase {
 
     texas.resetBeforeGameStart()
     texas.setPlayerRoles()
+    await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
     await this.#delay(2000)
     texas.dealCards()
     await this.#delay(2000)
-    gameRuntimeRegistry
-      .getOrThrow(roomKey)
-      .rollbackManager.snapshotPlayersAtHandStart(
-        gameRuntimeRegistry.getOrThrow(roomKey).currentMatchId
+    const rtForSnapshot = gameRuntimeRegistry.getOrThrow(roomKey)
+    if (rtForSnapshot.currentMatchId == null) {
+      throw new Error(
+        `[start game] snapshotPlayersAtHandStart: missing currentMatchId roomKey=${roomKey}`
       )
+    }
+    rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
+      rtForSnapshot.currentMatchId
+    )
     await texas.controller.start()
 
     await roomModel.update({

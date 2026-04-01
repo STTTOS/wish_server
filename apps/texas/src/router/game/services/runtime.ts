@@ -46,8 +46,7 @@ export async function createInitialMatchAndNotifyEntered(params: {
   const matchInfo = await match.create({
     data: {
       roomId,
-      lowestBetAmount: roomInfo.lowestBetAmount,
-      startedAt: new Date()
+      lowestBetAmount: roomInfo.lowestBetAmount
     }
   })
   wsGateway.notifyEntered(roomId, matchInfo.id, userIds)
