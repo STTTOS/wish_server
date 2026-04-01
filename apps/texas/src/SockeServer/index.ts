@@ -471,7 +471,7 @@ class SocketServer {
         )
         return
       }
-      this.#io.to(socket.id).emit('message', callback(userId))
+      this.#gameNs.to(socket.id).emit('message', callback(userId))
     })
   }
 
