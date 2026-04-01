@@ -184,7 +184,8 @@ type WsMessage<T extends WsEventType = WsEventType> = {
     rankCategory: RankCategory
   }>
   pokesToReveal: Poke[]
-  endStage: StageEnum
+  lastActionStage: StageEnum   // 最后一轮可操作下注结束时的阶段（引擎 currentStage）
+  boardThroughStage: StageEnum // 公共牌发到哪一街（引擎 endStage）
   bestRankCategory: RankCategory
   gameDuration: number   // 秒
   bestPokes: Array<Poke[]>

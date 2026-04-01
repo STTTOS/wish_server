@@ -70,13 +70,17 @@ export type WsGameEndSettleItem = {
   isFold: boolean
   handPokes: Poke[]
   rankCategory?: RankCategory
+  rankStrength: number
 }
 
 export type WsGameEndData = {
   matchId: number
   settleList: WsGameEndSettleItem[]
   pokesToReveal: Poke[]
-  endStage: StageEnum
+  /** 最后一轮可操作下注结束时的阶段（引擎 currentStage） */
+  lastActionStage: StageEnum
+  /** 公共牌发到哪一街（引擎 endStage） */
+  boardThroughStage: StageEnum
   bestRankCategory?: RankCategory
   gameDuration: number
   bestPokes: Array<Poke[]>

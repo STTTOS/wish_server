@@ -141,7 +141,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     })
   })
 
-  texas.onNextStage(async ({ stage, commonPokes, lastStage }) => {
+  texas.onNextStage(async ({ stage, pokesToReveal, lastStage }) => {
     const matchId = getRuntime().currentMatchId
     if (matchId == null) return
     await matchStageTimeRecord.update({
@@ -159,7 +159,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     wsGateway.notifyStageChanged(roomKey, {
       matchId,
       stage,
-      pokesToReveal: commonPokes
+      pokesToReveal
     })
   })
 
@@ -183,9 +183,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
 
   texas.onGameEnd(
     ({
+      endStage,
       bestPokes,
-      restCommonPokes,
-      currentStage: endStage,
+      currentStage,
+      showHandPokes,
+      pokesToReveal,
       bestRankCategory
     }) => {
       void (async () => {
@@ -209,7 +211,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
               const userId = p.getUserInfo().id
               const isFold = p.getStatus() === 'out'
               let handPokes = p.getHandPokes()
-              if (viewerUserId !== userId && isFold) {
+              if (viewerUserId !== userId && (isFold || !showHandPokes)) {
                 handPokes = []
               }
               return {
@@ -220,6 +222,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
                 isAllIn: p.getStatus() === 'allIn',
                 isFold,
                 handPokes,
+                rankStrength: p.rankStrength,
                 rankCategory: p.rankCategory
               }
             })
@@ -232,7 +235,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
               commonPokes,
               bestRankCategory,
               endedAt: gameEndAt,
-              endStage,
+              lastActionStage: currentStage,
+              boardThroughStage: endStage,
               bestPokes,
               totalBetAmount
             }
@@ -280,9 +284,10 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
           wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
             matchId: currentMatchId,
             settleList: buildSettleListForViewer(viewerUserId),
-            endStage,
+            lastActionStage: currentStage,
+            boardThroughStage: endStage,
             // 使用 pramas 抛出的剩余公共牌，而不是 texas.dealer.deck.getPokes().commonPokes
-            pokesToReveal: restCommonPokes,
+            pokesToReveal,
             bestRankCategory,
             gameDuration: Math.floor(
               (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
