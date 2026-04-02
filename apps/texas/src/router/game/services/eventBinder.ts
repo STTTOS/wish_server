@@ -104,7 +104,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     const matchId = getRuntime().currentMatchId
     if (matchId == null) return
     const serverNow = Date.now()
-    const thinkingTimeMs = roomInfo.thinkingTime
+    const thinkingTimeMs = roomInfo.thinkingTime * 1000
     wsGateway.notifyActionRequired(roomKey, {
       matchId,
       userId,
