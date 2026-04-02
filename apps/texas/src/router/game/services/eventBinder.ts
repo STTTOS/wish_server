@@ -186,7 +186,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       endStage,
       bestPokes,
       currentStage,
-      showHandPokes,
+      // showHandPokes,
       pokesToReveal,
       bestRankCategory
     }) => {
@@ -199,31 +199,42 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             return
           }
           const seated = texas.room.getPlayersBySeatStatus('on-set')
-          const strengthSorted = seated
-            .map((p) => p.rankStrength)
-            .sort((a, b) => b - a)
-
-          const rankOf = (strength: number) =>
-            Math.max(1, strengthSorted.indexOf(strength) + 1)
+          const sortedSeated = [...seated].sort((a, b) => {
+            const aFold = a.getStatus() === 'out'
+            const bFold = b.getStatus() === 'out'
+            if (aFold !== bFold) return aFold ? 1 : -1
+            if (aFold && bFold) return b.wager - a.wager
+            if (b.rankStrength !== a.rankStrength) {
+              return b.rankStrength - a.rankStrength
+            }
+            return b.wager - a.wager
+          })
 
           const buildSettleListForViewer = (viewerUserId: number) =>
-            seated.map((p) => {
+            sortedSeated.map((p) => {
               const userId = p.getUserInfo().id
               const isFold = p.getStatus() === 'out'
               let handPokes = p.getHandPokes()
-              if (viewerUserId !== userId && (isFold || !showHandPokes)) {
+              const hideHoleFromViewer = viewerUserId !== userId && isFold
+              if (hideHoleFromViewer) {
                 handPokes = []
               }
               return {
                 userId,
                 balance: p.balance,
                 wager: p.wager,
-                rank: rankOf(p.rankStrength),
                 isAllIn: p.getStatus() === 'allIn',
                 isFold,
                 handPokes,
-                rankStrength: p.rankStrength,
-                rankCategory: p.rankCategory
+                ...(hideHoleFromViewer
+                  ? {
+                      rankStrength: 0,
+                      rankCategory: undefined
+                    }
+                  : {
+                      rankStrength: p.rankStrength,
+                      rankCategory: p.rankCategory
+                    })
               }
             })
           const totalBetAmount = texas.pool.totalAmount

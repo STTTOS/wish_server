@@ -177,11 +177,12 @@ type WsMessage<T extends WsEventType = WsEventType> = {
     userId: number
     balance: number
     wager: number
-    rank: number
     isAllIn: boolean
     isFold: boolean
     handPokes: Poke[]
-    rankCategory: RankCategory
+    /** 与 handPokes 一致：看他人且（对方弃牌 或 未摊牌）时不出现 */
+    rankStrength?: number
+    rankCategory?: RankCategory
   }>
   pokesToReveal: Poke[]
   lastActionStage: StageEnum   // 最后一轮可操作下注结束时的阶段（引擎 currentStage）

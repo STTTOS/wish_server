@@ -65,12 +65,13 @@ export type WsGameEndSettleItem = {
   userId: number
   balance: number
   wager: number
-  rank: number
+  // rank: number
   isAllIn: boolean
   isFold: boolean
   handPokes: Poke[]
   rankCategory?: RankCategory
-  rankStrength: number
+  /** 与 handPokes 同规则：他人视角下弃牌或未到摊牌时不下发 */
+  rankStrength?: number
 }
 
 export type WsGameEndData = {
