@@ -121,7 +121,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     const action = player.getAction()!
     const actionType = action.type
     const amount = Number(action.payload?.value ?? 0)
-    await betRecord.create({
+    const data = await betRecord.create({
       data: {
         userId: player.getUserInfo().id,
         actionType,
@@ -133,9 +133,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     wsGateway.notifyActionTaken(roomKey, {
       matchId,
       userId: player.getUserInfo().id,
+      actionId: data.id,
       actionType,
       amount,
       pool: texas.pool.totalAmount,
+      totalBetAmount: player.totalBetAmount,
       currentStageBetAmount: player.currentStageTotalAmount,
       balance: player.balance
     })
@@ -172,12 +174,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     wsGateway.notifyGameStart(roomKey, {
       matchId,
       stage: texas.controller.stage,
-      pool: texas.pool.totalAmount,
-      defaultBets: texas.getDefaultBet().map((b) => ({
-        userId: b.userId,
-        amount: b.amount,
-        balance: b.balance
-      }))
+      pool: texas.pool.totalAmount
     })
   })
 
@@ -186,13 +183,12 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       endStage,
       bestPokes,
       currentStage,
-      // showHandPokes,
+      showHandPokes,
       pokesToReveal,
       bestRankCategory
     }) => {
       void (async () => {
         try {
-          texas.settle()
           const currentMatchId = getRuntime().currentMatchId
           if (currentMatchId == null) {
             logger.error('onGameEnd skipped: currentMatchId is null')
@@ -215,7 +211,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
               const userId = p.getUserInfo().id
               const isFold = p.getStatus() === 'out'
               let handPokes = p.getHandPokes()
-              const hideHoleFromViewer = viewerUserId !== userId && isFold
+              const hideHoleFromViewer =
+                viewerUserId !== userId && (isFold || !showHandPokes)
               if (hideHoleFromViewer) {
                 handPokes = []
               }
@@ -360,11 +357,21 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
         )
       )
       .then(() => {
-        wsGateway.notifyRolesAssigned(
-          roomKey,
-          currentMatchId,
-          players.map((p) => ({ userId: p.userId, role: p.role }))
-        )
+        wsGateway.notifyRolesAssigned(roomKey, {
+          matchId: currentMatchId,
+          roles: players.map((p) => ({
+            userId: p.userId,
+            role: p.role,
+            actionIndex: p.actionIndex
+          })),
+          pool: texas.pool.totalAmount,
+          stage: texas.controller.stage,
+          defaultBets: texas.getDefaultBet().map((b) => ({
+            userId: b.userId,
+            amount: b.amount,
+            balance: b.balance
+          }))
+        })
       })
       .catch((e) => {
         logger.error('playerMatchRecord create on roles assigned failed', e)

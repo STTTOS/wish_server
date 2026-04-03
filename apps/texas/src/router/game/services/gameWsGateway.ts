@@ -1,6 +1,8 @@
-import type { RoleEnum } from 'texas-poker-core'
-import type { WsMessage } from '../../../ws/ws-event-types'
 import type { RoomWsMessage } from '../../room/ws-event-types'
+import type {
+  WsMessage,
+  WsPlayerRolesAssignedData
+} from '../../../ws/ws-event-types'
 
 import { ws } from '../../../server'
 
@@ -85,14 +87,10 @@ export class GameWsGateway {
     }))
   }
 
-  notifyRolesAssigned(
-    roomKey: string,
-    matchId: number,
-    roles: Array<{ userId: number; role: RoleEnum }>
-  ) {
+  notifyRolesAssigned(roomKey: string, data: WsPlayerRolesAssignedData) {
     ws.broadcastGameRoom(roomKey, {
       type: 'player-roles-assigned',
-      data: { matchId, roles }
+      data
     })
   }
 

@@ -11,6 +11,14 @@ export type WsPlayerRolesAssignedData = {
   roles: Array<{
     userId: number
     role: RoleEnum
+    actionIndex: number
+  }>
+  pool: number
+  stage: StageEnum
+  defaultBets: Array<{
+    userId: number
+    amount: number
+    balance: number
   }>
 }
 
@@ -24,11 +32,6 @@ export type WsGameStartData = {
   matchId: number
   stage: StageEnum
   pool: number
-  defaultBets: Array<{
-    userId: number
-    amount: number
-    balance: number
-  }>
 }
 
 export type WsPlayerActionRequiredData = {
@@ -48,9 +51,13 @@ export type WsPlayerActionRequiredData = {
 export type WsPlayerActionTakenData = {
   matchId: number
   userId: number
+  actionId: number
   actionType: ActionType
   amount: number
   pool: number
+  // 此局总下注, 每局清空
+  totalBetAmount: number
+  // 当前阶段总下注, 每一轮清空
   currentStageBetAmount: number
   balance: number
 }
