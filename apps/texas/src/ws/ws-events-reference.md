@@ -128,8 +128,8 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 {
   matchId: number
   userId: number
-  serverNow: number      // 服务端当前毫秒时间戳
-  deadlineAt: number     // 行动截止毫秒时间戳
+  serverNow: number      // 本条 WS 实际发出时刻（ms）；可能与引擎开始计时不一致（例如延迟推送）
+  deadlineAt: number     // 与引擎一致的截止绝对时间（ms），在 onPreAction 时确定；剩余请用 deadlineAt - 本地 now
   allowedActions: ActionType[]
   restrict?: {
     min: number

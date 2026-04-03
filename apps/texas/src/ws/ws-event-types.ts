@@ -37,9 +37,12 @@ export type WsGameStartData = {
 export type WsPlayerActionRequiredData = {
   matchId: number
   userId: number
-  /** server unix ms timestamp, for client clock calibration */
+  /**
+   * 本条 WS 实际发出时刻（unix ms）。若服务端延迟推送 action-required，会与引擎开始计时的时刻不同；
+   * 剩余思考时间请用 deadlineAt - 本地当前时间（可结合 serverNow 做时钟偏差估计），不要用「满额思考时长」从零开始减。
+   */
   serverNow: number
-  /** when this turn countdown ends (unix ms timestamp) */
+  /** 与引擎一致的思考截止绝对时间（unix ms），在 onPreAction 触发时确定 */
   deadlineAt: number
   allowedActions: ActionType[]
   restrict?: {

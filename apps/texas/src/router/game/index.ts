@@ -19,7 +19,9 @@ import {
   MIN_THINKING_TIME,
   EXTENDED_THINKING_TIME,
   MAX_DELAY_REQUEST_COUNT,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER
+  GAME_WS_STAGE_CHANGED_DELAY_MS,
+  INITIAL_CHIPS_MIN_BB_MULTIPLIER,
+  GAME_WS_ACTION_REQUIRED_DELAY_MS
 } from '../../constants/game'
 
 const gameClientApi = combinePath(apiPrefixClient)('/game')
@@ -34,7 +36,11 @@ router.get(gameClientApi('/config'), async (ctx) => {
     maxPlayersCount: MAX_PLAYERS_COUNT,
     minBB: MIN_BB,
     maxDelayRequestCount: MAX_DELAY_REQUEST_COUNT,
-    extendedThinkingTime: EXTENDED_THINKING_TIME
+    extendedThinkingTime: EXTENDED_THINKING_TIME,
+    /** 与引擎 `beforeNextPlayerTurn` 对齐的毫秒数（供客户端动画；WS 在 `onPreAction` 同步发出） */
+    actionRequiredWsDelayMs: GAME_WS_ACTION_REQUIRED_DELAY_MS,
+    /** 与引擎 `beforeStageAdvance` 对齐的毫秒数（供客户端动画；WS 在 `onNextStage` 同步发出） */
+    stageChangedWsDelayMs: GAME_WS_STAGE_CHANGED_DELAY_MS
   })
 })
 

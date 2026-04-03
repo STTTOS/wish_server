@@ -108,10 +108,10 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     wsGateway.notifyActionRequired(roomKey, {
       matchId,
       userId,
-      serverNow,
       deadlineAt: serverNow + thinkingTimeMs,
       allowedActions,
-      restrict
+      restrict,
+      serverNow
     })
   })
 
