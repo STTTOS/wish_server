@@ -194,6 +194,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             logger.error('onGameEnd skipped: currentMatchId is null')
             return
           }
+          texas.settle()
           const seated = texas.room.getPlayersBySeatStatus('on-set')
           const sortedSeated = [...seated].sort((a, b) => {
             const aFold = a.getStatus() === 'out'
