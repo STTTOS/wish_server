@@ -136,8 +136,11 @@ export type WsGameInvalidatedData = {
 
 export type WsNextHandCountdownStartedData = {
   roomId: number
+  /** 推送时刻起算的倒计时终点（unix ms）；抵达后分配角色并发牌链路 */
   endsAt: number
+  /** 推送时刻起算，坐席锁定、房间 `in_hand`（unix ms） */
   lockAt: number
+  /** 服务端生成该消息的 unix ms；与 endsAt/lockAt 同基准 */
   serverNow: number
 }
 

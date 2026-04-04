@@ -38,6 +38,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     canStart: () =>
       (texas.controller.status as unknown as string) === 'idle' &&
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
+    /** lockAt：建局、重置引擎、房间视为已开局（坐席已锁） */
     onLock: async () => {
       const next = await match.create({
         data: {
@@ -48,24 +49,26 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
       await roomModel.update({
         where: { id: roomId },
-        data: { gameStatus: 'between_hands' }
+        data: { gameStatus: 'in_hand' }
       })
       texas.resetBeforeGameStart()
+    },
+    /** endsAt：分配角色；须等落库后再做首帧快照 */
+    onAssignRoles: async () => {
       texas.setPlayerRoles()
-      // 下一手 onLock：必须等本手角色 upsert 落库并 notify 后再打开局快照。
-      // dealCards 只在 onLock 全部完成后的定时回调里执行，不会早于这里。
       await getRuntime().rolesAssignedPersistence
       getRuntime().rollbackManager.snapshotPlayersAtHandStart(
         getRuntime().currentMatchId!
       )
     },
-    onDeal: () => texas.dealCards(),
+    onDeal: () => {
+      texas.dealCards()
+      getRuntime().rollbackManager.snapshotPlayersAtHandStart(
+        getRuntime().currentMatchId!
+      )
+    },
     onStart: async () => {
       await texas.controller.start()
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'in_hand' }
-      })
     }
   })
 
@@ -314,6 +317,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             where: { id: roomId },
             data: { gameStatus: 'between_hands' }
           })
+          // 将游戏状态重置为 idle
+          texas.controller.reset()
           maybeStartNextHandCountdown(roomId)
         } catch (e) {
           logger.error('onGameEnd handler failed', e)

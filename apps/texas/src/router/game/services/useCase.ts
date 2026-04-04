@@ -357,6 +357,7 @@ export class StartGameUseCase {
       members: connectedMembers,
       ownerId: runtimeOwnerId
     })
+    /** 所有玩家加载完后, 等待3s再通知玩家进入游戏 */
     await this.#delay(3000)
     const matchInfo = await createInitialMatchAndNotifyEntered({
       roomId,
@@ -394,20 +395,26 @@ export class StartGameUseCase {
     })
 
     texas.resetBeforeGameStart()
-    texas.setPlayerRoles()
-    await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
-    await this.#delay(2000)
-    texas.dealCards()
-    await this.#delay(2000)
+
     const rtForSnapshot = gameRuntimeRegistry.getOrThrow(roomKey)
     if (rtForSnapshot.currentMatchId == null) {
       throw new Error(
         `[start game] snapshotPlayersAtHandStart: missing currentMatchId roomKey=${roomKey}`
       )
     }
+    // 进入游戏2秒后开始分配角色
+    await this.#delay(2000)
+    texas.setPlayerRoles()
+    await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
+    // 角色分配完成后, 等待2秒再发牌
+    await this.#delay(2000)
+    texas.dealCards()
     rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
       rtForSnapshot.currentMatchId
     )
+
+    // 发牌3秒后再开始游戏
+    await this.#delay(3000)
     await texas.controller.start()
 
     await roomModel.update({
