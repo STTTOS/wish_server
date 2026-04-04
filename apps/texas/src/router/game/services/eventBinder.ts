@@ -55,7 +55,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
     },
     /** endsAt：分配角色；须等落库后再做首帧快照 */
     onAssignRoles: async () => {
-      texas.setPlayerRoles()
+      texas.unlockSeats()
+      texas.setPlayerRoles('rotate')
       await getRuntime().rolesAssignedPersistence
       getRuntime().rollbackManager.snapshotPlayersAtHandStart(
         getRuntime().currentMatchId!
