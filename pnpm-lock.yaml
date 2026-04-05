@@ -72,8 +72,8 @@ importers:
         specifier: ^4.8.1
         version: 4.8.1
       texas-poker-core:
-        specifier: ^1.4.11
-        version: 1.4.11
+        specifier: ^1.4.12
+        version: 1.4.12
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -2338,8 +2338,8 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
-  texas-poker-core@1.4.11:
-    resolution: {integrity: sha512-6aI3TWQP2V6JnEdBSy4bt3i8pD2VSq/ljkVD3pgSPnjxTosxbLAH6oRwTUO98pwJS5iFPv31afmO5S5wZF3oMg==}
+  texas-poker-core@1.4.12:
+    resolution: {integrity: sha512-cerJh2boD6WuCyWGmpAKfNF374llO5ALZVWJJLsiC3D1jAg73hLTcpRNtDYm98eTpL/IRWCe1+8FZ82/rMUzqg==}
 
   text-extensions@2.4.0:
     resolution: {integrity: sha512-te/NtwBwfiNRLf9Ijqx3T0nlqZiQ2XrrtBvu+cLL8ZRrGkO0NHTug8MYFKyoSrv/sHTaSKfilUkizV6XhxMJ3g==}
@@ -4827,7 +4827,7 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
-  texas-poker-core@1.4.11:
+  texas-poker-core@1.4.12:
     dependencies:
       core-js: 3.42.0
       ramda: 0.30.1
