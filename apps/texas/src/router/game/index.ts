@@ -7,6 +7,7 @@ import response from '../../utils/response'
 import { apiPrefixClient } from '../../config'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { StartGameUseCase, TakeActionUseCase } from './services/flow'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
@@ -27,6 +28,7 @@ import {
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
+const chipTopUpUseCase = new ChipTopUpUseCase()
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
@@ -139,6 +141,22 @@ router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
     matchInfo,
     activePlayerInfo
   })
+})
+
+/**
+ * 局间补码（幂等：本局间已补过则静默成功）
+ * body: { roomId: number } — afterMatchId、补码数量均由服务端计算/读取
+ */
+router.post(gameClientApi('/chipTopUp'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+
+  const result = await chipTopUpUseCase.execute({
+    userId,
+    roomId
+  })
+  respondFromApiResult(ctx, result, { okMessage: '成功' })
 })
 
 router.post(gameClientApi('/takeAction'), async (ctx) => {

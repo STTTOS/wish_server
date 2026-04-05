@@ -35,6 +35,7 @@ model User {
 
   Room          Room[]
   roomMembers   RoomMember[]
+  roomChipTopUps RoomChipTopUp[]
   userRoomStats UserRoomStat[]
   settings      UserSettings?
   announcementReads AnnouncementRead[]
@@ -138,6 +139,7 @@ model Room {
   owner           User           @relation(fields: [ownerId], references: [id])
   Match           Match[]
   members         RoomMember[]
+  roomChipTopUps  RoomChipTopUp[]
   userRoomStats   UserRoomStat[]
 }
 
@@ -159,6 +161,33 @@ model RoomMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, userId])
+}
+
+// 局间补码：紧跟在 afterMatchId 这一手结束之后、下一手开始前；游戏中不可补
+model RoomChipTopUp {
+  id     Int @id @default(autoincrement())
+  roomId Int
+  userId Int
+  /// 已结束的这一手 match；同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次
+  afterMatchId Int
+
+  /// 本次补入的筹码（通常 = 房间 initialChips）
+  amount Int
+  /// 补码执行前该玩家在桌上的筹码
+  balanceBefore Int
+  /// 补码执行后筹码（应等于 balanceBefore + amount）
+  balanceAfter Int
+  /// 写入时房间的 initialChips 快照（规则审计）
+  roomInitialChipsSnapshot Int
+
+  createdAt DateTime @default(now())
+
+  room   Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  afterMatch Match @relation(fields: [afterMatchId], references: [id], onDelete: Restrict)
+
+  @@unique([roomId, userId, afterMatchId])
+  @@index([roomId, userId, createdAt])
 }
 
 // 用户在房间内的对局统计
@@ -255,6 +284,8 @@ model PlayerMatchRecord {
   totalBetAmount Int              @default(0)
   isFold         Boolean          @default(false)
   isAllIn        Boolean          @default(false)
+  /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
+  balanceAfterHand Int?
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
@@ -293,6 +324,7 @@ model Match {
   matchStageTimeRecord MatchStageTimeRecord[]
 
   matchError MatchError[]
+  roomChipTopUpsAfterMatch RoomChipTopUp[]
 }
 
 model MatchStageTimeRecord {

@@ -15,6 +15,10 @@ import {
   createTexasAndSeatPlayers,
   createInitialMatchAndNotifyEntered
 } from './runtime'
+import {
+  NEXT_HAND_DEAL_AFTER_END_MS,
+  NEXT_HAND_START_AFTER_DEAL_MS
+} from '../../../constants/nextHand'
 
 /** HTTP 已校验通过后，后台开局流程的入参（含房间快照与预期成员）。 */
 type StartFlowInput = {
@@ -394,33 +398,34 @@ export class StartGameUseCase {
       wsGateway: this.wsGateway
     })
 
-    texas.resetBeforeGameStart()
-
     const rtForSnapshot = gameRuntimeRegistry.getOrThrow(roomKey)
     if (rtForSnapshot.currentMatchId == null) {
       throw new Error(
         `[start game] snapshotPlayersAtHandStart: missing currentMatchId roomKey=${roomKey}`
       )
     }
+
+    // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
     // 进入游戏2秒后开始分配角色
     await this.#delay(2000)
     texas.setPlayerRoles()
+    // 进入in_hand状态, 新加入的玩家直接到观战席
+    await roomModel.update({
+      where: { id: roomId },
+      data: { gameStatus: 'in_hand' }
+    })
+
     await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
     // 角色分配完成后, 等待2秒再发牌
-    await this.#delay(2000)
+    await this.#delay(NEXT_HAND_DEAL_AFTER_END_MS)
     texas.dealCards()
     rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
       rtForSnapshot.currentMatchId
     )
 
     // 发牌3秒后再开始游戏
-    await this.#delay(3000)
+    await this.#delay(NEXT_HAND_START_AFTER_DEAL_MS)
     await texas.controller.start()
-
-    await roomModel.update({
-      where: { id: roomId },
-      data: { gameStatus: 'in_hand' }
-    })
   }
 
   /** 校验 + 切 entering + 推送 game-entering，返回供后台 #runStartFlow 使用的数据。 */

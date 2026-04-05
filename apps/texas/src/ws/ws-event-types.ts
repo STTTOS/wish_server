@@ -13,13 +13,7 @@ export type WsPlayerRolesAssignedData = {
     role: RoleEnum
     actionIndex: number
   }>
-  pool: number
   stage: StageEnum
-  defaultBets: Array<{
-    userId: number
-    amount: number
-    balance: number
-  }>
 }
 
 export type WsPlayerHandDealtData = {
@@ -148,6 +142,17 @@ export type WsNextHandCountdownCancelledData = {
   roomId: number
 }
 
+/** 局间补码成功：全桌同步该玩家最新余额与本次补入数量（来自房间 initialChips） */
+export type WsPlayerChipTopUpData = {
+  roomId: number
+  userId: number
+  /** 服务端取本房最近已结束的 Match.id */
+  afterMatchId: number
+  /** 本次补入筹码（服务端从库读取，与 Room.initialChips 一致） */
+  topUpAmount: number
+  balanceAfter: number
+}
+
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
@@ -163,6 +168,7 @@ export type WsEventDataMap = {
   'player-action-taken': WsPlayerActionTakenData
   'game-stage-changed': WsGameStageChangedData
   'game-end': WsGameEndData
+  'player-chip-top-up': WsPlayerChipTopUpData
 }
 
 export type WsEventType = keyof WsEventDataMap

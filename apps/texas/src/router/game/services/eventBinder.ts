@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/texas-client'
 import { isFatalTexasErrorCode } from 'texas-poker-core'
 
 import { logger } from '../../../logger'
+import { autoTopUpOnSeatPlayersAtHandLock } from './chipTopUpUseCase'
 import {
   registerNextHandHooks,
   maybeStartNextHandCountdown
@@ -40,6 +41,14 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
     /** lockAt：建局、重置引擎、房间视为已开局（坐席已锁） */
     onLock: async () => {
+      await autoTopUpOnSeatPlayersAtHandLock({
+        roomId,
+        roomKey,
+        texas,
+        lowestBetAmount: roomInfo.lowestBetAmount,
+        initialChips: roomInfo.initialChips,
+        wsGateway
+      })
       const next = await match.create({
         data: {
           roomId,
@@ -47,14 +56,16 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
         }
       })
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
+      // 锁定坐席的时候, 进入in_hand状态, 新加入的玩家直接到观战席
       await roomModel.update({
         where: { id: roomId },
         data: { gameStatus: 'in_hand' }
       })
       texas.resetBeforeGameStart()
     },
-    /** endsAt：分配角色；须等落库后再做首帧快照 */
     onAssignRoles: async () => {
+      // 这里需要校验玩家的余额
+      // 同时还需要将玩家的余额实时写进room  Member 表中
       texas.unlockSeats()
       texas.setPlayerRoles('rotate')
       await getRuntime().rolesAssignedPersistence
@@ -267,7 +278,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
                 rankStrength: p.rankStrength,
                 totalBetAmount: Math.round(p.totalBetAmount ?? 0),
                 isFold,
-                isAllIn
+                isAllIn,
+                balanceAfterHand: Math.round(p.balance)
               }
               try {
                 await tx.playerMatchRecord.update({
@@ -371,13 +383,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             role: p.role,
             actionIndex: p.actionIndex
           })),
-          pool: texas.pool.totalAmount,
-          stage: texas.controller.stage,
-          defaultBets: texas.getDefaultBet().map((b) => ({
-            userId: b.userId,
-            amount: b.amount,
-            balance: b.balance
-          }))
+          stage: texas.controller.stage
         })
       })
       .catch((e) => {

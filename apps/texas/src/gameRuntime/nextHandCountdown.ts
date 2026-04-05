@@ -167,6 +167,7 @@ function startCountdownAfterPushDelay(roomId: number) {
     `[next-hand-countdown] started, roomId=${roomId}, lockAt=${lockAt}, endsAt=${endsAt}`
   )
 
+  // lockAt 到达, 坐席锁定, 不可再退出游戏
   const lockTimer = setTimeout(async () => {
     try {
       if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
@@ -178,6 +179,7 @@ function startCountdownAfterPushDelay(roomId: number) {
     }
   }, NEXT_HAND_LOCK_AT_OFFSET_MS)
 
+  // endsAt 到达, 分配角色
   const assignRolesTimer = setTimeout(async () => {
     try {
       if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
@@ -192,6 +194,7 @@ function startCountdownAfterPushDelay(roomId: number) {
     }
   }, NEXT_HAND_ENDS_AT_OFFSET_MS)
 
+  // endsAt 到达后，再延迟 NEXT_HAND_DEAL_AFTER_END_MS 发牌
   const dealDelay = NEXT_HAND_ENDS_AT_OFFSET_MS + NEXT_HAND_DEAL_AFTER_END_MS
   const dealTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
@@ -204,6 +207,7 @@ function startCountdownAfterPushDelay(roomId: number) {
     }
   }, dealDelay)
 
+  // 发牌后，再延迟 NEXT_HAND_START_AFTER_DEAL_MS 开始游戏
   const startDelay = dealDelay + NEXT_HAND_START_AFTER_DEAL_MS
   const startTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)

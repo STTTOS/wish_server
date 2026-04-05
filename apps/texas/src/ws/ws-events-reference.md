@@ -194,6 +194,29 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 }
 ```
 
+### `player-chip-top-up`
+
+用途：某玩家在**局间**（`between_hands`、引擎 `idle`）补码成功后，向**游戏房**内所有人广播，用于同步该玩家桌上余额与本次补入数量。
+
+触发时机：**仅在本轮请求首次完成「引擎加钱 + DB 写入」时发一次**。若本局间已补过（HTTP 幂等静默成功）或并发下由另一请求先落库，则**不再重复推送**。
+
+```ts
+{
+  roomId: number
+  userId: number // 补码玩家
+  afterMatchId: number // 服务端取本房「最近已结束」的 Match.id
+  topUpAmount: number // 本次补入筹码，服务端取 `Room.initialChips`
+  balanceAfter: number // 补码后该玩家桌上余额（引擎）
+}
+```
+
+**配套 HTTP**（需登录，路径以项目 `apiPrefixClient` + `/game/chipTopUp` 为准）：
+
+- 方法：`POST`
+- Body：`{ roomId: number }`（不传 `matchId`、不传补码数量）
+- 成功 `data`：`{ balanceAfter, topUpAmount, afterMatchId, alreadyApplied?: boolean }`
+- 规则摘要：`afterMatchId` 为库中该房 `endedAt` 最新的一条 `Match`；须 `between_hands` 且引擎 `idle`；桌上筹码须 ≤ 起始筹码的 20%（`CHIP_TOP_UP_ELIGIBLE_RATIO`）；每 `(roomId, userId, afterMatchId)` 仅允许成功补一次。
+
 ---
 
 ## 作废与自动续局事件
@@ -259,4 +282,5 @@ type WsEventType =
   | 'player-action-taken'
   | 'game-stage-changed'
   | 'game-end'
+  | 'player-chip-top-up'
 ```

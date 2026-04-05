@@ -23,6 +23,8 @@
 - `runtimeRegistry.ts`：房间运行时上下文注册中心
 - `currentMatch.ts`：当前 matchId 获取策略（runtime 优先，DB 兜底）
 - `runtime.ts`：Texas 实例化与首手 Match 创建
+- `takeActionUseCase.ts`：客户端行动（含幂等重试）
+- `chipTopUpUseCase.ts`：局间补码（HTTP + `player-chip-top-up` WS；补码量读库，表唯一防重）
 - `gameWsGateway.ts`：WS 发送网关
 - `validator.ts`：开始游戏校验与 entering 标记
 - `stateMachine.ts`：房间状态迁移守卫

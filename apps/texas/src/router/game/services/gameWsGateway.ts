@@ -70,6 +70,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }
 
+  notifyPlayerChipTopUp(
+    roomKey: string,
+    data: WsMessage<'player-chip-top-up'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'player-chip-top-up', data })
+  }
+
   notifyGameEnd(roomKey: string, data: WsMessage<'game-end'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-end', data })
   }
