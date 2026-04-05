@@ -13,7 +13,6 @@ export type WsPlayerRolesAssignedData = {
     role: RoleEnum
     actionIndex: number
   }>
-  stage: StageEnum
 }
 
 export type WsPlayerHandDealtData = {
@@ -24,8 +23,6 @@ export type WsPlayerHandDealtData = {
 
 export type WsGameStartData = {
   matchId: number
-  stage: StageEnum
-  pool: number
 }
 
 export type WsPlayerActionRequiredData = {

@@ -187,9 +187,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       data: { matchId, stage: 'pre_flop' }
     })
     wsGateway.notifyGameStart(roomKey, {
-      matchId,
-      stage: texas.controller.stage,
-      pool: texas.pool.totalAmount
+      matchId
     })
   })
 
@@ -382,8 +380,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             userId: p.userId,
             role: p.role,
             actionIndex: p.actionIndex
-          })),
-          stage: texas.controller.stage
+          }))
         })
       })
       .catch((e) => {

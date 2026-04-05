@@ -79,7 +79,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `player-roles-assigned`
 
-用途：本手角色分配完成（庄/盲位等）。
+用途：本手角色分配完成（庄/盲位等）。不含阶段字段；阶段在收到 `game-start` 时由客户端置为 `pre_flop`，后续以 `game-stage-changed` 为准。
 
 ```ts
 {
@@ -87,6 +87,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
   roles: Array<{
     userId: number
     role: RoleEnum
+    actionIndex: number
   }>
 }
 ```
@@ -105,18 +106,11 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-start`
 
-用途：本手正式开始（含默认盲注信息）。
+用途：本手正式开始（引擎已下盲注等）。不携带 `stage` / `pool`：客户端收到后置阶段为 `pre_flop`，底池可与首条 `player-action-taken` 等中的 `pool` 对齐。
 
 ```ts
 {
   matchId: number
-  stage: StageEnum
-  pool: number
-  defaultBets: Array<{
-    userId: number
-    amount: number
-    balance: number
-  }>
 }
 ```
 
