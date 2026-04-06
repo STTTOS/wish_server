@@ -60,6 +60,7 @@ router.post(matchApi('/list'), async (ctx) => {
         wager: true,
         isAllIn: true,
         isFold: true,
+        rankCategory: true,
         totalBetAmount: true
       },
       orderBy: {
@@ -72,29 +73,24 @@ router.post(matchApi('/list'), async (ctx) => {
     })
   ])
 
-  const listForResponse = records
-    .sort(
-      (a, b) =>
-        (a.match.startedAt?.getTime() ?? 0) - (b.match.endedAt?.getTime() ?? 0)
-    )
-    .map(({ match, ...restRecord }) => {
-      const {
-        id: matchId,
-        room: { code: roomCode, initialChips },
-        startedAt,
-        endedAt,
-        ...restMatch
-      } = match
-      return {
-        ...restRecord,
-        ...restMatch,
-        matchId,
-        roomCode,
-        initialChips,
-        startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
-        endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
-      }
-    })
+  const listForResponse = records.map(({ match, ...restRecord }) => {
+    const {
+      id: matchId,
+      room: { code: roomCode, initialChips },
+      startedAt,
+      endedAt,
+      ...restMatch
+    } = match
+    return {
+      ...restRecord,
+      ...restMatch,
+      matchId,
+      roomCode,
+      initialChips,
+      startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
+      endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
+    }
+  })
 
   response.success(ctx, withList(listForResponse, total))
 })
