@@ -198,10 +198,12 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
       currentStage,
       showHandPokes,
       pokesToReveal,
-      bestRankCategory
+      bestRankCategory,
+      pokesRevealed
     }) => {
       void (async () => {
         try {
+          const gameEndAt = new Date()
           const currentMatchId = getRuntime().currentMatchId
           if (currentMatchId == null) {
             logger.error('onGameEnd skipped: currentMatchId is null')
@@ -249,12 +251,10 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
               }
             })
           const totalBetAmount = texas.pool.totalAmount
-          const commonPokes = texas.dealer.deck.getPokes().commonPokes
-          const gameEndAt = new Date()
           await match.update({
             where: { id: currentMatchId },
             data: {
-              commonPokes,
+              commonPokes: pokesRevealed,
               bestRankCategory,
               endedAt: gameEndAt,
               lastActionStage: currentStage,
