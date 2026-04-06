@@ -77,6 +77,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'player-chip-top-up', data })
   }
 
+  notifyPlayerBuiltInVoice(
+    roomKey: string,
+    data: WsMessage<'player-built-in-voice'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'player-built-in-voice', data })
+  }
+
   notifyGameEnd(roomKey: string, data: WsMessage<'game-end'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-end', data })
   }

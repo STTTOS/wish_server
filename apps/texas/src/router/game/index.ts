@@ -2,18 +2,24 @@
 import type { ActionType } from 'texas-poker-core'
 
 import router from '../instance'
-import { roomMember } from '../../models'
 import response from '../../utils/response'
 import { apiPrefixClient } from '../../config'
+import { room, roomMember } from '../../models'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { GameWsGateway } from './services/gameWsGateway'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { StartGameUseCase, TakeActionUseCase } from './services/flow'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
+import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   gameRuntimeRegistry,
   getCurrentMatchIdWithFallback
 } from './services/runtimeKit'
+import {
+  BUILT_IN_VOICE_NAME_SET,
+  BUILT_IN_VOICE_USER_COOLDOWN_MS
+} from '../../constants/builtInVoice'
 import {
   MIN_BB,
   MAX_PLAYERS_COUNT,
@@ -29,6 +35,7 @@ const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
+const gameWsGateway = new GameWsGateway()
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
@@ -172,4 +179,74 @@ router.post(gameClientApi('/takeAction'), async (ctx) => {
     amount: Number(amount)
   })
   respondFromApiResult(ctx, result, { okMessage: '行动已提交' })
+})
+
+const builtInVoiceUserLastAt = new Map<string, number>()
+
+function builtInVoiceUserKey(roomId: number, userId: number): string {
+  return `${roomId}:${userId}`
+}
+
+/**
+ * 牌桌内置语音：校验房间、成员、白名单；每人每房 5s 内仅可请求一次；
+ * 同一房间内 WS 广播排队，相邻两次实际发出至少间隔 3s。
+ * body: { roomId: number, voiceName: string }
+ */
+router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown; voiceName?: unknown }
+  const roomId = Number(body?.roomId)
+  const voiceNameRaw =
+    typeof body?.voiceName === 'string' ? body.voiceName.trim() : ''
+  const userId = ctx.state.user!.id
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+  if (!voiceNameRaw) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 voiceName')
+    return
+  }
+  if (!BUILT_IN_VOICE_NAME_SET.has(voiceNameRaw)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '内置语音不存在')
+    return
+  }
+
+  const roomRow = await room.findFirst({
+    where: { id: roomId, deletedAt: null },
+    select: { id: true }
+  })
+  if (!roomRow) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
+    return
+  }
+
+  const membership = await roomMember.findFirst({
+    where: { userId, roomId },
+    select: { id: true }
+  })
+  if (!membership) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '不在该房间中')
+    return
+  }
+
+  const uKey = builtInVoiceUserKey(roomId, userId)
+  const now = Date.now()
+  const lastAt = builtInVoiceUserLastAt.get(uKey) ?? 0
+  if (now - lastAt < BUILT_IN_VOICE_USER_COOLDOWN_MS) {
+    response.error(
+      ctx,
+      HTTP_STATUS.TOO_MANY_REQUESTS,
+      '发送语音太频繁, 需要间隔5秒'
+    )
+    return
+  }
+  builtInVoiceUserLastAt.set(uKey, now)
+
+  response.success(ctx, true)
+  scheduleBuiltInVoiceBroadcast(
+    roomId,
+    { userId, voiceName: voiceNameRaw },
+    gameWsGateway
+  )
 })

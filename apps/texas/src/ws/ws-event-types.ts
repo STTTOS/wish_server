@@ -150,6 +150,12 @@ export type WsPlayerChipTopUpData = {
   balanceAfter: number
 }
 
+/** 牌桌内置语音（快捷音效）：同房间 /game 订阅者广播 */
+export type WsPlayerBuiltInVoiceData = {
+  userId: number
+  voiceName: string
+}
+
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
@@ -166,6 +172,7 @@ export type WsEventDataMap = {
   'game-stage-changed': WsGameStageChangedData
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
+  'player-built-in-voice': WsPlayerBuiltInVoiceData
 }
 
 export type WsEventType = keyof WsEventDataMap
