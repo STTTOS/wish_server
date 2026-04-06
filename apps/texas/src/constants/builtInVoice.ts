@@ -1,6 +1,6 @@
 /** 客户端可选的内置语音 key，须与白名单一致 */
 export const BUILT_IN_VOICE_NAMES = [
-  'check_pokes',
+  'i_want_to_check_pokes',
   'shin_my_shoes_for_me',
   'ma_le',
   'urge_someone_to_reveal_their_hand'
