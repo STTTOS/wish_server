@@ -10,6 +10,7 @@ export type RoomJoinAuthData = {
     name: string
     avatarUrl: string | null
     avatarKey: string
+    pokerBackgroundKey: string | null
   }
 }
 export type RoomJoinAuthResult = ApiResult<RoomJoinAuthData>
@@ -59,7 +60,13 @@ export async function validateRoomJoinAuth(input: {
 
   const joinUser = await user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, avatarUrl: true, avatarKey: true }
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      avatarKey: true,
+      pokerBackgroundKey: true
+    }
   })
 
   if (!joinUser) {
@@ -74,7 +81,8 @@ export async function validateRoomJoinAuth(input: {
         id: joinUser.id,
         name: joinUser.name,
         avatarUrl: joinUser.avatarUrl,
-        avatarKey: joinUser.avatarKey
+        avatarKey: joinUser.avatarKey,
+        pokerBackgroundKey: joinUser.pokerBackgroundKey
       }
     }
   }

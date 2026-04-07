@@ -136,7 +136,8 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
               id: true,
               name: true,
               avatarUrl: true,
-              avatarKey: true
+              avatarKey: true,
+              pokerBackgroundKey: true
             }
           }
         },
@@ -152,7 +153,8 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
               id: true,
               name: true,
               avatarUrl: true,
-              avatarKey: true
+              avatarKey: true,
+              pokerBackgroundKey: true
             }
           }
         }

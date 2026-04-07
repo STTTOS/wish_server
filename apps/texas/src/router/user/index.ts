@@ -259,6 +259,7 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
       name: true,
       avatarUrl: true,
       avatarKey: true,
+      pokerBackgroundKey: true,
       username: true,
       createdAt: true,
       isAdmin: true
@@ -267,10 +268,11 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
   if (!userInfo) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
   } else {
-    const { createdAt, ...rest } = userInfo
+    const { createdAt, pokerBackgroundKey, ...rest } = userInfo
     response.success(ctx, {
       createdAt: dayjs(createdAt).format(timeFormat),
-      ...rest
+      ...rest,
+      pokerBackgroundKey: pokerBackgroundKey ?? 'default'
     })
   }
 }
@@ -282,6 +284,50 @@ router.post(userClientApi('/info'), async (ctx) => {
 /** Web 端获取用户信息，需 Cookie `token` 或 Authorization Bearer（与客户端一致） */
 router.post(userWebApi('/info'), async (ctx) => {
   await fetchUserInfo(ctx)
+})
+
+/**
+ * 牌桌背景预设 key，body: { pokerBackgroundKey: string }
+ */
+router.post(userClientApi('/setPokerBackground'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { pokerBackgroundKey }: { pokerBackgroundKey?: string } =
+    ctx.request.body ?? {}
+
+  if (
+    pokerBackgroundKey === undefined ||
+    typeof pokerBackgroundKey !== 'string' ||
+    pokerBackgroundKey.trim().length === 0
+  ) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '请传入有效的 pokerBackgroundKey'
+    )
+    return
+  }
+  const key = pokerBackgroundKey.trim()
+  if (key.length > 128) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'pokerBackgroundKey 过长')
+    return
+  }
+
+  try {
+    await user.update({
+      where: { id: userId },
+      data: { pokerBackgroundKey: key }
+    })
+    response.success(ctx, null, '牌桌背景更新成功')
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+      return
+    }
+    throw error
+  }
 })
 
 /**

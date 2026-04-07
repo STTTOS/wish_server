@@ -12,6 +12,7 @@ export type RoomMemberClientRow = {
   name: string
   avatarUrl: string | null
   avatarKey: string
+  pokerBackgroundKey: string
   joinedAt: string
   isOwner: boolean
   /** 是否在等待房或游戏房任一 WS 通道在线 */
@@ -48,7 +49,17 @@ export class RoomMembersFacade {
     const { waiting, game } = this.gateway.getPresence(roomId)
     const rows = await roomMember.findMany({
       where: { roomId },
-      include: { user: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            avatarKey: true,
+            pokerBackgroundKey: true
+          }
+        }
+      },
       orderBy: { joinedAt: 'asc' }
     })
     return rows.map(({ joinedAt, user: u }) => {
@@ -59,6 +70,7 @@ export class RoomMembersFacade {
         name: u.name,
         avatarUrl: u.avatarUrl,
         avatarKey: u.avatarKey,
+        pokerBackgroundKey: u.pokerBackgroundKey ?? 'default',
         joinedAt: dayjs(joinedAt).format(timeFormat),
         isOwner: ownerId === u.id,
         isOnline: onWaiting || onGame,

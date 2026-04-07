@@ -43,6 +43,7 @@ export class RoomCreateFacade {
               name: string
               avatarUrl: string | null
               avatarKey: string
+              pokerBackgroundKey: string | null
             }
           }
         }
@@ -51,7 +52,13 @@ export class RoomCreateFacade {
       async (tx): Promise<TxRes> => {
         const userInfo = await tx.user.findUnique({
           where: { id: userId },
-          select: { id: true, name: true, avatarUrl: true, avatarKey: true }
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            avatarKey: true,
+            pokerBackgroundKey: true
+          }
         })
         if (!userInfo) {
           return {
@@ -170,7 +177,10 @@ export class RoomCreateFacade {
     this.waitingRoomGateway.broadcastRoomListRoomCreated({
       id: roomId,
       code: roomCode,
-      owner,
+      owner: {
+        ...owner,
+        pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+      },
       initialChips,
       thinkingTime,
       lowestBetAmount,

@@ -55,7 +55,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
           id: true,
           name: true,
           avatarUrl: true,
-          avatarKey: true
+          avatarKey: true,
+          pokerBackgroundKey: true
         }
       },
       members: {
@@ -79,7 +80,10 @@ router.post(roomApiClient('/list'), async (ctx) => {
       return {
         id,
         code,
-        owner,
+        owner: {
+          ...owner,
+          pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+        },
         initialChips,
         thinkingTime,
         lowestBetAmount,
@@ -150,7 +154,8 @@ router.post(roomApiClient('/detail'), async (ctx) => {
           id: true,
           name: true,
           avatarUrl: true,
-          avatarKey: true
+          avatarKey: true,
+          pokerBackgroundKey: true
         }
       }
     }
@@ -173,7 +178,10 @@ router.post(roomApiClient('/detail'), async (ctx) => {
   response.success(ctx, {
     id,
     code,
-    owner,
+    owner: {
+      ...owner,
+      pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+    },
     gameStatus,
     isPrivate,
     thinkingTime,

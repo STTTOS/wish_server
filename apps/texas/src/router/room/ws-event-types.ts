@@ -12,6 +12,7 @@ export type WsWaitingRoomMemberJoinedData = {
   name: string
   avatarUrl: string | null
   avatarKey: string
+  pokerBackgroundKey: string
   joinedAt: string
   isOwner: boolean
 }
@@ -51,6 +52,7 @@ export type WsRoomListRoomCreatedData = {
     name: string
     avatarUrl: string | null
     avatarKey: string
+    pokerBackgroundKey: string
   }
   initialChips: number
   thinkingTime: number

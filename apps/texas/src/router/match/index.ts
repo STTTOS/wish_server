@@ -242,6 +242,7 @@ router.post(matchApi('/detail'), async (ctx) => {
               id: true,
               avatarUrl: true,
               avatarKey: true,
+              pokerBackgroundKey: true,
               name: true
             }
           },
@@ -263,6 +264,7 @@ router.post(matchApi('/detail'), async (ctx) => {
               id: true,
               avatarUrl: true,
               avatarKey: true,
+              pokerBackgroundKey: true,
               name: true
             }
           },
