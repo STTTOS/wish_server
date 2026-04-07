@@ -20,6 +20,37 @@ import {
 } from '../game/services/runtimeKit'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
+
+/** 对局详情结算行：按查看者掩码底牌与牌力（本人始终可见自己的底牌；弃牌/独赢无摊牌规则见调用处） */
+function settleRecordVisibleFields<
+  H,
+  C extends string | null,
+  S extends number
+>(args: {
+  isSelf: boolean
+  isFold: boolean
+  hideHoleCardsFromViewer: boolean
+  handPokes: H
+  rankCategory: C
+  rankStrength: S
+}): { handPokes: H | []; rankCategory: C | null; rankStrength: S | 0 } {
+  const {
+    isSelf,
+    isFold,
+    hideHoleCardsFromViewer,
+    handPokes,
+    rankCategory,
+    rankStrength
+  } = args
+  const showHoleCards = isSelf || !hideHoleCardsFromViewer
+  const showRankInfo = !isFold && (isSelf || !hideHoleCardsFromViewer)
+  return {
+    handPokes: showHoleCards ? handPokes : [],
+    rankCategory: showRankInfo ? rankCategory : null,
+    rankStrength: showRankInfo ? rankStrength : 0
+  }
+}
+
 /**
  * 查询当前用户的对局记录（分页）
  */
@@ -263,11 +294,6 @@ router.post(matchApi('/detail'), async (ctx) => {
     return
   }
 
-  type PlayerRecordWithSortIndex =
-    (typeof matchInfo.playerMatchRecords)[number] & {
-      sortIndex: number
-    }
-
   const {
     room: { code: roomCode, id: roomId, initialChips },
     endedAt,
@@ -276,46 +302,68 @@ router.post(matchApi('/detail'), async (ctx) => {
     playerMatchRecords,
     ...restMatchInfo
   } = matchInfo
-  // 玩家结算记录
-  const settleRecords = playerMatchRecords
-    //根据牌力排序, 弃牌在后
+
+  const totalPlayers = playerMatchRecords.length
+  const foldedCount = playerMatchRecords.filter((p) => p.isFold).length
+  /** 仅一人未弃牌收池，无摊牌；赢家底牌对其他人不可见 */
+  const isNoShowdownSingleWinner =
+    totalPlayers >= 1 && foldedCount === totalPlayers - 1
+  const viewerId = userId
+
+  const wagerDesc = (
+    a: { wager: number | null },
+    b: { wager: number | null }
+  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
+
+  // 玩家结算记录：未弃牌在前（先比 rankStrength，再比 wager）；弃牌在后（按 wager）
+  const settleRecords = [...playerMatchRecords]
     .sort((a, b) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      return a.rankStrength - b.rankStrength
-    })
-    // 根据牌力设置 sortIndex
-    .reduce<PlayerRecordWithSortIndex[]>((acc, cur, index) => {
-      const lastOne = acc[index - 1]
-      let sortIndex: number
-      if (!lastOne) {
-        sortIndex = 1
-      } else if (lastOne.rankStrength === cur.rankStrength) {
-        sortIndex = lastOne.sortIndex
-      } else {
-        sortIndex = lastOne.sortIndex + 1
+      if (!a.isFold && !b.isFold) {
+        if (a.rankStrength !== b.rankStrength) {
+          return a.rankStrength - b.rankStrength
+        }
+        return wagerDesc(a, b)
       }
-      return [...acc, { ...cur, sortIndex }]
-    }, [])
-    // 格式化字段
+      return wagerDesc(a, b)
+    })
     .map(
       ({
         handPokes,
         isFold,
-        sortIndex: rank,
-        user: { id: userId, ...user },
+        user: { id: recordUserId, ...user },
         rankCategory,
         rankStrength,
         ...rest
-      }) => ({
-        ...user,
-        ...rest,
-        rank,
-        userId,
-        isFold,
-        handPokes: isFold ? [] : handPokes,
-        rankCategory: isFold ? undefined : rankCategory,
-        rankStrength: isFold ? 0 : rankStrength
-      })
+      }) => {
+        const isSelf = recordUserId === viewerId
+        /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
+        const hideHoleCardsFromViewer =
+          !isSelf && (isFold || isNoShowdownSingleWinner)
+
+        const {
+          handPokes: outHandPokes,
+          rankCategory: outRankCategory,
+          rankStrength: outRankStrength
+        } = settleRecordVisibleFields({
+          isSelf,
+          isFold,
+          hideHoleCardsFromViewer,
+          handPokes,
+          rankCategory,
+          rankStrength
+        })
+
+        return {
+          ...user,
+          ...rest,
+          userId: recordUserId,
+          isFold,
+          handPokes: outHandPokes,
+          rankCategory: outRankCategory,
+          rankStrength: outRankStrength
+        }
+      }
     )
 
   const actionRecords = records.map(
