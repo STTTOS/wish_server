@@ -174,19 +174,22 @@ export class RoomCreateFacade {
     }
     const { owner, roomId, roomCode, createdAt } = txRes.data
 
-    this.waitingRoomGateway.broadcastRoomListRoomCreated({
-      id: roomId,
-      code: roomCode,
-      owner: {
-        ...owner,
-        pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
-      },
-      initialChips,
-      thinkingTime,
-      lowestBetAmount,
-      createdAt: dayjs(createdAt).format(timeFormat),
-      memberCount: 1
-    })
+    // 私密房不出现在公开房间列表，不向 /room-list 广播
+    if (!isPrivate) {
+      this.waitingRoomGateway.broadcastRoomListRoomCreated({
+        id: roomId,
+        code: roomCode,
+        owner: {
+          ...owner,
+          pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+        },
+        initialChips,
+        thinkingTime,
+        lowestBetAmount,
+        createdAt: dayjs(createdAt).format(timeFormat),
+        memberCount: 1
+      })
+    }
 
     return {
       ok: true,
