@@ -449,7 +449,18 @@ class SocketServer {
    * @description 向 /game 指定用户推送消息
    */
   broadcastGameToUser(userId: number, data: Parameters<Socket['send']>[0]) {
-    logger.info(`broadcastGameToUser, ${userId}, data: ${JSON.stringify(data)}`)
+    let logPayload: unknown = data
+    if (data && typeof data === 'object' && 'handPokes' in data) {
+      const hand = data.handPokes
+      const n = Array.isArray(hand) ? hand.length : 0
+      logPayload = {
+        ...data,
+        handPokes: `[redacted:${n}]`
+      }
+    }
+    logger.info(
+      `broadcastGameToUser, ${userId}, data: ${JSON.stringify(logPayload)}`
+    )
     const userRoomKey = this.#getGameUserRoomKey(userId)
     this.#gameNs.to(userRoomKey).emit('message', data)
   }
