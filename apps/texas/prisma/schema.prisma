@@ -9,23 +9,23 @@ generator client {
 }
 
 model User {
-  id       Int     @id @default(autoincrement())
-  balance  Float
+  id                 Int     @id @default(autoincrement())
+  balance            Float
   // 自定义头像 URL（上传等），可选
-  avatarUrl String?
+  avatarUrl          String?
   // 客户端预设头像 key，如 cartoon/default
-  avatarKey String  @default("cartoon/default")
+  avatarKey          String  @default("cartoon/default")
   pokerBackgroundKey String? @default("default")
   // 用户通过weChat注册的话会关联weChatId
-  weChatId String?
+  weChatId           String?
   // 游戏昵称, 需要唯一, 设置为非必填, 在注册时给一个随机的名字, 降低注册门槛
-  name     String  @unique
+  name               String  @unique
   // 新增用户名和密码字段
-  username String  @unique
+  username           String  @unique
   // 是否管理员
-  isAdmin  Boolean @default(false)
+  isAdmin            Boolean @default(false)
   // the password of the user should be hashed
-  password String
+  password           String
 
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @default(now())
@@ -34,11 +34,11 @@ model User {
   deletedAt    DateTime?
   matchRecords PlayerMatchRecord[]
 
-  Room          Room[]
-  roomMembers   RoomMember[]
-  roomChipTopUps RoomChipTopUp[]
-  userRoomStats UserRoomStat[]
-  settings      UserSettings?
+  Room              Room[]
+  roomMembers       RoomMember[]
+  roomChipTopUps    RoomChipTopUp[]
+  userRoomStats     UserRoomStat[]
+  settings          UserSettings?
   announcementReads AnnouncementRead[]
 }
 
@@ -53,7 +53,7 @@ model UserSettings {
   // 是否展示战绩总览
   showRecordOverview Boolean @default(true)
   // 离线是否自动跟注
-  autoCallOnOffline Boolean @default(false)
+  autoCallOnOffline  Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
@@ -75,21 +75,21 @@ model Announcement {
 
   type AnnouncementType
 
-  title String @db.VarChar(120)
+  title   String @db.VarChar(120)
   summary String @db.VarChar(300)
   content String @db.Text
 
   actionText String? @db.VarChar(40)
-  actionUrl String? @db.VarChar(500)
+  actionUrl  String? @db.VarChar(500)
 
   priority Int @default(0)
 
-  status AnnouncementStatus
+  status    AnnouncementStatus
   publishAt DateTime
-  expireAt DateTime?
+  expireAt  DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @default(now())
   deletedAt DateTime?
   reads     AnnouncementRead[]
 
@@ -97,10 +97,10 @@ model Announcement {
 }
 
 model AnnouncementRead {
-  id             Int          @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   announcementId Int
   userId         Int
-  readAt         DateTime     @default(now())
+  readAt         DateTime @default(now())
 
   announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -120,24 +120,24 @@ model MatchError {
 }
 
 model Room {
-  id              Int            @id @default(autoincrement())
+  id              Int             @id @default(autoincrement())
   // 房间代码
-  code            String         @unique
+  code            String          @unique
   // 房间在业务侧的对局状态（用于“房主点击开始游戏”）
-  gameStatus      RoomGameStatus @default(waiting)
+  gameStatus      RoomGameStatus  @default(waiting)
   // 大盲注
   lowestBetAmount Int
   // 初始筹码
-  initialChips    Int            @default(0)
-  createdAt       DateTime       @default(now())
+  initialChips    Int             @default(0)
+  createdAt       DateTime        @default(now())
   deletedAt       DateTime?
   thinkingTime    Int
   isPrivate       Boolean
   // 房主
   ownerId         Int
   // 仅未软删房间写入 ownerId；软删时置空。用于保证“一个用户最多一个有效房间”。
-  activeOwnerId   Int?           @unique
-  owner           User           @relation(fields: [ownerId], references: [id])
+  activeOwnerId   Int?            @unique
+  owner           User            @relation(fields: [ownerId], references: [id])
   Match           Match[]
   members         RoomMember[]
   roomChipTopUps  RoomChipTopUp[]
@@ -166,25 +166,25 @@ model RoomMember {
 
 // 局间补码：紧跟在 afterMatchId 这一手结束之后、下一手开始前；游戏中不可补
 model RoomChipTopUp {
-  id     Int @id @default(autoincrement())
-  roomId Int
-  userId Int
+  id           Int @id @default(autoincrement())
+  roomId       Int
+  userId       Int
   /// 已结束的这一手 match；同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次
   afterMatchId Int
 
   /// 本次补入的筹码（通常 = 房间 initialChips）
-  amount Int
+  amount                   Int
   /// 补码执行前该玩家在桌上的筹码
-  balanceBefore Int
+  balanceBefore            Int
   /// 补码执行后筹码（应等于 balanceBefore + amount）
-  balanceAfter Int
+  balanceAfter             Int
   /// 写入时房间的 initialChips 快照（规则审计）
   roomInitialChipsSnapshot Int
 
   createdAt DateTime @default(now())
 
-  room   Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room       Room  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   afterMatch Match @relation(fields: [afterMatchId], references: [id], onDelete: Restrict)
 
   @@unique([roomId, userId, afterMatchId])
@@ -228,16 +228,16 @@ enum Stage {
 
 // 座位角色（从庄家顺时针：庄家→小盲→大盲→枪口→…→关煞位），支持最多 10 人
 enum Role {
-  btn   // 庄家/按钮
-  sb    // 小盲
-  bb    // 大盲
-  utg   // 枪口
-  utg1  // 枪口+1
-  utg2  // 枪口+2（10 人桌）
-  mp    // 中位
-  lj    // Lojack（10 人桌）
-  hj    // 劫持位
-  co    // 关煞位
+  btn // 庄家/按钮
+  sb // 小盲
+  bb // 大盲
+  utg // 枪口
+  utg1 // 枪口+1
+  utg2 // 枪口+2（10 人桌）
+  mp // 中位
+  lj // Lojack（10 人桌）
+  hj // 劫持位
+  co // 关煞位
 }
 
 enum RankCategory {
@@ -265,56 +265,58 @@ enum RankCategory {
 
 // 记录玩家手牌
 model PlayerMatchRecord {
-  id             Int              @id @default(autoincrement())
+  id               Int           @id @default(autoincrement())
   // 对应的对局 ID
-  matchId        Int
+  matchId          Int
   // 对应用户 ID
-  userId         Int
+  userId           Int
   // [Poke, Poke]
-  handPokes       Json
+  handPokes        Json
   // 该手牌中的座位角色（庄家/小盲/大盲等）
-  role           Role?
+  role             Role?
   // 输赢结果
-  wager          Float            @default(0)
+  wager            Float         @default(0)
   // 牌型
-  rankCategory   RankCategory?
+  rankCategory     RankCategory?
   // 牌型的唯一签名
-  rankSignature  String?
+  rankSignature    String?
   // 将牌型转化为大小存储, 方便数据库索引
-  rankStrength Int @default(0)
-  totalBetAmount Int              @default(0)
-  isFold         Boolean          @default(false)
-  isAllIn        Boolean          @default(false)
+  rankStrength     Int           @default(0)
+  totalBetAmount   Int           @default(0)
+  isFold           Boolean       @default(false)
+  isAllIn          Boolean       @default(false)
   /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
   balanceAfterHand Int?
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])
 
+  createdAt DateTime @default(now())
   @@unique([matchId, userId])
 }
 
 // 对局信息
 model Match {
-  id              Int               @id @default(autoincrement())
+  id                Int           @id @default(autoincrement())
+  createdAt         DateTime      @default(now())
   // 对局开始时间：在 setPlayerRoles / onRolesAssigned 时写入
-  startedAt       DateTime?
+  startedAt         DateTime?
   // 对局结束的时间
-  endedAt         DateTime?
+  endedAt           DateTime?
   // 总的下注额度
-  totalBetAmount  Float?
+  totalBetAmount    Float?
   // 最后一轮可操作下注结束时控制器所处阶段（与引擎 onGameEnd.currentStage 一致）
   lastActionStage   Stage?
   // 本手公共牌实际发到哪一街（与引擎 onGameEnd.endStage 一致；可能与 lastActionStage 不同，如 turn 全下后发到 river）
   boardThroughStage Stage?
   // 公共牌
-  commonPokes     Json?
+  commonPokes       Json?
   // 存储计算后的最大牌力
-  bestRankCategory     RankCategory?
+  bestRankCategory  RankCategory?
   // string[][] 记录这场对局结算时可以形成最大牌型的扑克牌
-  bestPokes    Json?
+  bestPokes         Json?
   // 大盲注
-  lowestBetAmount Int               @default(0)
+  lowestBetAmount   Int           @default(0)
 
   // 关联房间Id
   roomId               Int
@@ -324,7 +326,7 @@ model Match {
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
 
-  matchError MatchError[]
+  matchError               MatchError[]
   roomChipTopUpsAfterMatch RoomChipTopUp[]
 }
 
@@ -342,16 +344,16 @@ model MatchStageTimeRecord {
 
 // 用户的行为记录表
 model BetRecord {
-  id     Int    @id @default(autoincrement())
+  id         Int        @id @default(autoincrement())
   // 用户的行为
   actionType ActionType
   // 下注金额, 过牌等行为默认为0
-  amount Float  @default(0)
+  amount     Float      @default(0)
   // 记录用户在哪个阶段发生的行为
-  stage  Stage
+  stage      Stage
 
-  userId   Int
-  user     User     @relation(fields: [userId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 
   match   Match? @relation(fields: [matchId], references: [id], onDelete: Cascade)
