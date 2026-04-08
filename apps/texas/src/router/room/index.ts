@@ -75,7 +75,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
       createdAt,
       owner,
       initialChips,
-      members
+      members,
+      gameStatus
     }) => {
       return {
         id,
@@ -86,6 +87,7 @@ router.post(roomApiClient('/list'), async (ctx) => {
         },
         initialChips,
         thinkingTime,
+        gameStatus,
         lowestBetAmount,
         createdAt: dayjs(createdAt).format(timeFormat),
         memberCount: members.length
