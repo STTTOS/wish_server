@@ -8,7 +8,8 @@ export const BUILT_IN_VOICE_NAMES = [
   'dasima_am_i_strong',
   'dasima_heihei',
   'dasima_what_r_u_doing',
-  'dasima_how_do_you_do'
+  'dasima_how_do_you_do',
+  'cxk_what_r_u_doing'
 ] as const
 
 export type BuiltInVoiceName = (typeof BUILT_IN_VOICE_NAMES)[number]
