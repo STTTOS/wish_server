@@ -437,6 +437,7 @@ class SocketServer {
    * @description 向 /game 房间内所有端广播
    */
   broadcastGameRoom(roomId: string, data: Parameters<Socket['send']>[0]) {
+    // TODO: 日志 payload 脱敏（与 broadcastGameToUser 一致）：game-end 的 settleList[].handPokes / pokesToReveal / bestPokes，game-stage-changed 的 pokesToReveal 等
     logger.info(
       `broadcastGameRoom, ${this.#getUserIdsInGameRoom(
         roomId
