@@ -6,9 +6,11 @@ import response from '../../utils/response'
 import { apiPrefixClient } from '../../config'
 import { room, roomMember } from '../../models'
 import combinePath from '../../utils/combinePath'
+import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { GameWsGateway } from './services/gameWsGateway'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
+import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { StartGameUseCase, TakeActionUseCase } from './services/flow'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
@@ -17,19 +19,13 @@ import {
   getCurrentMatchIdWithFallback
 } from './services/runtimeKit'
 import {
+  gameRuntimeConfig,
+  type GameRuntimeConfigPatch
+} from '../../utils/gameRuntimeConfig'
+import {
   BUILT_IN_VOICE_NAME_SET,
   BUILT_IN_VOICE_USER_COOLDOWN_MS
 } from '../../constants/builtInVoice'
-import {
-  MIN_BB,
-  MAX_PLAYERS_COUNT,
-  MIN_THINKING_TIME,
-  EXTENDED_THINKING_TIME,
-  MAX_DELAY_REQUEST_COUNT,
-  GAME_WS_STAGE_CHANGED_DELAY_MS,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER,
-  GAME_WS_ACTION_REQUIRED_DELAY_MS
-} from '../../constants/game'
 
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
@@ -40,17 +36,30 @@ const gameWsGateway = new GameWsGateway()
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
   response.success(ctx, {
-    minThinkingTime: MIN_THINKING_TIME,
-    initialChipsMinBigBlindMultiplier: INITIAL_CHIPS_MIN_BB_MULTIPLIER,
+    ...gameRuntimeConfig.getClientRulesSnapshot(),
     maxPlayersCount: MAX_PLAYERS_COUNT,
-    minBB: MIN_BB,
-    maxDelayRequestCount: MAX_DELAY_REQUEST_COUNT,
-    extendedThinkingTime: EXTENDED_THINKING_TIME,
-    /** 与引擎 `beforeNextPlayerTurn` 对齐的毫秒数（供客户端动画；WS 在 `onPreAction` 同步发出） */
-    actionRequiredWsDelayMs: GAME_WS_ACTION_REQUIRED_DELAY_MS,
-    /** 与引擎 `beforeStageAdvance` 对齐的毫秒数（供客户端动画；WS 在 `onNextStage` 同步发出） */
-    stageChangedWsDelayMs: GAME_WS_STAGE_CHANGED_DELAY_MS
+    minBB: MIN_BB
   })
+})
+
+/**
+ * 管理员：运行时调整规则与各类延时（毫秒），无需重启；GET /game/config 仅返回规则三项（实时）。
+ * 各类延时不在 config 中下发，改后返回完整快照供核对。
+ * body 至少含一个字段，毫秒项范围 0～120000。
+ */
+router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  if (!(await isAdminUser(userId))) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权限')
+    return
+  }
+  const body = ctx.request.body as GameRuntimeConfigPatch
+  const result = gameRuntimeConfig.applyPatch(body)
+  if (!result.ok) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, result.message)
+    return
+  }
+  response.success(ctx, result.data, '已更新')
 })
 
 // 以下开始新增接口

@@ -7,6 +7,7 @@ import { createMatchRollbackManager } from './rollback'
 import { bindTexasLifecycleEvents } from './eventBinder'
 import { transitionRoomGameStatus } from './stateMachine'
 import prisma, { room as roomModel } from '../../../models'
+import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
 import {
   validateStartGameRequest,
   markRoomEnteringAndNotify
@@ -15,10 +16,6 @@ import {
   createTexasAndSeatPlayers,
   createInitialMatchAndNotifyEntered
 } from './runtime'
-import {
-  NEXT_HAND_DEAL_AFTER_END_MS,
-  NEXT_HAND_START_AFTER_DEAL_MS
-} from '../../../constants/nextHand'
 
 /** HTTP 已校验通过后，后台开局流程的入参（含房间快照与预期成员）。 */
 type StartFlowInput = {
@@ -407,7 +404,7 @@ export class StartGameUseCase {
 
     // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
     // 进入游戏2秒后开始分配角色
-    await this.#delay(2000)
+    await this.#delay(gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs())
     texas.setPlayerRoles()
     // 进入in_hand状态, 新加入的玩家直接到观战席
     await roomModel.update({
@@ -417,14 +414,14 @@ export class StartGameUseCase {
 
     await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
     // 角色分配完成后, 等待2秒再发牌
-    await this.#delay(NEXT_HAND_DEAL_AFTER_END_MS)
+    await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
     texas.dealCards()
     rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
       rtForSnapshot.currentMatchId
     )
 
     // 发牌3秒后再开始游戏
-    await this.#delay(NEXT_HAND_START_AFTER_DEAL_MS)
+    await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
     await texas.controller.start()
   }
 

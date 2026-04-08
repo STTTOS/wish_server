@@ -1,11 +1,8 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
+import { MIN_BB } from '../../../constants/game'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
-import {
-  MIN_BB,
-  MIN_THINKING_TIME,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER
-} from '../../../constants/game'
+import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
 
 export type RoomCreateInput = {
   userId: number
@@ -40,11 +37,11 @@ export function validateRoomCreateAuth(
     return { ok: false, status: HTTP_STATUS.BAD_REQUEST, message: '参数异常' }
   }
 
-  if (thinkingTime < MIN_THINKING_TIME) {
+  if (thinkingTime < gameRuntimeConfig.getMinThinkingTime()) {
     return {
       ok: false,
       status: HTTP_STATUS.BAD_REQUEST,
-      message: `思考时间不可小于${MIN_THINKING_TIME}s`
+      message: `思考时间不可小于${gameRuntimeConfig.getMinThinkingTime()}s`
     }
   }
 
@@ -58,12 +55,13 @@ export function validateRoomCreateAuth(
 
   if (
     !Number.isInteger(initialChips) ||
-    initialChips < lowestBetAmount * INITIAL_CHIPS_MIN_BB_MULTIPLIER
+    initialChips <
+      lowestBetAmount * gameRuntimeConfig.getInitialChipsMinBigBlindMultiplier()
   ) {
     return {
       ok: false,
       status: HTTP_STATUS.BAD_REQUEST,
-      message: `初始筹码必须为整数且大于等于大盲注的${INITIAL_CHIPS_MIN_BB_MULTIPLIER}倍`
+      message: `初始筹码必须为整数且大于等于大盲注的${gameRuntimeConfig.getInitialChipsMinBigBlindMultiplier()}倍`
     }
   }
 

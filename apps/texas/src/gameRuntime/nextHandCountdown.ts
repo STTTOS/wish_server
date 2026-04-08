@@ -1,14 +1,8 @@
 import type { WsMessage } from '../ws/ws-event-types'
 
 import { logger } from '../logger'
+import { gameRuntimeConfig } from '../utils/gameRuntimeConfig'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
-import {
-  NEXT_HAND_DEAL_AFTER_END_MS,
-  NEXT_HAND_ENDS_AT_OFFSET_MS,
-  NEXT_HAND_LOCK_AT_OFFSET_MS,
-  NEXT_HAND_START_AFTER_DEAL_MS,
-  NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
-} from '../constants/nextHand'
 
 /**
  * 管理“对局间隔”倒计时：
@@ -150,8 +144,10 @@ function startCountdownAfterPushDelay(roomId: number) {
   }
 
   const serverNow = Date.now()
-  const lockAt = serverNow + NEXT_HAND_LOCK_AT_OFFSET_MS
-  const endsAt = serverNow + NEXT_HAND_ENDS_AT_OFFSET_MS
+  const lockOffset = gameRuntimeConfig.getNextHandLockAtOffsetMs()
+  const endsOffset = gameRuntimeConfig.getNextHandEndsAtOffsetMs()
+  const lockAt = serverNow + lockOffset
+  const endsAt = serverNow + endsOffset
 
   const startedMsg: WsMessage<'next-hand-countdown-started'> = {
     type: 'next-hand-countdown-started',
@@ -177,7 +173,7 @@ function startCountdownAfterPushDelay(roomId: number) {
       logger.error(`[next-hand-countdown] lock failed, roomId=${roomId}`, e)
       cancelNextHandCountdown(roomId)
     }
-  }, NEXT_HAND_LOCK_AT_OFFSET_MS)
+  }, lockOffset)
 
   // endsAt 到达, 分配角色
   const assignRolesTimer = setTimeout(async () => {
@@ -192,10 +188,11 @@ function startCountdownAfterPushDelay(roomId: number) {
       )
       cancelNextHandCountdown(roomId)
     }
-  }, NEXT_HAND_ENDS_AT_OFFSET_MS)
+  }, endsOffset)
 
-  // endsAt 到达后，再延迟 NEXT_HAND_DEAL_AFTER_END_MS 发牌
-  const dealDelay = NEXT_HAND_ENDS_AT_OFFSET_MS + NEXT_HAND_DEAL_AFTER_END_MS
+  // endsAt 到达后，再延迟一段时间发牌
+  const dealAfter = gameRuntimeConfig.getNextHandDealAfterEndMs()
+  const dealDelay = endsOffset + dealAfter
   const dealTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
     try {
@@ -207,8 +204,8 @@ function startCountdownAfterPushDelay(roomId: number) {
     }
   }, dealDelay)
 
-  // 发牌后，再延迟 NEXT_HAND_START_AFTER_DEAL_MS 开始游戏
-  const startDelay = dealDelay + NEXT_HAND_START_AFTER_DEAL_MS
+  const startAfter = gameRuntimeConfig.getNextHandStartAfterDealMs()
+  const startDelay = dealDelay + startAfter
   const startTimer = setTimeout(async () => {
     if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
     try {
@@ -273,13 +270,14 @@ export function maybeStartNextHandCountdown(roomId: number) {
     return
   }
 
+  const pushDelayMs = gameRuntimeConfig.getNextHandCountdownPushDelayMs()
   const pushTimer = setTimeout(() => {
     pendingPushByRoomId.delete(roomId)
     startCountdownAfterPushDelay(roomId)
-  }, NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS)
+  }, pushDelayMs)
 
   pendingPushByRoomId.set(roomId, pushTimer)
   logger.info(
-    `[next-hand-countdown] push scheduled in ${NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS}ms, roomId=${roomId}`
+    `[next-hand-countdown] push scheduled in ${pushDelayMs}ms, roomId=${roomId}`
   )
 }

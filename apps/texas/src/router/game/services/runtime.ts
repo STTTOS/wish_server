@@ -4,10 +4,7 @@ import { Texas } from 'texas-poker-core'
 
 import { match } from '../../../models'
 import { GameWsGateway } from './gameWsGateway'
-import {
-  GAME_WS_STAGE_CHANGED_DELAY_MS,
-  GAME_WS_ACTION_REQUIRED_DELAY_MS
-} from '../../../constants/game'
+import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
 
 function sleep(ms: number) {
   return ms <= 0
@@ -30,8 +27,10 @@ export function createTexasAndSeatPlayers(params: {
     initialChips: roomInfo.initialChips,
     thinkingTime: roomInfo.thinkingTime,
     user: { id: roomInfo.owner.id, name: roomInfo.owner.name },
-    beforeStageAdvance: () => sleep(GAME_WS_STAGE_CHANGED_DELAY_MS),
-    beforeNextPlayerTurn: () => sleep(GAME_WS_ACTION_REQUIRED_DELAY_MS)
+    beforeStageAdvance: () =>
+      sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs()),
+    beforeNextPlayerTurn: () =>
+      sleep(gameRuntimeConfig.getGameWsActionRequiredDelayMs())
   })
 
   const ownerPlayer = texas.room.owner
