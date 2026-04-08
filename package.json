@@ -36,7 +36,7 @@
     "redis": "^5.11.0",
     "sharp": "^0.33.3",
     "socket.io": "^4.8.1",
-    "texas-poker-core": "^1.4.13",
+    "texas-poker-core": "^1.4.16",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
