@@ -450,12 +450,24 @@ class SocketServer {
    */
   broadcastGameToUser(userId: number, data: Parameters<Socket['send']>[0]) {
     let logPayload: unknown = data
-    if (data && typeof data === 'object' && 'handPokes' in data) {
-      const hand = data.handPokes
-      const n = Array.isArray(hand) ? hand.length : 0
-      logPayload = {
-        ...data,
-        handPokes: `[redacted:${n}]`
+    if (
+      data &&
+      typeof data === 'object' &&
+      'data' in data &&
+      (data as { data: unknown }).data != null &&
+      typeof (data as { data: unknown }).data === 'object'
+    ) {
+      const inner = (data as { data: Record<string, unknown> }).data
+      if ('handPokes' in inner) {
+        const hand = inner.handPokes
+        const n = Array.isArray(hand) ? hand.length : 0
+        logPayload = {
+          ...(data as Record<string, unknown>),
+          data: {
+            ...inner,
+            handPokes: `[redacted:${n}]`
+          }
+        }
       }
     }
     logger.info(
