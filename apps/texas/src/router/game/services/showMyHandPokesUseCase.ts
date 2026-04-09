@@ -19,10 +19,11 @@ function parseHandPokesJson(raw: unknown): Poke[] {
 /**
  * 局间主动亮牌：校验房间/对局/成员，写 `voluntaryShowHandAt` 幂等，首次向 /game 广播。
  *
- * **何时有意义**：仅「一人收池、其余均已弃牌」——恰好一名未弃牌玩家且为当前用户；`game-end` 对他人会掩码该赢家底牌时才有信息增量。
+ * **可亮牌**：
+ * - 本手唯一未弃牌（收池）玩家——`game-end` 对他人掩码赢家底牌时可补信息；
+ * - 本手已弃牌玩家——自愿公开自己底牌（`PlayerMatchRecord.isFold`，与 `onGameEnd` 落库一致）。
  *
- * **判定方式**：依赖 Texas 内存态——`onGameEnd` 只 `controller.reset()`，局间 `on-set` 且非 `out` 人数与结算时 `isFold` 一致。
- * **无运行时**（进程重启、运行时已销毁等）：直接 **409**，不查库兜底；亮牌条件与引擎一致，缺运行时无法保证与当前桌状态同步。
+ * **判定**：独收池依赖 Texas 局间内存态；弃牌路径以 DB `isFold` 为准（与引擎 `out` 在结算时一致）。无运行时 **409**，不放宽 matchId/控制器校验。
  */
 export class ShowMyHandPokesUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
@@ -93,21 +94,12 @@ export class ShowMyHandPokesUseCase {
       }
     }
 
-    const remaining = texas.room
-      .getPlayersBySeatStatus('on-set')
-      .filter((p) => p.getStatus() !== 'out')
-    if (remaining.length !== 1) {
-      return {
-        ok: false,
-        status: HTTP_STATUS.CONFLICT,
-        message: '当前对局已摊牌或存在多名未弃牌玩家，无需亮牌'
-      }
-    }
-    if (remaining[0].getUserInfo().id !== userId) {
+    const selfPlayer = texas.room.getPlayerById(userId)
+    if (!selfPlayer) {
       return {
         ok: false,
         status: HTTP_STATUS.FORBIDDEN,
-        message: '仅本手未弃牌的玩家可亮牌'
+        message: '不在本桌，无法亮牌'
       }
     }
 
@@ -117,7 +109,8 @@ export class ShowMyHandPokesUseCase {
       },
       select: {
         handPokes: true,
-        voluntaryShowHandAt: true
+        voluntaryShowHandAt: true,
+        isFold: true
       }
     })
     if (!record) {
@@ -125,6 +118,29 @@ export class ShowMyHandPokesUseCase {
         ok: false,
         status: HTTP_STATUS.NOT_FOUND,
         message: '未找到本手玩家记录'
+      }
+    }
+
+    const remaining = texas.room
+      .getPlayersBySeatStatus('on-set')
+      .filter((p) => p.getStatus() !== 'out')
+
+    const isSoleUnfoldedWinner =
+      remaining.length === 1 && remaining[0].getUserInfo().id === userId
+    const isFoldVoluntaryReveal = record.isFold === true
+
+    if (!isSoleUnfoldedWinner && !isFoldVoluntaryReveal) {
+      if (remaining.length === 1) {
+        return {
+          ok: false,
+          status: HTTP_STATUS.FORBIDDEN,
+          message: '仅本手收池玩家或已弃牌玩家本人可亮牌'
+        }
+      }
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '当前对局已摊牌或存在多名未弃牌玩家，不满足主动亮牌条件'
       }
     }
 
