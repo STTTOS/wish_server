@@ -55,12 +55,13 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
           lowestBetAmount: roomInfo.lowestBetAmount
         }
       })
-      runtimeRegistry.setCurrentMatchId(roomKey, next.id)
-      // 锁定坐席的时候, 进入in_hand状态, 新加入的玩家直接到观战席
+      // 先写 DB 为 in_hand，再 setCurrentMatchId，避免极短窗口内「房间仍 between_hands 但 runtime 已指向新局」，
+      // 导致局间亮上一手（showMyHandPokes）误判 runtimeMatchId !== matchId。
       await roomModel.update({
         where: { id: roomId },
         data: { gameStatus: 'in_hand' }
       })
+      runtimeRegistry.setCurrentMatchId(roomKey, next.id)
       texas.resetBeforeGameStart()
     },
     onAssignRoles: async () => {
