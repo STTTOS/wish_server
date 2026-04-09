@@ -124,10 +124,10 @@ export class QuitGameUseCase {
 
     if (texas) {
       try {
-        texas.room.removeById(userId)
         if (txRes.newOwnerId != null) {
           texas.room.setOwnerById(txRes.newOwnerId)
         }
+        texas.room.removeById(userId)
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
       }
