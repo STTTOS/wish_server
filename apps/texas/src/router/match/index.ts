@@ -323,7 +323,7 @@ router.post(matchApi('/detail'), async (ctx) => {
       if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
       if (!a.isFold && !b.isFold) {
         if (a.rankStrength !== b.rankStrength) {
-          return a.rankStrength - b.rankStrength
+          return b.rankStrength - a.rankStrength
         }
         return wagerDesc(a, b)
       }
