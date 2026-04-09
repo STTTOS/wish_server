@@ -162,6 +162,12 @@ export type WsPlayerQuitGameData = {
   userId: number
 }
 
+/** 局间主动亮牌：同房间 /game 订阅者广播（每人每 match 仅首次推送） */
+export type WsPlayerHandVoluntarilyShownData = {
+  userId: number
+  handPokes: Poke[]
+}
+
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
@@ -180,6 +186,7 @@ export type WsEventDataMap = {
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
   'player-quit-game': WsPlayerQuitGameData
+  'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
 }
 
 export type WsEventType = keyof WsEventDataMap

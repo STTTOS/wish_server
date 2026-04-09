@@ -287,6 +287,8 @@ model PlayerMatchRecord {
   isAllIn          Boolean       @default(false)
   /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
   balanceAfterHand Int?
+  /// 局间主动亮牌（HTTP）成功时间；用于幂等，避免重复 WS 推送
+  voluntaryShowHandAt DateTime?
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id])

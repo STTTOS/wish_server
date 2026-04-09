@@ -2,7 +2,8 @@ import type { RoomWsMessage } from '../../room/ws-event-types'
 import type {
   WsMessage,
   WsPlayerQuitGameData,
-  WsPlayerRolesAssignedData
+  WsPlayerRolesAssignedData,
+  WsPlayerHandVoluntarilyShownData
 } from '../../../ws/ws-event-types'
 
 import { ws } from '../../../server'
@@ -193,5 +194,16 @@ export class GameWsGateway {
       type: 'player-quit-game',
       data
     })
+  }
+
+  notifyPlayerHandVoluntarilyShown(
+    roomKey: string,
+    data: WsPlayerHandVoluntarilyShownData
+  ) {
+    const msg: WsMessage<'player-hand-voluntarily-shown'> = {
+      type: 'player-hand-voluntarily-shown',
+      data
+    }
+    ws.broadcastGameRoom(roomKey, msg)
   }
 }
