@@ -166,6 +166,8 @@ export type WsPlayerQuitGameData = {
 
 /** 局间主动亮牌：同房间 /game 订阅者广播（每人每 match 仅首次推送） */
 export type WsPlayerHandVoluntarilyShownData = {
+  roomId: number
+  matchId: number
   userId: number
   handPokes: Poke[]
   /** 本手结算落库的牌型；未形成牌型或未计算时为 null */

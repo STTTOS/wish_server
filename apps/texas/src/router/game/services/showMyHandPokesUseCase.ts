@@ -157,6 +157,8 @@ export class ShowMyHandPokesUseCase {
     }
 
     this.wsGateway.notifyPlayerHandVoluntarilyShown(roomKey, {
+      roomId,
+      matchId,
       userId,
       handPokes,
       rankCategory: record.rankCategory ?? null
