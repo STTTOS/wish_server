@@ -1,6 +1,7 @@
 import type { RoomWsMessage } from '../../room/ws-event-types'
 import type {
   WsMessage,
+  WsPlayerQuitGameData,
   WsPlayerRolesAssignedData
 } from '../../../ws/ws-event-types'
 
@@ -181,5 +182,16 @@ export class GameWsGateway {
 
   disconnectUserRoomSockets(roomId: number, userId: number) {
     ws.disconnectUserRoomSockets(roomId, userId)
+  }
+
+  disconnectUserGameSockets(roomId: number, userId: number) {
+    ws.disconnectUserGameSockets(roomId, userId)
+  }
+
+  notifyPlayerQuitGame(roomKey: string, data: WsPlayerQuitGameData) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'player-quit-game',
+      data
+    })
   }
 }

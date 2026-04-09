@@ -6,6 +6,7 @@ import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
+import { room as roomModel } from '../models'
 import { isAdminUser } from '../utils/isAdminUser'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
@@ -294,6 +295,8 @@ class SocketServer {
 
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
+      /** 补发：HTTP 已 join 但 WS 连晚于 `game-entering` 广播时，避免卡在等待页 */
+      void this.#replayMissedEnteringIfNeeded(socket, roomId)
 
       const userId = socket.data.userId as number
       if (typeof userId === 'number') {
@@ -321,6 +324,31 @@ class SocketServer {
         this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
     })
+  }
+
+  /**
+   * 连接 `/waiting-room` 时若房间已在 `entering`，向本 socket 单独补发一条 `game-entering`
+   *（与 {@link GameWsGateway.notifyEntering} 同形），与广播时序解耦。
+   */
+  async #replayMissedEnteringIfNeeded(socket: Socket, roomId: number) {
+    try {
+      const row = await roomModel.findUnique({
+        where: { id: roomId },
+        select: { gameStatus: true, deletedAt: true }
+      })
+      if (!row || row.deletedAt != null) return
+      if (row.gameStatus !== 'entering') return
+      const msg: WsMessage<'game-entering'> = {
+        type: 'game-entering',
+        data: { roomId }
+      }
+      socket.emit('message', msg)
+      logger.info(
+        `[waiting-room] replay game-entering, roomId=${roomId}, socketId=${socket.id}`
+      )
+    } catch (e) {
+      logger.error('[waiting-room] replay game-entering failed', e)
+    }
   }
 
   #getSocketByIdInNamespace(namespace: Namespace, socketId: string) {
@@ -555,6 +583,20 @@ class SocketServer {
       `[room-socket-disconnect] roomId=${roomId}, userId=${userId}, sockets=${targets.length}`
     )
     targets.forEach((socket) => socket.disconnect(true))
+  }
+
+  /** 仅断开该用户在指定房间下的 `/game` 连接（不碰 waiting-room） */
+  disconnectUserGameSockets(roomId: number, userId: number) {
+    const roomKey = String(roomId)
+    const gameTargets = this.#getSocketsInGameRoom(roomKey).filter(
+      (s) => (s.data.userId as number) === userId
+    )
+    if (gameTargets.length === 0) return
+
+    logger.info(
+      `[game-socket-disconnect] roomId=${roomId}, userId=${userId}, sockets=${gameTargets.length}`
+    )
+    gameTargets.forEach((socket) => socket.disconnect(true))
   }
 
   /**

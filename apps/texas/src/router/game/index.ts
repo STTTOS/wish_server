@@ -9,6 +9,7 @@ import combinePath from '../../utils/combinePath'
 import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { GameWsGateway } from './services/gameWsGateway'
+import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { StartGameUseCase, TakeActionUseCase } from './services/flow'
@@ -32,6 +33,7 @@ const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
 const gameWsGateway = new GameWsGateway()
+const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
@@ -173,6 +175,24 @@ router.post(gameClientApi('/chipTopUp'), async (ctx) => {
     roomId
   })
   respondFromApiResult(ctx, result, { okMessage: '成功' })
+})
+
+/**
+ * 局间退出对局：删成员、广播 `player-quit-game`、断开该用户 /game。
+ * body: { roomId: number } — 仅 `between_hands`；非成员或房间已删幂等成功
+ */
+router.post(gameClientApi('/quit'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const result = await quitGameUseCase.execute({ userId, roomId })
+  respondFromApiResult(ctx, result, { okMessage: '已退出对局' })
 })
 
 router.post(gameClientApi('/takeAction'), async (ctx) => {

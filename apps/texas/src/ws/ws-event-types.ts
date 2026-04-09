@@ -156,6 +156,12 @@ export type WsPlayerBuiltInVoiceData = {
   voiceName: string
 }
 
+/** 局间 HTTP 退出对局成功：同房间 /game 订阅者广播 */
+export type WsPlayerQuitGameData = {
+  roomId: number
+  userId: number
+}
+
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
@@ -173,6 +179,7 @@ export type WsEventDataMap = {
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
+  'player-quit-game': WsPlayerQuitGameData
 }
 
 export type WsEventType = keyof WsEventDataMap
