@@ -15,7 +15,9 @@ export const BUILT_IN_VOICE_NAMES = [
   // 丁真 喂!
   'ding_zhen_wei',
   // 五五开 诶嘿嘿
-  'white_hei_hei'
+  'white_hei_hei',
+  // pdd 心态崩了
+  'pdd_what_the_fuck'
 ] as const
 
 export type BuiltInVoiceName = (typeof BUILT_IN_VOICE_NAMES)[number]
