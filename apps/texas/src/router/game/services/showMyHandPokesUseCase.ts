@@ -110,7 +110,8 @@ export class ShowMyHandPokesUseCase {
       select: {
         handPokes: true,
         voluntaryShowHandAt: true,
-        isFold: true
+        isFold: true,
+        rankCategory: true
       }
     })
     if (!record) {
@@ -165,7 +166,8 @@ export class ShowMyHandPokesUseCase {
 
     this.wsGateway.notifyPlayerHandVoluntarilyShown(roomKey, {
       userId,
-      handPokes
+      handPokes,
+      rankCategory: record.rankCategory ?? null
     })
 
     return { ok: true, data: { alreadyShown: false } }

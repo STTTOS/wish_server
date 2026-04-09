@@ -166,6 +166,8 @@ export type WsPlayerQuitGameData = {
 export type WsPlayerHandVoluntarilyShownData = {
   userId: number
   handPokes: Poke[]
+  /** 本手结算落库的牌型；未形成牌型或未计算时为 null */
+  rankCategory: RankCategory | null
 }
 
 export type WsEventDataMap = {
