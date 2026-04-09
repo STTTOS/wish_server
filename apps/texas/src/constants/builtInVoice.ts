@@ -9,7 +9,13 @@ export const BUILT_IN_VOICE_NAMES = [
   'dasima_heihei',
   'dasima_what_r_u_doing',
   'dasima_how_do_you_do',
-  'cxk_what_r_u_doing'
+  'cxk_what_r_u_doing',
+  // 你好 我是丁真
+  'hello_i_am_ding_zhen',
+  // 丁真 喂!
+  'ding_zhen_wei',
+  // 五五开 诶嘿嘿
+  'white_hei_hei'
 ] as const
 
 export type BuiltInVoiceName = (typeof BUILT_IN_VOICE_NAMES)[number]
