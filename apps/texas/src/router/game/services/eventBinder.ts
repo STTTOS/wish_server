@@ -223,6 +223,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             return b.wager - a.wager
           })
 
+          /** 未弃牌人数；为 1 时即独收池，该人 isFold=false，其余在坐者均已弃牌，故无需再写「且为本人」 */
+          const unfoldedOnSetCount = seated.filter(
+            (x) => x.getStatus() !== 'out'
+          ).length
+
           const buildSettleListForViewer = (viewerUserId: number) =>
             sortedSeated.map((p) => {
               const userId = p.getUserInfo().id
@@ -239,6 +244,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
                 wager: p.wager,
                 isAllIn: p.getStatus() === 'allIn',
                 isFold,
+                canVoluntaryShowHand: isFold || unfoldedOnSetCount === 1,
                 handPokes,
                 ...(hideHoleFromViewer
                   ? {

@@ -199,7 +199,7 @@ router.post(gameClientApi('/quit'), async (ctx) => {
 
 /**
  * 局间主动亮牌（每人每 match 幂等，仅首次向 /game 推送 `player-hand-voluntarily-shown`）
- * 收池玩家或本手已弃牌玩家均可亮自己的底牌。
+ * 本手已弃牌者，或独收池（恰好一名未弃牌）时在坐者，均可亮自己的底牌。
  * body: { roomId: number, matchId: number }
  */
 router.post(gameClientApi('/showMyHandPokes'), async (ctx) => {

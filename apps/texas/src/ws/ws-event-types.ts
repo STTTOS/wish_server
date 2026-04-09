@@ -69,6 +69,8 @@ export type WsGameEndSettleItem = {
   // rank: number
   isAllIn: boolean
   isFold: boolean
+  /** 与 showMyHandPokes 一致：已弃牌，或独收池（恰好一名未弃牌）时在坐者均可；局间/运行时仍以 HTTP 为准 */
+  canVoluntaryShowHand: boolean
   handPokes: Poke[]
   rankCategory?: RankCategory
   /** 与 handPokes 同规则：他人视角下弃牌或未到摊牌时不下发 */

@@ -20,8 +20,8 @@ function parseHandPokesJson(raw: unknown): Poke[] {
  * 局间主动亮牌：校验房间/对局/成员，写 `voluntaryShowHandAt` 幂等，首次向 /game 广播。
  *
  * **可亮牌**：
- * - 本手唯一未弃牌（收池）玩家——`game-end` 对他人掩码赢家底牌时可补信息；
- * - 本手已弃牌玩家——自愿公开自己底牌（`PlayerMatchRecord.isFold`，与 `onGameEnd` 落库一致）。
+ * - 本手已弃牌玩家（`PlayerMatchRecord.isFold`）；
+ * - 或本手恰好一名未弃牌（独收池）——此时在坐参与者均可亮自己的牌，不限于收池者。
  *
  * **判定**：独收池依赖 Texas 局间内存态；弃牌路径以 DB `isFold` 为准（与引擎 `out` 在结算时一致）。无运行时 **409**，不放宽 matchId/控制器校验。
  */
@@ -126,18 +126,10 @@ export class ShowMyHandPokesUseCase {
       .getPlayersBySeatStatus('on-set')
       .filter((p) => p.getStatus() !== 'out')
 
-    const isSoleUnfoldedWinner =
-      remaining.length === 1 && remaining[0].getUserInfo().id === userId
     const isFoldVoluntaryReveal = record.isFold === true
+    const isSoleUnfoldedHand = remaining.length === 1
 
-    if (!isSoleUnfoldedWinner && !isFoldVoluntaryReveal) {
-      if (remaining.length === 1) {
-        return {
-          ok: false,
-          status: HTTP_STATUS.FORBIDDEN,
-          message: '仅本手收池玩家或已弃牌玩家本人可亮牌'
-        }
-      }
+    if (!isFoldVoluntaryReveal && !isSoleUnfoldedHand) {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
