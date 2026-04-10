@@ -65,11 +65,7 @@ export type WsGameStageChangedData = {
 /** game-end.matchOverview：房间内累计（含已离开但曾有战绩/补码的用户） */
 export type WsMatchOverviewWagerItem = {
   userId: number
-  /**
-   * 与本房 `Room.initialChips`、补码、当前筹码一致时的净额：
-   * `桌上当前余额 − chipTopUpAmount − initialChips`（与累计 Σwager 等价）；
-   * 无可靠余额快照时回退为库内累计 wager。
-   */
+  /** 本房累计 `Σ playerMatchRecord.wager` 取整归零后的桌上输赢净额（零和）；与 chipTopUp 无关 */
   totalWager: number
   chipTopUpCount: number
   chipTopUpAmount: number

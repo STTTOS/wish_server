@@ -315,7 +315,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
 
           let matchOverview: WsMatchOverview = { wagerList: [], billList: [] }
           try {
-            matchOverview = await fetchMatchOverviewForRoom(roomId, texas)
+            matchOverview = await fetchMatchOverviewForRoom(roomId)
           } catch (overviewErr) {
             logger.error(
               '[onGameEnd] fetchMatchOverviewForRoom failed',

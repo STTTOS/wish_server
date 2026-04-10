@@ -1,4 +1,3 @@
-import type { Texas } from 'texas-poker-core'
 import type { WsMatchOverview } from '../../../ws/ws-event-types'
 
 import prisma from '../../../models'
@@ -16,19 +15,15 @@ type UserAgg = {
 /**
  * 房间内对局总览：含曾参与本房任意一手或有过局间补码的用户（含已退房间成员）。
  *
- * `wagerList.totalWager`：优先 `当前桌上余额 − 本房累计补码 − 房间 initialChips`；
- * 与 `Σ playerMatchRecord.wager` 在记账一致时等价。`billList` 由该净额取整归零后清账。
+ * `wagerList.totalWager`：本房 `PlayerMatchRecord.wager` 按人累加（零和），再取整归零；
+ * 不用「余额 − 补码 − initialChips」——玩家离桌再进会多次带入，与单段起始筹码对不齐。
+ * `billList` 由该净额清账。补码字段仅作展示，客户端可自行算「相对钱包」等衍生指标。
  */
 export async function fetchMatchOverviewForRoom(
-  roomId: number,
-  texas?: Texas | null
+  roomId: number
 ): Promise<WsMatchOverview> {
-  // 房间起始筹码、按人累计 wager / 补码、每人最近一手桌上面额
-  const [roomRow, wagerGroups, topUpGroups, balanceRows] = await Promise.all([
-    prisma.room.findFirst({
-      where: { id: roomId, deletedAt: null },
-      select: { initialChips: true }
-    }),
+  // 按人累计本房 wager、补码次数与金额
+  const [wagerGroups, topUpGroups] = await Promise.all([
     prisma.playerMatchRecord.groupBy({
       by: ['userId'],
       where: { match: { roomId } },
@@ -39,25 +34,8 @@ export async function fetchMatchOverviewForRoom(
       where: { roomId },
       _sum: { amount: true },
       _count: { _all: true }
-    }),
-    prisma.playerMatchRecord.findMany({
-      where: {
-        match: { roomId },
-        balanceAfterHand: { not: null }
-      },
-      select: { userId: true, balanceAfterHand: true, matchId: true },
-      orderBy: { matchId: 'desc' }
     })
   ])
-
-  const initialChips = roomRow?.initialChips ?? 0
-
-  const latestBalanceByUser = new Map<number, number>()
-  // matchId 降序：每个 userId 只保留最近一手
-  for (const row of balanceRows) {
-    if (latestBalanceByUser.has(row.userId)) continue
-    latestBalanceByUser.set(row.userId, row.balanceAfterHand!)
-  }
 
   const byUser = new Map<number, UserAgg>()
 
@@ -85,28 +63,10 @@ export async function fetchMatchOverviewForRoom(
     byUser.set(row.userId, prev)
   }
 
-  const floatPositions = Array.from(byUser.entries()).map(([userId, v]) => {
-    let balance: number | undefined
-
-    const enginePlayer = texas?.room.getPlayerById(userId)
-    if (enginePlayer != null) {
-      // 仍在桌：引擎余额与本手刚落库的 balanceAfterHand 一致
-      balance = Math.round(enginePlayer.balance)
-    } else if (latestBalanceByUser.has(userId)) {
-      // 已离桌等：取本房最近一手的 balanceAfterHand
-      balance = latestBalanceByUser.get(userId)
-    }
-
-    let net: number
-    if (balance !== undefined) {
-      net = balance - v.chipTopUpAmount - initialChips
-    } else {
-      // 无快照：用库内累计 wager
-      net = v.wagerSum
-    }
-
-    return { userId, net }
-  })
+  const floatPositions = Array.from(byUser.entries()).map(([userId, v]) => ({
+    userId,
+    net: v.wagerSum
+  }))
 
   // 取整并修正舍入误差，保证全房净额之和为 0，再清账
   const normalized = normalizeIntegerZeroSum(floatPositions)
