@@ -62,6 +62,30 @@ export type WsGameStageChangedData = {
   pokesToReveal: Poke[]
 }
 
+/** game-end.matchOverview：房间内累计（含已离开但曾有战绩/补码的用户） */
+export type WsMatchOverviewWagerItem = {
+  userId: number
+  /**
+   * 与本房 `Room.initialChips`、补码、当前筹码一致时的净额：
+   * `桌上当前余额 − chipTopUpAmount − initialChips`（与累计 Σwager 等价）；
+   * 无可靠余额快照时回退为库内累计 wager。
+   */
+  totalWager: number
+  chipTopUpCount: number
+  chipTopUpAmount: number
+}
+
+export type WsMatchOverviewBillItem = {
+  fromUserId: number
+  toUserId: number
+  amount: number
+}
+
+export type WsMatchOverview = {
+  billList: WsMatchOverviewBillItem[]
+  wagerList: WsMatchOverviewWagerItem[]
+}
+
 export type WsGameEndSettleItem = {
   userId: number
   balance: number
@@ -80,6 +104,8 @@ export type WsGameEndSettleItem = {
 export type WsGameEndData = {
   matchId: number
   settleList: WsGameEndSettleItem[]
+  /** 房间维度总览；与本手 settleList 独立 */
+  matchOverview: WsMatchOverview
   pokesToReveal: Poke[]
   /** 最后一轮可操作下注结束时的阶段（引擎 currentStage） */
   lastActionStage: StageEnum

@@ -1,11 +1,13 @@
 import type { Player } from 'texas-poker-core'
 import type { BindTexasLifecycleParams } from './types'
+import type { WsMatchOverview } from '../../../ws/ws-event-types'
 
 import { Prisma } from '@prisma/texas-client'
 import { isFatalTexasErrorCode } from 'texas-poker-core'
 
 import { logger } from '../../../logger'
 import { autoTopUpOnSeatPlayersAtHandLock } from './chipTopUpUseCase'
+import { fetchMatchOverviewForRoom } from './matchOverviewAggregation'
 import {
   registerNextHandHooks,
   maybeStartNextHandCountdown
@@ -311,9 +313,20 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams) {
             }
           })
 
+          let matchOverview: WsMatchOverview = { wagerList: [], billList: [] }
+          try {
+            matchOverview = await fetchMatchOverviewForRoom(roomId, texas)
+          } catch (overviewErr) {
+            logger.error(
+              '[onGameEnd] fetchMatchOverviewForRoom failed',
+              overviewErr
+            )
+          }
+
           wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
             matchId: currentMatchId,
             settleList: buildSettleListForViewer(viewerUserId),
+            matchOverview,
             lastActionStage: currentStage,
             boardThroughStage: endStage,
             // 使用 pramas 抛出的剩余公共牌，而不是 texas.dealer.deck.getPokes().commonPokes
