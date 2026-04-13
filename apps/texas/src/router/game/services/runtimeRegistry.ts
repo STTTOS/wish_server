@@ -63,6 +63,9 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (runtime?.texas) runtime.texas.reset()
     this.#runtimes.delete(roomKey)
+    void import('./texasDomain/playerTurnTimeoutScheduler').then((m) =>
+      m.clearPlayerTurnTimeout(roomKey)
+    )
   }
 }
 

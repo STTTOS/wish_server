@@ -9,6 +9,10 @@ import { Prisma } from '@prisma/texas-client'
 import { logger } from '../../../../logger'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
+import {
+  clearPlayerTurnTimeout,
+  schedulePlayerTurnTimeout
+} from './playerTurnTimeoutScheduler'
 import prisma, {
   match,
   betRecord,
@@ -49,6 +53,8 @@ async function handleHandEnded(
 ): Promise<void> {
   const { texas, roomId, roomKey, wsGateway, getRuntime } = ctx
   const p = e.payload
+
+  clearPlayerTurnTimeout(roomKey)
 
   try {
     const gameEndAt = new Date()
@@ -297,6 +303,8 @@ async function processTexasDomainEvent(
       })
       if (dup) return
 
+      clearPlayerTurnTimeout(roomKey)
+
       const amount = e.payload.amount ?? 0
       const row = await betRecord.create({
         data: {
@@ -357,10 +365,17 @@ async function processTexasDomainEvent(
       if (matchId == null) return
       const serverNow = Date.now()
       const thinkingTimeMs = roomInfo.thinkingTime * 1000
+      const deadlineAt = serverNow + thinkingTimeMs
+      schedulePlayerTurnTimeout({
+        roomKey,
+        userId: e.payload.userId,
+        deadlineAt,
+        handId: e.payload.handId
+      })
       wsGateway.notifyActionRequired(roomKey, {
         matchId,
         userId: e.payload.userId,
-        deadlineAt: serverNow + thinkingTimeMs,
+        deadlineAt,
         allowedActions: e.payload.allowedActions,
         restrict: e.payload.restrict,
         serverNow
