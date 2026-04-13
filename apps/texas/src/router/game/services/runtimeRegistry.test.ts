@@ -1,10 +1,20 @@
 import type { Texas } from 'texas-poker-core'
-import type { MatchRollbackManager } from './types'
+import type { StartRoomInfo, MatchRollbackManager } from './types'
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { GameRuntimeRegistry } from './runtimeRegistry'
+
+const fakeRoomInfo = {
+  id: 1,
+  ownerId: 1,
+  deletedAt: null,
+  lowestBetAmount: 10,
+  initialChips: 1000,
+  thinkingTime: 30,
+  owner: { id: 1, name: 'o' }
+} satisfies StartRoomInfo
 
 const noopRollbackManager: MatchRollbackManager = {
   snapshotPlayersAtHandStart: () => undefined,
@@ -21,11 +31,11 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
   registry.register({
     roomId: 1,
     roomKey: '1',
+    roomInfo: fakeRoomInfo,
     texas: fakeTexas,
     currentMatchId: 100,
     matchStartedAt: Date.now(),
-    rollbackManager: noopRollbackManager,
-    rolesAssignedPersistence: Promise.resolve()
+    rollbackManager: noopRollbackManager
   })
 
   assert.equal(registry.hasTexas('1'), true)
@@ -43,11 +53,11 @@ test('GameRuntimeRegistry current match read/write', () => {
   registry.register({
     roomId: 2,
     roomKey: '2',
+    roomInfo: fakeRoomInfo,
     texas: fakeTexas,
     currentMatchId: 200,
     matchStartedAt: Date.now(),
-    rollbackManager: noopRollbackManager,
-    rolesAssignedPersistence: Promise.resolve()
+    rollbackManager: noopRollbackManager
   })
 
   assert.equal(registry.getCurrentMatchId('2'), 200)

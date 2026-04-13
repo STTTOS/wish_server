@@ -1,20 +1,17 @@
 import type { Texas } from 'texas-poker-core'
-import type { MatchRollbackManager } from './types'
+import type { StartRoomInfo, MatchRollbackManager } from './types'
 
 export type GameRuntime = {
   roomKey: string
   roomId: number
+  /** 供领域事件解释器（WS 倒计时、思考时间等） */
+  roomInfo: StartRoomInfo
   texas: Texas
   /** 当前手 match；作废回滚后置为 null，直至下一手 onLock 再写入新 id */
   currentMatchId: number | null
-  /** 当前手从「角色分配完成」起的 unix ms，在 onRolesAssigned 中更新 */
+  /** 当前手从「角色分配完成」起的 unix ms，在 RolesAssigned 解释时更新 */
   matchStartedAt: number
   rollbackManager: MatchRollbackManager
-  /**
-   * 本手「角色→库」的收尾 Promise：upsert 完成且已 notifyRolesAssigned 后 resolve；
-   * setPlayerRoles() 后由业务层/onLock await；onDealCards 写入手牌成功后重置为 Promise.resolve()。
-   */
-  rolesAssignedPersistence: Promise<void>
 }
 
 /**

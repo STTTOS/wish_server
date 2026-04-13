@@ -1,5 +1,7 @@
 import type { StartGameValidatedContext } from './types'
 
+import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
+
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
@@ -12,6 +14,7 @@ import {
   validateStartGameRequest,
   markRoomEnteringAndNotify
 } from './validator'
+import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 import {
   createTexasAndSeatPlayers,
   createInitialMatchAndNotifyEntered
@@ -379,14 +382,14 @@ export class StartGameUseCase {
     gameRuntimeRegistry.register({
       roomId,
       roomKey,
+      roomInfo: runtimeRoomInfo,
       texas,
       currentMatchId,
       matchStartedAt: Date.now(),
-      rollbackManager,
-      rolesAssignedPersistence: Promise.resolve()
+      rollbackManager
     })
 
-    bindTexasLifecycleEvents({
+    const { drainTexasDomainEvents } = bindTexasLifecycleEvents({
       texas,
       roomId,
       roomKey,
@@ -402,27 +405,44 @@ export class StartGameUseCase {
       )
     }
 
-    // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
-    // 进入游戏2秒后开始分配角色
-    await this.#delay(gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs())
-    texas.setPlayerRoles()
-    // 进入in_hand状态, 新加入的玩家直接到观战席
-    await roomModel.update({
-      where: { id: roomId },
-      data: { gameStatus: 'in_hand' }
-    })
+    try {
+      // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
+      // 进入游戏2秒后开始分配角色
+      await this.#delay(
+        gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs()
+      )
+      texas.setPlayerRoles()
+      // 进入in_hand状态, 新加入的玩家直接到观战席
+      await roomModel.update({
+        where: { id: roomId },
+        data: { gameStatus: 'in_hand' }
+      })
 
-    await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
-    // 角色分配完成后, 等待2秒再发牌
-    await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
-    texas.dealCards()
-    rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
-      rtForSnapshot.currentMatchId
-    )
+      await drainTexasDomainEvents()
+      // 角色分配完成后, 等待2秒再发牌
+      await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
+      texas.dealCards()
+      await drainTexasDomainEvents()
+      rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
+        rtForSnapshot.currentMatchId
+      )
 
-    // 发牌3秒后再开始游戏
-    await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
-    await texas.controller.start()
+      // 发牌3秒后再开始游戏
+      await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
+      texas.start()
+      await drainTexasDomainEvents()
+    } catch (e: unknown) {
+      if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+        await handleFatalTexasEngineError({
+          error: e,
+          roomId,
+          roomKey,
+          getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
+        })
+        return
+      }
+      throw e
+    }
   }
 
   /** 校验 + 切 entering + 推送 game-entering，返回供后台 #runStartFlow 使用的数据。 */

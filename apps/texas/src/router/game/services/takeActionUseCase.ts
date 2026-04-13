@@ -1,9 +1,15 @@
 import type { ActionType } from 'texas-poker-core'
 import type { ApiVoidResult } from '../../../utils/apiResult'
 
+import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
+
 import { roomMember } from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { actionToTableCommand } from './texasDomain/actionToTableCommand'
+import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
+import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
+import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 
 type TakeActionInput = {
   userId: number
@@ -13,9 +19,8 @@ type TakeActionInput = {
 
 /**
  * 客户端行动用例：
- * - 当前轮到本人：执行动作
+ * - 当前轮到本人：经 `dispatchCommand` 执行，并排空领域事件（落库 / WS / 节拍）
  * - 非当前回合：仅当「玩家最近动作」与本次请求（type + amount）一致时按重试幂等成功
- * - 其余非当前回合请求：返回 409，避免把新意图误判为成功
  */
 export class TakeActionUseCase {
   async execute(input: TakeActionInput): Promise<ApiVoidResult> {
@@ -70,9 +75,20 @@ export class TakeActionUseCase {
     }
 
     try {
-      await player[actionType](amount)
+      await texas.dispatchCommand(
+        actionToTableCommand(userId, actionType, amount)
+      )
+      await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
       return { ok: true, data: null }
-    } catch (e) {
+    } catch (e: unknown) {
+      if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+        await handleFatalTexasEngineError({
+          error: e,
+          roomId,
+          roomKey,
+          getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
+        })
+      }
       const message = e instanceof Error ? e.message : '行动失败'
       return { ok: false, status: HTTP_STATUS.CONFLICT, message }
     }

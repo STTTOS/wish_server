@@ -440,7 +440,7 @@ router.post(matchApi('/currentState'), async (ctx) => {
     status: texas.controller.status,
     stage: texas.controller.stage,
     pool: texas.pool.totalAmount,
-    commonPokes: texas.dealer.deck.getPokes().commonPokes,
+    commonPokes: texas.dealer.getPokes().commonPokes,
     activePlayerInfo,
     playersOnSeat,
     playersOnWatch

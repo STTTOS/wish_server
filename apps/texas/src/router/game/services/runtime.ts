@@ -4,13 +4,6 @@ import { Texas } from 'texas-poker-core'
 
 import { match } from '../../../models'
 import { GameWsGateway } from './gameWsGateway'
-import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
-
-function sleep(ms: number) {
-  return ms <= 0
-    ? Promise.resolve()
-    : new Promise<void>((resolve) => setTimeout(resolve, ms))
-}
 
 /**
  * 创建 Texas 实例并将房间成员全部入座。
@@ -26,11 +19,7 @@ export function createTexasAndSeatPlayers(params: {
     maximumCountOfPlayers: members.length,
     initialChips: roomInfo.initialChips,
     thinkingTime: roomInfo.thinkingTime,
-    user: { id: roomInfo.owner.id, name: roomInfo.owner.name },
-    beforeStageAdvance: () =>
-      sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs()),
-    beforeNextPlayerTurn: () =>
-      sleep(gameRuntimeConfig.getGameWsActionRequiredDelayMs())
+    user: { id: roomInfo.owner.id, name: roomInfo.owner.name }
   })
 
   const ownerPlayer = texas.room.owner
