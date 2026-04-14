@@ -10,7 +10,9 @@ export const ADMIN_ONLY_PATHS = [
   '/api/web/announcement/changeStatus',
   '/api/web/announcement/delete',
   '/api/web/system/maintenance/status',
-  '/api/web/system/maintenance/set'
+  '/api/web/system/maintenance/set',
+  '/api/web/match/hand-poke-audit/list',
+  '/api/web/match/hand-poke-audit/detail'
 ] as const
 
 /**

@@ -3,6 +3,7 @@ import type { WithPaginationReq } from '../interface'
 import dayjs from 'dayjs'
 
 import './web'
+import './handPokeAuditWeb'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
