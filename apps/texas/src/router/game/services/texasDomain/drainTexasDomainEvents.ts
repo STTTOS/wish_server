@@ -7,6 +7,7 @@ import type { WsMatchOverview } from '../../../../ws/ws-event-types'
 import { Prisma } from '@prisma/texas-client'
 
 import { logger } from '../../../../logger'
+import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import {
@@ -19,8 +20,6 @@ import prisma, {
   room as roomModel,
   matchStageTimeRecord
 } from '../../../../models'
-
-const STAGE_ADVANCED_PACING_MS = 2000
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -172,6 +171,10 @@ async function handleHandEnded(
       matchOverview = await fetchMatchOverviewForRoom(roomId)
     } catch (overviewErr) {
       logger.error('[HandEnded] fetchMatchOverviewForRoom failed', overviewErr)
+    }
+
+    if (p.outcome === 'showdown') {
+      await sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs())
     }
 
     wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
@@ -357,7 +360,6 @@ async function processTexasDomainEvent(
         stage: e.payload.toStage,
         pokesToReveal: e.payload.pokesRevealedThisStep
       })
-      await sleep(STAGE_ADVANCED_PACING_MS)
       return
     }
     case 'TurnOffered': {
@@ -392,10 +394,7 @@ async function processTexasDomainEvent(
   }
 }
 
-/**
- * 排空 Texas 领域事件缓冲：持久化、WS、并在 `StageAdvanced` 后统一停顿 2s。
- */
-export async function drainAndInterpretTexas(
+async function drainBufferedDomainEvents(
   ctx: TexasEventContext
 ): Promise<void> {
   for (;;) {
@@ -405,4 +404,44 @@ export async function drainAndInterpretTexas(
       await processTexasDomainEvent(ctx, ev)
     }
   }
+}
+
+/**
+ * Core 固定使用 `pendingFlowOps`：行动结束后先等 `actionRequired` 间隔，再按队列消费进街/交权；
+ * 连续进街之间再等 `stageChanged` 间隔。
+ */
+async function drainPendingFlowQueueWithPacing(
+  ctx: TexasEventContext
+): Promise<void> {
+  const texas = ctx.texas
+  if (texas.getPendingFlowOps().length === 0) return
+
+  const afterActionMs = gameRuntimeConfig.getGameWsActionRequiredDelayMs()
+  const betweenStagesMs = gameRuntimeConfig.getGameWsStageChangedDelayMs()
+
+  await sleep(afterActionMs)
+
+  while (texas.getPendingFlowOps().length > 0) {
+    const [head] = texas.getPendingFlowOps()
+    if (head === 'stage_advance') {
+      texas.applyPendingStageAdvance()
+      await drainBufferedDomainEvents(ctx)
+      if (texas.getPendingFlowOps().length > 0) {
+        await sleep(betweenStagesMs)
+      }
+    } else {
+      texas.flushPendingTurnHandoff()
+      await drainBufferedDomainEvents(ctx)
+    }
+  }
+}
+
+/**
+ * 排空 Texas 领域事件缓冲并按运行时配置节拍消费 `pendingFlowOps`。
+ */
+export async function drainAndInterpretTexas(
+  ctx: TexasEventContext
+): Promise<void> {
+  await drainBufferedDomainEvents(ctx)
+  await drainPendingFlowQueueWithPacing(ctx)
 }

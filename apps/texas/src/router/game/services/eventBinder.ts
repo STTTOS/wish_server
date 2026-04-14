@@ -10,8 +10,8 @@ import { registerNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 
 /**
- * 注册局间倒计时钩子，并返回领域事件排空函数（持久化 / WS / 阶段节拍）。
- * Core 已无 `onAction` / `onGameEnd` 等回调，副作用均经 `drainDomainEvents` 驱动。
+ * 注册局间倒计时钩子，并返回领域事件排空函数（持久化 / WS / `pendingFlowOps` 节拍）。
+ * Core 固定经 `pendingFlowOps` 延迟进街与交权；由 `drainAndInterpretTexas` 消费并带可配置 sleep。
  */
 export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
   drainTexasDomainEvents: () => Promise<void>

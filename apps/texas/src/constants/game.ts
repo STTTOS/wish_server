@@ -19,5 +19,8 @@ export const MAX_PLAYERS_COUNT = 10
 /** 上一人 action-taken 后，延迟多久推送下一位的 `player-action-required`（纯展示节奏；deadlineAt 仍按引擎触发时刻）。 */
 export const GAME_WS_ACTION_REQUIRED_DELAY_MS = 2000
 
-/** 阶段推进时，延迟多久推送 `game-stage-changed`（库表仍立即写入）。 */
+/**
+ * Core `pendingFlowOps` 节拍：两次进街（含跑马连续翻牌）之间的间隔；摊牌结算后、推送 `game-end` 前亦用此时长。
+ * `game-stage-changed` 在事件处理中立即推送，此值不推迟该 WS。
+ */
 export const GAME_WS_STAGE_CHANGED_DELAY_MS = 3000

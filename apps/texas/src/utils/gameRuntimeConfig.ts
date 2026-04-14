@@ -45,9 +45,9 @@ export type GameRuntimeConfigPatch = {
   initialChipsMinBigBlindMultiplier?: unknown
   /** 客户端默认展示的初始筹码倍数（须 ≥ 上一项） */
   defaultInitialChipsMinBigBlindMultiplier?: unknown
-  /** 上一人行动后延迟再推 `player-action-required`（展示用） */
+  /** 行动结束后、`pendingFlowOps` 开始消费前的间隔（下一位 `player-action-required` 等） */
   actionRequiredWsDelayMs?: unknown
-  /** 阶段推进后延迟再推 `game-stage-changed` */
+  /** `pendingFlowOps` 连续进街间隔；摊牌后 `game-end` 推送前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
   stageChangedWsDelayMs?: unknown
   /** 首局进桌后延迟再分配角色 */
   startGameBeforeAssignRolesDelayMs?: unknown
@@ -70,9 +70,9 @@ export type GameRuntimeConfigSnapshot = {
   initialChipsMinBigBlindMultiplier: number
   /** 默认初始筹码倍数 */
   defaultInitialChipsMinBigBlindMultiplier: number
-  /** 上一人行动后延迟再推 `player-action-required`（毫秒） */
+  /** `pendingFlowOps` 消费前间隔（毫秒） */
   actionRequiredWsDelayMs: number
-  /** 阶段推进后延迟再推 `game-stage-changed`（毫秒） */
+  /** 连续进街间隔与摊牌后 `game-end` 前停顿（毫秒） */
   stageChangedWsDelayMs: number
   /** 首局进桌后延迟再分配角色（毫秒） */
   startGameBeforeAssignRolesDelayMs: number
