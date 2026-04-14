@@ -8,7 +8,7 @@ import {
   MAINTENANCE_CODE,
   MAINTENANCE_MESSAGE,
   MAINTENANCE_HTTP_WHITELIST_PATHS
-} from '../constants/maintenance'
+} from '../router/system/maintenanceConstants'
 
 const maintenanceWhitelist = new Set<string>(MAINTENANCE_HTTP_WHITELIST_PATHS)
 

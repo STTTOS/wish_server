@@ -27,7 +27,7 @@ import {
 import {
   BUILT_IN_VOICE_NAME_SET,
   BUILT_IN_VOICE_USER_COOLDOWN_MS
-} from '../../constants/builtInVoice'
+} from './builtInVoiceConstants'
 
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()

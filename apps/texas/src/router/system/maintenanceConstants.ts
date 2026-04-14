@@ -1,4 +1,4 @@
-import { HTTP_STATUS } from './httpStatus'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 
 export const MAINTENANCE_CODE = HTTP_STATUS.SERVICE_UNAVAILABLE
 export const MAINTENANCE_MESSAGE =

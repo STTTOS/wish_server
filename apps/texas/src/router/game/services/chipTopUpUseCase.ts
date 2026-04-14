@@ -8,8 +8,8 @@ import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { CHIP_TOP_UP_ELIGIBLE_RATIO } from './chipTopUpConstants'
 import { room, match, roomMember, roomChipTopUp } from '../../../models'
-import { CHIP_TOP_UP_ELIGIBLE_RATIO } from '../../../constants/chipTopUp'
 
 export type ChipTopUpInput = {
   userId: number

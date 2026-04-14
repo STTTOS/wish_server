@@ -1,7 +1,7 @@
 import type { GameWsGateway } from './gameWsGateway'
 
 import { logger } from '../../../logger'
-import { BUILT_IN_VOICE_ROOM_EMIT_MIN_INTERVAL_MS } from '../../../constants/builtInVoice'
+import { BUILT_IN_VOICE_ROOM_EMIT_MIN_INTERVAL_MS } from '../builtInVoiceConstants'
 
 const roomLastEmitAt = new Map<number, number>()
 const roomEmitChains = new Map<number, Promise<void>>()

@@ -1,7 +1,7 @@
 import { createClient, type RedisClientType } from 'redis'
 
 import { logger } from '../logger'
-import { MAINTENANCE_KEY } from '../constants/maintenance'
+import { MAINTENANCE_KEY } from '../router/system/maintenanceConstants'
 
 const redisUrl = process.env.REDIS_URL
 

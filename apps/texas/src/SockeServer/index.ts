@@ -13,8 +13,11 @@ import { GameEnteringTracker } from './gameEnteringTracker'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
-import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
+import {
+  MAINTENANCE_CODE,
+  MAINTENANCE_MESSAGE
+} from '../router/system/maintenanceConstants'
 import {
   resolveWsUserFromHandshake,
   getWsRoomIdFromHandshakeAuth
