@@ -47,6 +47,8 @@ export function aggregateHandPokeAuditFromRows(
   auditStatus: HandPokeAuditStatusType
   chiSquare: number | null
   pValue: number | null
+  /** 与 χ² 可算条件一致：有效手数 ≥ 最少手数 */
+  heatmapScaleEnabled: boolean
 } {
   const countsByPoke = new Map<Poke, number>()
   for (const p of ALL_POKE_LIST) {
@@ -63,6 +65,7 @@ export function aggregateHandPokeAuditFromRows(
   }
 
   const totalValidCards = validHandCount * 2
+  const heatmapScaleEnabled = validHandCount >= HAND_POKE_AUDIT_MIN_VALID_HANDS
 
   if (validHandCount < HAND_POKE_AUDIT_MIN_VALID_HANDS) {
     return {
@@ -71,7 +74,8 @@ export function aggregateHandPokeAuditFromRows(
       countsByPoke,
       auditStatus: HandPokeAuditStatus.insufficient_data,
       chiSquare: null,
-      pValue: null
+      pValue: null,
+      heatmapScaleEnabled
     }
   }
 
@@ -95,7 +99,8 @@ export function aggregateHandPokeAuditFromRows(
     countsByPoke,
     auditStatus,
     chiSquare: chiSq,
-    pValue
+    pValue,
+    heatmapScaleEnabled
   }
 }
 

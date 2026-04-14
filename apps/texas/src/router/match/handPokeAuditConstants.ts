@@ -2,6 +2,11 @@ import type { Poke } from 'texas-poker-core'
 
 import { ranks, suits } from 'texas-poker-core'
 
+/**
+ * 手牌分布审计：检验参数、牌面全集与类型（与 `handPokeAuditService` 强绑定）。
+ * 分页等系统级配置见 `constants/pagination.ts`。
+ */
+
 /** 有效两手牌记录达到该条数后才做 χ² 检验（对应约 300 张底牌） */
 export const HAND_POKE_AUDIT_MIN_VALID_HANDS = 150
 
