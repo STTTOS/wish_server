@@ -102,7 +102,7 @@
   /** 为 true 时建议使用 pearsonResidual 做绿→黄→红渐变；false 时仅展示次数、不着色 */
   heatmapScaleEnabled: boolean
   pokeDistribution: Array<{
-    poke: string
+    poke: Poke
     count: number
     expectedCount: number
     /** Pearson 残差 (O−E)/√E；与总 χ² 同一期望 E=cardCount/52 */
