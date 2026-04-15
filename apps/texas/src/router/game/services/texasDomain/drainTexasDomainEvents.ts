@@ -191,6 +191,10 @@ async function handleHandEnded(
       bestPokes: p.bestPokes ?? [],
       totalBetAmount
     }))
+    texas.reset()
+    // 游戏结束后, 轮换庄家位置
+    // 在其他玩家加入时, 有新的BB anchor
+    texas.rotateRolesForNewHand()
 
     getRuntime().rollbackManager.clearInvalidatedFlag(currentMatchId)
     getRuntime().rollbackManager.clearSnapshot(currentMatchId)
@@ -199,7 +203,6 @@ async function handleHandEnded(
       where: { id: roomId },
       data: { gameStatus: 'between_hands' }
     })
-    texas.controller.reset()
     maybeStartNextHandCountdown(roomId)
   } catch (err) {
     logger.error('HandEnded handler failed', err)

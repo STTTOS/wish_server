@@ -35,6 +35,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       (texas.controller.status as unknown as string) === 'idle' &&
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
     onLock: async () => {
+      // 锁座, 新加入的玩家落到观战席
+      texas.lockSeats()
       await autoTopUpOnSeatPlayersAtHandLock({
         roomId,
         roomKey,
@@ -54,12 +56,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
         data: { gameStatus: 'in_hand' }
       })
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
-      texas.resetBeforeGameStart()
     },
     onAssignRoles: async () => {
       try {
-        texas.unlockSeats()
-        texas.setPlayerRoles('rotate')
+        // 根据新加入/离开的玩家 重排位置, 并将位置信息推送给客户端
+        texas.setPlayerRoles('rearrange')
         await drainTexasDomainEvents()
         getRuntime().rollbackManager.snapshotPlayersAtHandStart(
           getRuntime().currentMatchId!
