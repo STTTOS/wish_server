@@ -12,9 +12,13 @@ import { GameWsGateway } from './services/gameWsGateway'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
-import { StartGameUseCase, TakeActionUseCase } from './services/flow'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import {
+  JoinGameUseCase,
+  StartGameUseCase,
+  TakeActionUseCase
+} from './services/flow'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   gameRuntimeRegistry,
@@ -35,6 +39,7 @@ const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
 const gameWsGateway = new GameWsGateway()
 const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
+const joinGameUseCase = new JoinGameUseCase()
 const showMyHandPokesUseCase = new ShowMyHandPokesUseCase(gameWsGateway)
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
@@ -197,6 +202,25 @@ router.post(gameClientApi('/quit'), async (ctx) => {
 
   const result = await quitGameUseCase.execute({ userId, roomId })
   respondFromApiResult(ctx, result, { okMessage: '已退出对局' })
+})
+
+/**
+ * 中途加入对局（同步 Core 环）：须已是房间成员；`Room.gameStatus === 'waiting'` 不可调用。
+ * Core `room.status === 'seats_locked'` 时仅观战 `join`；`seats_open` 时 `join` 后 `seat`。重复调用幂等。
+ * body: { roomId: number }
+ */
+router.post(gameClientApi('/join'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const result = await joinGameUseCase.execute({ userId, roomId })
+  respondFromApiResult(ctx, result, { okMessage: '已加入对局' })
 })
 
 /**

@@ -4,6 +4,7 @@ import { Texas } from 'texas-poker-core'
 
 import { match } from '../../../models'
 import { GameWsGateway } from './gameWsGateway'
+import { MAX_PLAYERS_COUNT } from '../../../constants/game'
 
 /**
  * 创建 Texas 实例并将房间成员全部入座。
@@ -16,7 +17,7 @@ export function createTexasAndSeatPlayers(params: {
   const { roomInfo, members, ownerId } = params
   const texas = new Texas({
     lowestBetAmount: roomInfo.lowestBetAmount,
-    maximumCountOfPlayers: members.length,
+    maximumCountOfPlayers: MAX_PLAYERS_COUNT,
     initialChips: roomInfo.initialChips,
     thinkingTime: roomInfo.thinkingTime,
     user: { id: roomInfo.owner.id, name: roomInfo.owner.name }
