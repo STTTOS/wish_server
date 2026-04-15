@@ -1,5 +1,6 @@
 import type { ApiVoidResult } from '../../../utils/apiResult'
 
+import { Prisma } from '@prisma/texas-client'
 import {
   TexasError,
   TexasCoreErrorCode,
@@ -9,18 +10,109 @@ import {
 import prisma from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { MAX_PLAYERS_COUNT } from '../../../constants/game'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 
+type EnsureMemberTxResult =
+  | { kind: 'fail'; status: number; message: string }
+  | { kind: 'already_member' }
+  | { kind: 'created' }
+
 /**
- * 中途进入 Core 牌桌（须已是 `RoomMember`）：
- * - DB `gameStatus !== 'waiting'`（仍在等人阶段不可进引擎桌）。
- * - Core `room.status === 'seats_locked'`（本手锁座）：仅 `join` 观战。
- * - `seats_open`（局间开放入座）：`join` 后 `seat`；已在观战则补 `seat`。
- * 幂等：已在座直接成功；已观战且锁座直接成功；`seat` 遇「已在座」按成功处理。
+ * **非 waiting** 时进入 Core 牌桌（`POST /game/join`）：
+ * - 若尚无 `RoomMember`，本用例内事务写入成员（与等待房入表规则一致），再挂引擎；引擎失败则删回该成员。
+ * - DB `gameStatus === 'waiting'` 时不可调用（应使用 `POST /room/join`）。
+ * - Core `room.status === 'seats_locked'`：仅 `join` 观战；`seats_open`：`join` 后 `seat`。
  */
 export class JoinGameUseCase {
+  async #ensureRoomMemberForNonWaitingRoom(input: {
+    roomId: number
+    userId: number
+  }): Promise<
+    | { ok: true; createdNewMember: boolean }
+    | { ok: false; status: number; message: string }
+  > {
+    const { roomId, userId } = input
+    try {
+      const txRes: EnsureMemberTxResult = await prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomId} FOR UPDATE`
+
+          const latestRoom = await tx.room.findUnique({
+            where: { id: roomId },
+            select: { id: true, deletedAt: true, gameStatus: true }
+          })
+
+          if (!latestRoom || latestRoom.deletedAt) {
+            return {
+              kind: 'fail',
+              status: HTTP_STATUS.NOT_FOUND,
+              message: '房间不存在'
+            }
+          }
+          if (latestRoom.gameStatus === 'waiting') {
+            return {
+              kind: 'fail',
+              status: HTTP_STATUS.CONFLICT,
+              message: '当前阶段请使用加入房间接口（POST /room/join）'
+            }
+          }
+
+          const existing = await tx.roomMember.findUnique({
+            where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+          })
+          if (existing) {
+            return { kind: 'already_member' }
+          }
+
+          const memberCount = await tx.roomMember.count({ where: { roomId } })
+          if (memberCount >= MAX_PLAYERS_COUNT) {
+            return {
+              kind: 'fail',
+              status: HTTP_STATUS.CONFLICT,
+              message: '房间已满'
+            }
+          }
+
+          const inOtherRoomLatest = await tx.roomMember.findFirst({
+            where: {
+              userId,
+              room: { id: { not: roomId }, deletedAt: null }
+            }
+          })
+          if (inOtherRoomLatest) {
+            return {
+              kind: 'fail',
+              status: HTTP_STATUS.CONFLICT,
+              message: '你已在其他房间中，请先退出后再加入'
+            }
+          }
+
+          await tx.roomMember.create({ data: { roomId, userId } })
+          return { kind: 'created' }
+        }
+      )
+
+      if (txRes.kind === 'fail') {
+        return { ok: false, status: txRes.status, message: txRes.message }
+      }
+      return {
+        ok: true,
+        createdNewMember: txRes.kind === 'created'
+      }
+    } catch (e: unknown) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        return { ok: true, createdNewMember: false }
+      }
+      throw e
+    }
+  }
+
   async execute(input: {
     userId: number
     roomId: number
@@ -43,24 +135,33 @@ export class JoinGameUseCase {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
-        message: '当前阶段不可加入对局'
+        message: '当前阶段请使用加入房间接口（POST /room/join）'
       }
     }
 
+    let createdNewMember = false
     const member = await prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId, userId } },
       select: { userId: true }
     })
     if (!member) {
-      return {
-        ok: false,
-        status: HTTP_STATUS.FORBIDDEN,
-        message: '请先加入房间'
+      const ensured = await this.#ensureRoomMemberForNonWaitingRoom({
+        roomId,
+        userId
+      })
+      if (!ensured.ok) {
+        return { ok: false, status: ensured.status, message: ensured.message }
       }
+      createdNewMember = ensured.createdNewMember
     }
 
     const texas = gameRuntimeRegistry.getTexas(roomKey)
     if (!texas) {
+      if (createdNewMember) {
+        await prisma.roomMember.delete({
+          where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+        })
+      }
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
@@ -88,6 +189,11 @@ export class JoinGameUseCase {
         select: { id: true, name: true }
       })
       if (!userRow) {
+        if (createdNewMember) {
+          await prisma.roomMember.delete({
+            where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+          })
+        }
         return {
           ok: false,
           status: HTTP_STATUS.NOT_FOUND,
@@ -109,6 +215,17 @@ export class JoinGameUseCase {
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
       return { ok: true, data: null }
     } catch (e: unknown) {
+      const rollbackMemberIfNeeded = async () => {
+        if (!createdNewMember) return
+        try {
+          await prisma.roomMember.delete({
+            where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+          })
+        } catch {
+          /* ignore */
+        }
+      }
+
       if (e instanceof TexasError) {
         if (e.code === TexasCoreErrorCode.ROOM_SEAT_ALREADY) {
           return { ok: true, data: null }
@@ -142,6 +259,7 @@ export class JoinGameUseCase {
               }
               const msg =
                 inner instanceof Error ? inner.message : '加入对局失败'
+              await rollbackMemberIfNeeded()
               return { ok: false, status: HTTP_STATUS.CONFLICT, message: msg }
             }
           }
@@ -159,6 +277,7 @@ export class JoinGameUseCase {
         }
       }
       const message = e instanceof Error ? e.message : '加入对局失败'
+      await rollbackMemberIfNeeded()
       return { ok: false, status: HTTP_STATUS.CONFLICT, message }
     }
   }

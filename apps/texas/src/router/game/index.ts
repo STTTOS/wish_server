@@ -14,12 +14,12 @@ import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   JoinGameUseCase,
   StartGameUseCase,
   TakeActionUseCase
 } from './services/flow'
-import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   gameRuntimeRegistry,
   getCurrentMatchIdWithFallback
@@ -205,8 +205,8 @@ router.post(gameClientApi('/quit'), async (ctx) => {
 })
 
 /**
- * 中途加入对局（同步 Core 环）：须已是房间成员；`Room.gameStatus === 'waiting'` 不可调用。
- * Core `room.status === 'seats_locked'` 时仅观战 `join`；`seats_open` 时 `join` 后 `seat`。重复调用幂等。
+ * **非 waiting** 时加入对局：必要时写入 `RoomMember`，再同步 Core（`join`/`seat`）。
+ * `waiting` 阶段请使用 `POST /room/join`（`roomCode`）。
  * body: { roomId: number }
  */
 router.post(gameClientApi('/join'), async (ctx) => {
