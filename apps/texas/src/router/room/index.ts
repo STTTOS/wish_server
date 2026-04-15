@@ -8,11 +8,13 @@ import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { timeFormat, apiPrefixClient } from '../../config'
 import { roomPlaySessionFromGameStatus } from './roomPlaySession'
+import { JoinGameUseCase } from '../game/services/joinGameUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
   RoomJoinFacade,
   RoomQuitFacade,
   RoomKickFacade,
+  RoomEnterFacade,
   RoomCreateFacade,
   RoomMembersFacade,
   WaitingRoomGateway
@@ -23,6 +25,11 @@ const roomApiClient = combinePath(apiPrefixClient)('/room')
 const roomMembersFacade = new RoomMembersFacade(new WaitingRoomGateway(ws))
 const roomCreateFacade = new RoomCreateFacade(new WaitingRoomGateway(ws))
 const roomJoinFacade = new RoomJoinFacade(new WaitingRoomGateway(ws))
+const joinGameUseCaseForEnter = new JoinGameUseCase()
+const roomEnterFacade = new RoomEnterFacade(
+  roomJoinFacade,
+  joinGameUseCaseForEnter
+)
 const roomQuitFacade = new RoomQuitFacade(new WaitingRoomGateway(ws))
 const roomKickFacade = new RoomKickFacade(new WaitingRoomGateway(ws))
 
@@ -99,7 +106,26 @@ router.post(roomApiClient('/list'), async (ctx) => {
   response.success(ctx, result)
 })
 
-// 客户端：通过房间代码加入房间
+/**
+ * 客户端：统一「进房」入口（`roomCode`）。服务端按 `gameStatus` 分派：`waiting` → 等房入表；否则 → 对局入桌（同 `game/join`）。
+ * 成功 `data`：`roomId`、`gameStatus`、`joinedAs`、`gameRuntimeAttached`。
+ */
+router.post(roomApiClient('/enter'), async (ctx) => {
+  const { roomCode } = ctx.request.body as { roomCode?: unknown }
+  const userId = ctx.state.user!.id
+  const normalizedRoomCode = typeof roomCode === 'string' ? roomCode : ''
+
+  const result = await roomEnterFacade.execute({
+    roomCode: normalizedRoomCode,
+    userId
+  })
+  respondFromApiResult(ctx, result, { okMessage: '加入成功' })
+})
+
+/**
+ * 客户端：通过房间代码加入房间（**仅 `gameStatus === 'waiting'`**；写 `RoomMember` + 等待房 WS）。
+ * 对局已开始请用 `POST /game/join`（`roomId`）或统一入口 `POST /room/enter`。成功 `data`：`roomId`、`gameStatus`、`joinedAs`、`gameRuntimeAttached`。
+ */
 router.post(roomApiClient('/join'), async (ctx) => {
   const { roomCode } = ctx.request.body as { roomCode?: unknown }
   const userId = ctx.state.user!.id
@@ -111,7 +137,7 @@ router.post(roomApiClient('/join'), async (ctx) => {
     userId
   })
 
-  respondFromApiResult(ctx, result, { okMessage: '加入成功', okData: null })
+  respondFromApiResult(ctx, result, { okMessage: '加入成功' })
 })
 
 // 客户端：退出房间（幂等：房间已删、或已不在成员表中、或重复调用均返回成功）

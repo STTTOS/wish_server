@@ -18,7 +18,7 @@ export type RoomJoinAuthResult = ApiResult<RoomJoinAuthData>
 /**
  * 成员加入校验器（validator）：
  * - 输入校验
- * - 房间存在且处于 waiting
+ * - 房间存在且未删、且 **`gameStatus === 'waiting'`**（非等待阶段请走 `POST /game/join`）
  * - 用户存在
  *
  * 并发正确性依赖 Facade 内的事务二次校验（锁房间行、再校验人数/重复/跨房）。
@@ -54,7 +54,8 @@ export async function validateRoomJoinAuth(input: {
     return {
       ok: false,
       status: HTTP_STATUS.CONFLICT,
-      message: '仅等待房间状态支持加入房间'
+      message:
+        '对局已开始或不在等待阶段，请使用加入对局接口（POST /game/join，body 含 roomId）'
     }
   }
 
