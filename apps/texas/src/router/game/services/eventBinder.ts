@@ -2,7 +2,8 @@ import type { BindTexasLifecycleParams } from './types'
 
 import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
 
-import { match, room as roomModel } from '../../../models'
+import { match } from '../../../models'
+import { transitionRoomGameStatus } from './stateMachine'
 import { autoTopUpOnSeatPlayersAtHandLock } from './chipTopUpUseCase'
 import { buildTexasEventContext } from './texasDomain/texasEventContext'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
@@ -18,6 +19,9 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
 } {
   const { texas, roomId, roomKey, roomInfo, runtimeRegistry, wsGateway } =
     params
+
+  const setQuitBlocked = (blocked: boolean) =>
+    runtimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, blocked)
 
   const getRuntime = () => runtimeRegistry.getOrThrow(roomKey)
   const ctx = buildTexasEventContext({
@@ -35,6 +39,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       (texas.controller.status as unknown as string) === 'idle' &&
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
     onLock: async () => {
+      setQuitBlocked(true)
       // 锁座, 新加入的玩家落到观战席
       texas.lockSeats()
       await autoTopUpOnSeatPlayersAtHandLock({
@@ -51,10 +56,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
           lowestBetAmount: roomInfo.lowestBetAmount
         }
       })
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'in_hand' }
-      })
+      await transitionRoomGameStatus(roomId, 'starting_hand')
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
     },
     onAssignRoles: async () => {
@@ -100,6 +102,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       try {
         texas.start()
         await drainTexasDomainEvents()
+        await transitionRoomGameStatus(roomId, 'in_hand')
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
           await handleFatalTexasEngineError({

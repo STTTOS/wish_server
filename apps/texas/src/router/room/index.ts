@@ -7,6 +7,7 @@ import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { timeFormat, apiPrefixClient } from '../../config'
+import { roomPlaySessionFromGameStatus } from './roomPlaySession'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import {
   RoomJoinFacade,
@@ -87,7 +88,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
         },
         initialChips,
         thinkingTime,
-        gameStatus,
+        // gameStatus,
+        playSession: roomPlaySessionFromGameStatus(gameStatus),
         lowestBetAmount,
         createdAt: dayjs(createdAt).format(timeFormat),
         memberCount: members.length
@@ -184,7 +186,8 @@ router.post(roomApiClient('/detail'), async (ctx) => {
       ...owner,
       pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
     },
-    gameStatus,
+    // gameStatus,
+    playSession: roomPlaySessionFromGameStatus(gameStatus),
     isPrivate,
     thinkingTime,
     initialChips,

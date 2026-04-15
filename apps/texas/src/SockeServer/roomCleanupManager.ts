@@ -97,7 +97,7 @@ export class RoomCleanupManager {
 
   /**
    * 运行时已销毁后把 DB 拉回 waiting，与 join/quit 等路由约定一致。
-   * 不走 transitionRoomGameStatus：清理路径允许从 in_hand/between_hands/entering 等直接落回 waiting。
+   * 不走 transitionRoomGameStatus：清理路径允许从 in_hand / starting_hand / between_hands / entering 等直接落回 waiting。
    */
   async #resetRoomGameStatusToWaiting(roomIdNumber: number) {
     if (!roomIdNumber) return

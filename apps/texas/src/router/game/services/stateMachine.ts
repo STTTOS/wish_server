@@ -1,12 +1,13 @@
-import { room as roomModel } from '../../../models'
+import type { RoomGameStatus } from '@prisma/texas-client'
 
-type RoomGameStatus = 'waiting' | 'entering' | 'in_hand' | 'between_hands'
+import { room as roomModel } from '../../../models'
 
 const allowedTransitions: Record<RoomGameStatus, RoomGameStatus[]> = {
   waiting: ['entering'],
-  entering: ['in_hand', 'between_hands', 'waiting'],
+  entering: ['starting_hand', 'waiting'],
+  starting_hand: ['in_hand', 'between_hands', 'waiting'],
   in_hand: ['between_hands'],
-  between_hands: ['in_hand', 'waiting']
+  between_hands: ['starting_hand', 'waiting']
 }
 
 /**

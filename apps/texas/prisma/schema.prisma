@@ -123,7 +123,7 @@ model Room {
   id              Int             @id @default(autoincrement())
   // 房间代码
   code            String          @unique
-  // 房间在业务侧的对局状态（用于“房主点击开始游戏”）
+  // 房间在业务侧的对局状态；语义见 schema 中 RoomGameStatus 各枚举注释
   gameStatus      RoomGameStatus  @default(waiting)
   // 大盲注
   lowestBetAmount Int
@@ -145,9 +145,15 @@ model Room {
 }
 
 enum RoomGameStatus {
+  /// 等人，未开始游戏
   waiting
+  /// 已点开局，等成员连 /game
   entering
+  /// 已锁座并完成角色分配等，`Texas.start()` 前；Core 本手仍为 idle
+  starting_hand
+  /// 已 Texas.start()，本手进行中
   in_hand
+  /// 本手 reset 后局间
   between_hands
 }
 

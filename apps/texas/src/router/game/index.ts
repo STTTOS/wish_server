@@ -180,8 +180,10 @@ router.post(gameClientApi('/chipTopUp'), async (ctx) => {
 })
 
 /**
- * 局间退出对局：删成员、广播 `player-quit-game`、断开该用户 /game。
- * body: { roomId: number } — 仅 `between_hands`；非成员或房间已删幂等成功
+ * 退出对局：删 `RoomMember`、广播 `player-quit-game`、断开该用户 /game。
+ * - `between_hands`：同步 `room.removeById`。
+ * - Core 已为 `in_hand`：先 `FoldDueToLeave` 并 drain；环上摘座延至本手 `reset` 后（可立刻加入其它房间）。
+ * - `starting_hand`：不可退出（与引擎尚未 `start` 一致）。
  */
 router.post(gameClientApi('/quit'), async (ctx) => {
   const body = ctx.request.body as { roomId?: unknown }

@@ -386,7 +386,9 @@ export class StartGameUseCase {
       texas,
       currentMatchId,
       matchStartedAt: Date.now(),
-      rollbackManager
+      rollbackManager,
+      pendingTexasSeatRemovalUserIds: new Set(),
+      quitBlockedUntilBlindsPosted: false
     })
 
     const { drainTexasDomainEvents } = bindTexasLifecycleEvents({
@@ -411,12 +413,9 @@ export class StartGameUseCase {
       await this.#delay(
         gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs()
       )
+      gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, true)
       texas.setPlayerRoles()
-      // 进入in_hand状态, 新加入的玩家直接到观战席
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'in_hand' }
-      })
+      await transitionRoomGameStatus(roomId, 'starting_hand')
 
       await drainTexasDomainEvents()
       // 角色分配完成后, 等待2秒再发牌
@@ -431,6 +430,7 @@ export class StartGameUseCase {
       await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
       texas.start()
       await drainTexasDomainEvents()
+      await transitionRoomGameStatus(roomId, 'in_hand')
     } catch (e: unknown) {
       if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
         await handleFatalTexasEngineError({

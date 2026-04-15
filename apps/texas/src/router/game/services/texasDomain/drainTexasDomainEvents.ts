@@ -7,6 +7,7 @@ import type { WsMatchOverview } from '../../../../ws/ws-event-types'
 import { Prisma } from '@prisma/texas-client'
 
 import { logger } from '../../../../logger'
+import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
@@ -192,6 +193,8 @@ async function handleHandEnded(
       totalBetAmount
     }))
     texas.reset()
+    gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
+    gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
     // 游戏结束后, 轮换庄家位置
     // 在其他玩家加入时, 有新的BB anchor
     texas.rotateRolesForNewHand()
@@ -292,7 +295,12 @@ async function processTexasDomainEvent(
       wsGateway.notifyGameStart(roomKey, { matchId })
       return
     }
-    case 'BlindsPosted':
+    case 'BlindsPosted': {
+      gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
+      return
+    }
+    case 'PostedBigBlind':
+      return
     case 'PotUpdated':
     case 'TurnEnded':
     case 'PotAwarded':

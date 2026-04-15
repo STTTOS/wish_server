@@ -3,6 +3,7 @@ import type { GameRuntime } from '../runtimeRegistry'
 import { TexasError } from 'texas-poker-core'
 
 import { logger } from '../../../../logger'
+import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { matchError, room as roomModel } from '../../../../models'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 
@@ -35,5 +36,6 @@ export async function handleFatalTexasEngineError(params: {
     data: { gameStatus: 'between_hands' }
   })
   maybeStartNextHandCountdown(roomId)
+  gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
   logger.error(`[fatal texas] roomKey=${roomKey}`, error)
 }

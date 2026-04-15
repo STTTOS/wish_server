@@ -1,6 +1,8 @@
 import type { Texas } from 'texas-poker-core'
 import type { StartRoomInfo, MatchRollbackManager } from './types'
 
+import { logger } from '../../../logger'
+
 export type GameRuntime = {
   roomKey: string
   roomId: number
@@ -12,6 +14,15 @@ export type GameRuntime = {
   /** 当前手从「角色分配完成」起的 unix ms，在 RolesAssigned 解释时更新 */
   matchStartedAt: number
   rollbackManager: MatchRollbackManager
+  /**
+   * 本手进行中已删库离房、须在 `Texas.reset()` 解锁座后执行的 `room.removeById`。
+   * 与「先 FoldDueToLeave、局间再摘环」一致。
+   */
+  pendingTexasSeatRemovalUserIds: Set<number>
+  /**
+   * `onLock`（或首局分配角色前）至本手领域事件 `BlindsPosted` 处理完成前，禁止局内退出。
+   */
+  quitBlockedUntilBlindsPosted: boolean
 }
 
 /**
@@ -58,10 +69,50 @@ export class GameRuntimeRegistry {
     runtime.currentMatchId = matchId
   }
 
+  /** 本手 `reset` 解锁座后，摘掉已离房但仍留在环上的玩家（见 `pendingTexasSeatRemovalUserIds`）。 */
+  flushDeferredTexasSeatRemovals(roomKey: string): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime?.texas) return
+    const pending = runtime.pendingTexasSeatRemovalUserIds
+    if (pending.size === 0) return
+    for (const userId of [...pending]) {
+      try {
+        if (runtime.texas.room.has(userId)) {
+          runtime.texas.room.removeById(userId)
+        }
+      } catch (e) {
+        logger.error(
+          `[runtime] deferred removeById failed roomKey=${roomKey} userId=${userId}`,
+          e
+        )
+      }
+      pending.delete(userId)
+    }
+  }
+
+  enqueueDeferredTexasSeatRemoval(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingTexasSeatRemovalUserIds.add(userId)
+  }
+
+  setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.quitBlockedUntilBlindsPosted = blocked
+  }
+
+  isQuitBlockedUntilBlindsPosted(roomKey: string): boolean {
+    return Boolean(this.#runtimes.get(roomKey)?.quitBlockedUntilBlindsPosted)
+  }
+
   /** 销毁运行时：reset Texas 后移除上下文。 */
   destroyRuntime(roomKey: string) {
     const runtime = this.#runtimes.get(roomKey)
-    if (runtime?.texas) runtime.texas.reset()
+    if (runtime?.texas) {
+      runtime.texas.reset()
+      this.flushDeferredTexasSeatRemovals(roomKey)
+    }
     this.#runtimes.delete(roomKey)
     void import('./texasDomain/playerTurnTimeoutScheduler').then((m) =>
       m.clearPlayerTurnTimeout(roomKey)
