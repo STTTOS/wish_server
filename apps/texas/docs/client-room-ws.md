@@ -146,3 +146,17 @@ socket.on('message', (payload) => {
 
 - 新连接只做现有握手（JWT + `roomId`）与 join，**不必**新增接口；上线推送由本次连接逻辑自动发出。
 - 成员是否在房仍以 **DB / HTTP** 为准；WS 断开**不会**单独删成员（除非走原有「全员 waiting-room 离线 + 等待中房间」清理策略）。
+
+---
+
+## 7. 命名空间 `/game`：快照与 WS 补发（断线重连 / 中途观战）
+
+更完整的**目标对照、复杂度说明与客户端配合步骤**见：**[`client-game-reconnect-snapshot.md`](./client-game-reconnect-snapshot.md)**。
+
+**推荐顺序（摘要）**
+
+1. **HTTP**：`POST .../game/fetchCurrentGameState`（需已是房间成员且对局存在），拿到桌面状态 + **`latestWsSeq`**。
+2. **WS**：连接 `.../game`，`auth` 中带 `token`、`roomId`，以及 **`gameRoomSinceSeq: latestWsSeq`**（或本地持久化的「最后处理过的全房广播序号」）。连上后处理 `initial connect`，再处理可能下发的 **`game-room-replay`**（见 `ws-events-reference.md`）。
+3. 若 `game-room-replay.truncated === true`，回到步骤 1 拉快照，并用响应里的 `latestWsSeq` 更新游标。
+
+**说明**：环形缓冲只覆盖 **`broadcastGameRoom` 全房广播**；底牌等单播仍以 HTTP / 现有逻辑为准。

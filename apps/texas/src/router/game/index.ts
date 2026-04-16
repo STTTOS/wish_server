@@ -14,6 +14,7 @@ import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { getLatestGameRoomSeq } from '../../SockeServer/gameRoomWsReplayBuffer'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   JoinGameUseCase,
@@ -164,7 +165,9 @@ router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
     playersOnSeat,
     playersOnWatch,
     matchInfo,
-    activePlayerInfo
+    activePlayerInfo,
+    /** 全房广播 WS 游标；重连 `/game` 时置于 `auth.gameRoomSinceSeq` 以补发 `game-room-replay` */
+    latestWsSeq: getLatestGameRoomSeq(String(roomId))
   })
 })
 

@@ -196,6 +196,28 @@ export type WsPlayerHandVoluntarilyShownData = {
   rankCategory: RankCategory | null
 }
 
+/** 全房广播补发：与历史 `message` 中各事件 body 同形（一般为 `{ type, data }`） */
+export type WsGameRoomReplayItem = {
+  seq: number
+  payload: Record<string, unknown>
+}
+
+export type WsGameRoomReplayData = {
+  roomId: number
+  /** 请求参数中的 sinceSeq（不含） */
+  afterSeq: number
+  /** 本包内最大序号；无事件时与 `afterSeq` 相同 */
+  throughSeq: number
+  /** 服务端当前缓冲区游标；下次连接可带 `auth.gameRoomSinceSeq = latestSeq` */
+  latestSeq: number
+  events: WsGameRoomReplayItem[]
+  /**
+   * `true`：`afterSeq < latestSeq` 但环形缓冲内已无更早条目，中间 WS 已丢弃；
+   * 须用 HTTP `fetchCurrentGameState` 等对局快照对齐，再令 `gameRoomSinceSeq = latestSeq`。
+   */
+  truncated?: boolean
+}
+
 export type WsEventDataMap = {
   'game-entering': WsGameEnteringData
   'game-entering-progress': WsGameEnteringProgressData
@@ -215,6 +237,7 @@ export type WsEventDataMap = {
   'player-built-in-voice': WsPlayerBuiltInVoiceData
   'player-quit-game': WsPlayerQuitGameData
   'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
+  'game-room-replay': WsGameRoomReplayData
 }
 
 export type WsEventType = keyof WsEventDataMap

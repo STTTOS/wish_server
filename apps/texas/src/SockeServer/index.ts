@@ -16,8 +16,14 @@ import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
 import {
+  replayGameRoomSince,
+  getLatestGameRoomSeq,
+  recordGameRoomBroadcast
+} from './gameRoomWsReplayBuffer'
+import {
   resolveWsUserFromHandshake,
-  getWsRoomIdFromHandshakeAuth
+  getWsRoomIdFromHandshakeAuth,
+  getWsGameRoomSinceSeqFromHandshake
 } from '../utils/wsAuth'
 import {
   SOCKET_IO_PING_TIMEOUT_MS,
@@ -171,6 +177,46 @@ class SocketServer {
       socket.join(roomKey)
       socket.join(userRoomKey)
       socket.send({ type: 'initial connect', data: null })
+
+      /**
+       * 全房广播补发（`game-room-replay`），与 {@link gameRoomWsReplayBuffer} 对齐：
+       *
+       * - **`sinceSeq`**（握手 `auth.gameRoomSinceSeq`）：客户端声称「**序号 ≤ sinceSeq 的全房广播我已处理过**」；
+       *   服务端只回放 **`seq > sinceSeq`**。`0` 表示未带游标 / 从头跟实时流。
+       * - **`latestSeq`**（`getLatestGameRoomSeq`）：本房缓冲已分配到的**最大序号**（全房广播条数的水位线）；
+       *   未必等于 `ring` 内最老条的 `seq`（旧条目可能被环形挤出）。
+       * - **`entries`**：`replayGameRoomSince` 返回的、仍留在环形缓冲里的 **`seq > sinceSeq`** 的记录。
+       * - **`truncated`**：客户端自认落后（`sinceSeq < latestSeq`）但 **`entries` 为空**——说明
+       *   `(sinceSeq, latestSeq]` 区间内的消息**已不在缓冲**（断线过久或进程重启等），**不能只靠 WS 补**，须 HTTP 快照对齐。
+       * - **`afterSeq`**：与 `sinceSeq` 同值写入 payload，语义为「本包补发下界（不含）」。
+       * - **`throughSeq`**：本包 `events` 中**最大 `seq`**；若 `events` 为空（仅 `truncated` 场景）则退化为 `sinceSeq`，表示本包未通过缓冲补到任何一条。
+       */
+      const sinceSeq = getWsGameRoomSinceSeqFromHandshake(socket.handshake)
+      if (sinceSeq >= 0) {
+        const latestSeq = getLatestGameRoomSeq(roomKey)
+        const entries = replayGameRoomSince(roomKey, sinceSeq)
+        const truncated =
+          sinceSeq > 0 && sinceSeq < latestSeq && entries.length === 0
+        if (entries.length > 0 || truncated) {
+          const throughSeq =
+            entries.length > 0 ? entries[entries.length - 1]!.seq : sinceSeq
+          const replay: WsMessage<'game-room-replay'> = {
+            type: 'game-room-replay',
+            data: {
+              roomId,
+              afterSeq: sinceSeq,
+              throughSeq,
+              latestSeq,
+              ...(truncated ? { truncated: true as const } : {}),
+              events: entries.map((e) => ({
+                seq: e.seq,
+                payload: e.payload as Record<string, unknown>
+              }))
+            }
+          }
+          socket.emit('message', replay)
+        }
+      }
 
       this.#handleGameRoomConnect(roomKey, userId)
       this.#notifyGameRoomWaiters(roomKey)
@@ -471,6 +517,7 @@ class SocketServer {
         roomId
       )}, data: ${JSON.stringify(data)}`
     )
+    recordGameRoomBroadcast(roomId, data)
     this.#gameNs.to(roomId).emit('message', data)
   }
 

@@ -60,6 +60,26 @@ export function getWsRoomIdFromHandshakeAuth(
 }
 
 /**
+ * 从 `handshake.auth.gameRoomSinceSeq` 读取「上次已确认的全房 WS 序号」。
+ * 重连时传入，服务端在 `message` 中下发 `game-room-replay`；缺省或非法视为 `0`。
+ */
+export function getWsGameRoomSinceSeqFromHandshake(
+  handshake: Socket['handshake']
+): number {
+  const auth = handshake.auth
+  if (!auth || typeof auth !== 'object') return 0
+  const raw = (auth as { gameRoomSinceSeq?: unknown }).gameRoomSinceSeq
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= 0) {
+    return Math.floor(raw)
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    const n = Number(raw.trim())
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n)
+  }
+  return 0
+}
+
+/**
  * 校验 JWT 且 session 与 Redis/内存中当前登录态一致（单端登录）。
  */
 export async function verifyWsLoginToken(

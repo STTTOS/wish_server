@@ -2,6 +2,7 @@ import type { Texas } from 'texas-poker-core'
 import type { StartRoomInfo, MatchRollbackManager } from './types'
 
 import { logger } from '../../../logger'
+import { clearGameRoomWsReplay } from '../../../SockeServer/gameRoomWsReplayBuffer'
 
 export type GameRuntime = {
   roomKey: string
@@ -114,6 +115,7 @@ export class GameRuntimeRegistry {
       this.flushDeferredTexasSeatRemovals(roomKey)
     }
     this.#runtimes.delete(roomKey)
+    clearGameRoomWsReplay(roomKey)
     void import('./texasDomain/playerTurnTimeoutScheduler').then((m) =>
       m.clearPlayerTurnTimeout(roomKey)
     )
