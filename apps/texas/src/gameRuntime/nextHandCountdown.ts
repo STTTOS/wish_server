@@ -230,6 +230,28 @@ function startCountdownAfterPushDelay(roomId: number) {
   })
 }
 
+export type NextHandCountdownSnapshot =
+  | { state: 'none' }
+  /** 已排期推送 `next-hand-countdown-started`，尚未带 endsAt/lockAt */
+  | { state: 'push_delay_scheduled' }
+  | { state: 'active'; endsAt: number; lockAt: number }
+
+/**
+ * 供 HTTP 快照等与 WS `next-hand-countdown-*` 对齐的局间倒计时状态。
+ */
+export function getNextHandCountdownSnapshot(
+  roomId: number
+): NextHandCountdownSnapshot {
+  if (countdowns.has(roomId)) {
+    const c = countdowns.get(roomId)!
+    return { state: 'active', endsAt: c.endsAt, lockAt: c.lockAt }
+  }
+  if (pendingPushByRoomId.has(roomId)) {
+    return { state: 'push_delay_scheduled' }
+  }
+  return { state: 'none' }
+}
+
 export function maybeStartNextHandCountdown(roomId: number) {
   if (countdowns.has(roomId) || pendingPushByRoomId.has(roomId)) {
     logger.info(

@@ -9,22 +9,19 @@ import combinePath from '../../utils/combinePath'
 import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { GameWsGateway } from './services/gameWsGateway'
+import { gameRuntimeRegistry } from './services/runtimeKit'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
-import { getLatestGameRoomSeq } from '../../SockeServer/gameRoomWsReplayBuffer'
+import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   JoinGameUseCase,
   StartGameUseCase,
   TakeActionUseCase
 } from './services/flow'
-import {
-  gameRuntimeRegistry,
-  getCurrentMatchIdWithFallback
-} from './services/runtimeKit'
 import {
   gameRuntimeConfig,
   type GameRuntimeConfigPatch
@@ -100,7 +97,11 @@ router.post(gameClientApi('/entring'), async (ctx) => {
   return
 })
 
-// 用户重连后获取当前对局的状态
+/**
+ * 用户重连后拉取牌桌快照（与全房 WS 对齐：`player-roles-assigned` / `player-action-required` /
+ * `player-action-taken` / `game-stage-changed` / `game-end` / `next-hand-countdown-*` 等）。
+ * 不再仅在 `in_hand` 返回：局间 `idle` / `between_hands` 等一并下发，便于客户端对齐 UI。
+ */
 router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
   const userId = ctx.state.user!.id
   const membership = await roomMember.findFirst({
@@ -116,59 +117,22 @@ router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
     return
   }
 
-  const gameStatus = texas.controller.status
-  if ((gameStatus as unknown as string) !== 'in_hand') {
-    response.success(ctx, 2100, '游戏已经结束')
+  const roomRow = await room.findFirst({
+    where: { id: roomId, deletedAt: null },
+    select: { gameStatus: true }
+  })
+  if (!roomRow) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
     return
   }
-  // 需要获取当前对局的信息
-  // 包括所有玩家的信息
-  // 当前行动的用户的相关信息
-  // 当前的阶段, 总奖池
 
-  // 所有玩家的信息
-  const playersOnSeat = texas.room
-    .getPlayersBySeatStatus('on-set')
-    .map((player) => {
-      return {
-        role: player.getRole(),
-        action: player.getAction(),
-        userInfo: player.getUserInfo(),
-        currentStageTotalAmount: player.currentStageTotalAmount
-      }
-    })
-  const playersOnWatch = texas.room
-    .getPlayersBySeatStatus('hang')
-    .map((player) => {
-      return {
-        userInfo: player.getUserInfo()
-      }
-    })
-
-  const activePlayer = texas.controller.activePlayer
-  // 当前行动玩家的信息
-  const activePlayerInfo = {
-    userInfo: activePlayer?.getUserInfo(),
-    remainThinkTime: activePlayer?.getRemainThinkTime()
-  }
-
-  // 对局信息
-  const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
-  const matchInfo = {
-    matchId: currentMatchId,
-    roomId: Number(roomId),
-    status: gameStatus,
-    stage: texas.controller.stage,
-    pool: texas.pool.totalAmount
-  }
-  response.success(ctx, {
-    playersOnSeat,
-    playersOnWatch,
-    matchInfo,
-    activePlayerInfo,
-    /** 全房广播 WS 游标；重连 `/game` 时置于 `auth.gameRoomSinceSeq` 以补发 `game-room-replay` */
-    latestWsSeq: getLatestGameRoomSeq(String(roomId))
+  const payload = await buildFetchCurrentGameStatePayload({
+    texas,
+    roomId,
+    userId,
+    roomGameStatus: roomRow.gameStatus
   })
+  response.success(ctx, payload)
 })
 
 /**

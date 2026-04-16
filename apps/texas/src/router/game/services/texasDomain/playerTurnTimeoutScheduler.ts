@@ -240,6 +240,21 @@ export function clearPlayerTurnTimeout(roomKey: string): void {
 }
 
 /**
+ * 当前桌已排期的思考超时（与最近一次 `player-action-required` 的 `deadlineAt` 同源）。
+ * 若队列尚未消费到 `TurnOffered` 或已行动清掉，则返回 `undefined`。
+ */
+export function getScheduledPlayerTurnDeadline(
+  roomKey: string
+):
+  | Readonly<{ userId: number; deadlineAt: number; handId: string }>
+  | undefined {
+  const p = pendingByRoomKey.get(roomKey)
+  return p
+    ? { userId: p.userId, deadlineAt: p.deadlineAt, handId: p.handId }
+    : undefined
+}
+
+/**
  * 到期时执行：校验仍轮到该玩家、本手未换，再 CheckDueToTimeout / FoldDueToTimeout。
  */
 async function processOneDue(roomKey: string, p: PendingTurn): Promise<void> {
