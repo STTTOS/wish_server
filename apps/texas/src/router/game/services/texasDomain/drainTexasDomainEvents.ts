@@ -192,7 +192,7 @@ async function handleHandEnded(
       bestPokes: p.bestPokes ?? [],
       totalBetAmount
     }))
-    texas.reset()
+    texas.unlockSeats()
     gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
     // 游戏结束后, 轮换庄家位置

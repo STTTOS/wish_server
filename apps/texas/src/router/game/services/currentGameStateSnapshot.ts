@@ -1,5 +1,6 @@
-import type { RankCategory } from 'texas-poker-core'
 import type { Texas, Stage, RoomStatus, HandLifecycle } from 'texas-poker-core'
+
+import { type RankCategory } from 'texas-poker-core'
 
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { getLatestGameRoomSeq } from '../../../SockeServer/gameRoomWsReplayBuffer'
@@ -38,7 +39,7 @@ export type FetchCurrentGameStatePayload = {
     stage: Stage
     pool: number
     commonPokes: import('texas-poker-core').Poke[]
-    boardThroughStage: Stage
+    // boardThroughStage: Stage
     defaultBets: Array<{ userId: number; balance: number; amount: number }>
     engineRoomSeatStatus: RoomStatus
     pendingFlowOps: import('texas-poker-core').PendingFlowOpKind[]
@@ -68,22 +69,17 @@ export async function buildFetchCurrentGameStatePayload(input: {
 }): Promise<FetchCurrentGameStatePayload> {
   const { texas, roomId, userId, roomGameStatus } = input
   const roomKey = String(roomId)
-  const handLifecycle = texas.controller.status as HandLifecycle
+  const handLifecycle = texas.controller.status
   const inHand = handLifecycle === 'in_hand'
 
-  const byAction = texas.dealer.getPlayersByActionSequence()
-  const actionIndexByUserId = new Map(
-    byAction.map((p, i) => [p.getUserInfo().id, i] as const)
-  )
-
-  const playersOnSeat = texas.room
-    .getPlayersBySeatStatus('on-set')
-    .map((player) => {
+  const playersOnSeat = texas.dealer
+    .getPlayersByActionSequence()
+    .map((player, actionIndex) => {
       const st = player.getStatus()
       return {
         userInfo: player.getUserInfo(),
         role: player.getRole(),
-        actionIndex: actionIndexByUserId.get(player.getUserInfo().id) ?? 0,
+        actionIndex,
         isFold: st === 'out',
         isAllIn: st === 'allIn',
         balance: player.balance,
@@ -95,7 +91,6 @@ export async function buildFetchCurrentGameStatePayload(input: {
         rankStrength: player.rankStrength
       }
     })
-    .sort((a, b) => a.actionIndex - b.actionIndex)
 
   const playersOnWatch = texas.room
     .getPlayersBySeatStatus('hang')
@@ -105,7 +100,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
     }))
 
   const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
-  const pokes = texas.dealer.getPokes()
+  const commonPokes = texas.controller.getRevealedPokes()
   const active = texas.controller.activePlayer
   const handId = texas.controller.currentHandId
 
@@ -146,8 +141,8 @@ export async function buildFetchCurrentGameStatePayload(input: {
       status: handLifecycle,
       stage: texas.controller.stage,
       pool: texas.pool.totalAmount,
-      commonPokes: inHand ? [...pokes.commonPokes] : [],
-      boardThroughStage: texas.controller.endAt,
+      commonPokes: inHand ? commonPokes : [],
+      // boardThroughStage: texas.controller.stage,
       defaultBets: inHand ? [...texas.getDefaultBet()] : [],
       engineRoomSeatStatus: texas.room.status,
       pendingFlowOps: [...texas.getPendingFlowOps()]

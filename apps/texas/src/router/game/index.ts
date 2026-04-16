@@ -106,23 +106,17 @@ router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
   const userId = ctx.state.user!.id
   const membership = await roomMember.findFirst({
     where: { userId, room: { deletedAt: null } },
-    select: { roomId: true }
+    select: {
+      roomId: true,
+      room: { select: { gameStatus: true } }
+    }
   })
   const roomId = membership?.roomId
   const texas = roomId
     ? gameRuntimeRegistry.getTexas(String(roomId))
     : undefined
-  if (!roomId || !texas) {
+  if (!roomId || !texas || !membership) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
-    return
-  }
-
-  const roomRow = await room.findFirst({
-    where: { id: roomId, deletedAt: null },
-    select: { gameStatus: true }
-  })
-  if (!roomRow) {
-    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
     return
   }
 
@@ -130,7 +124,7 @@ router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
     texas,
     roomId,
     userId,
-    roomGameStatus: roomRow.gameStatus
+    roomGameStatus: membership.room.gameStatus
   })
   response.success(ctx, payload)
 })

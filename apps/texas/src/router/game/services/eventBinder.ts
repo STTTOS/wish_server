@@ -40,6 +40,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
     onLock: async () => {
       setQuitBlocked(true)
+      texas.reset()
       // 锁座, 新加入的玩家落到观战席
       texas.lockSeats()
       await autoTopUpOnSeatPlayersAtHandLock({
