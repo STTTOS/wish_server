@@ -25,6 +25,15 @@ export type WsGameStartData = {
   matchId: number
 }
 
+/** 翻前强制盲注已入池（与 Core `BlindsPosted.posts` 一致；短码时 `amount` 可小于规定盲注） */
+export type WsGameBlindsPostedData = {
+  matchId: number
+  roomId: number
+  posts: Array<{ userId: number; amount: number; kind: 'sb' | 'bb' }>
+  /** 盲注记入后的主池总额 */
+  pool: number
+}
+
 export type WsPlayerActionRequiredData = {
   matchId: number
   userId: number
@@ -229,6 +238,7 @@ export type WsEventDataMap = {
   'player-roles-assigned': WsPlayerRolesAssignedData
   'player-hand-dealt': WsPlayerHandDealtData
   'game-start': WsGameStartData
+  'game-blinds-posted': WsGameBlindsPostedData
   'player-action-required': WsPlayerActionRequiredData
   'player-action-taken': WsPlayerActionTakenData
   'game-stage-changed': WsGameStageChangedData

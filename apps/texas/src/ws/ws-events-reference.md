@@ -106,11 +106,24 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-start`
 
-用途：本手正式开始（引擎已下盲注等）。不携带 `stage` / `pool`：客户端收到后置阶段为 `pre_flop`，底池可与首条 `player-action-taken` 等中的 `pool` 对齐。
+用途：本手正式开始（引擎已下盲注等）。不携带 `stage` / `pool`：客户端收到后置阶段为 `pre_flop`；底池可与同批稍后下发的 **`game-blinds-posted`** 或后续 `player-action-taken` 中的 `pool` 对齐。
 
 ```ts
 {
   matchId: number
+}
+```
+
+### `game-blinds-posted`
+
+用途：翻前小盲/大盲已从各玩家筹码扣入池（与 Core `BlindsPosted` 一致；短码时 `amount` 可小于规定盲注）。在 `game-start` 之后、`player-action-required` 之前下发。
+
+```ts
+{
+  matchId: number
+  roomId: number
+  posts: Array<{ userId: number; amount: number; kind: 'sb' | 'bb' }>
+  pool: number
 }
 ```
 
@@ -297,6 +310,7 @@ type WsEventType =
   | 'player-roles-assigned'
   | 'player-hand-dealt'
   | 'game-start'
+  | 'game-blinds-posted'
   | 'player-action-required'
   | 'player-action-taken'
   | 'game-stage-changed'

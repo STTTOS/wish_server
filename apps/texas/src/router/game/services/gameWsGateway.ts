@@ -72,6 +72,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }
 
+  notifyGameBlindsPosted(
+    roomKey: string,
+    data: WsMessage<'game-blinds-posted'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'game-blinds-posted', data })
+  }
+
   notifyPlayerChipTopUp(
     roomKey: string,
     data: WsMessage<'player-chip-top-up'>['data']

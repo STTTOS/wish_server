@@ -297,6 +297,15 @@ async function processTexasDomainEvent(
     }
     case 'BlindsPosted': {
       gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
+      const matchId = getRuntime().currentMatchId
+      if (matchId != null) {
+        wsGateway.notifyGameBlindsPosted(roomKey, {
+          matchId,
+          roomId,
+          posts: e.payload.posts,
+          pool: texas.pool.totalAmount
+        })
+      }
       return
     }
     case 'PostedBigBlind':
