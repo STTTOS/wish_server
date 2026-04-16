@@ -281,7 +281,7 @@ function builtInVoiceUserKey(roomId: number, userId: number): string {
 }
 
 /**
- * 牌桌内置语音：校验房间、成员、白名单；每人每房 5s 内仅可请求一次；
+ * 牌桌内置语音：校验房间、成员、在坐（on-set）、白名单；每人每房 5s 内仅可请求一次；
  * 同一房间内 WS 广播排队，相邻两次实际发出至少间隔 3s。
  * body: { roomId: number, voiceName: string }
  */
@@ -320,6 +320,16 @@ router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
   })
   if (!membership) {
     response.error(ctx, HTTP_STATUS.FORBIDDEN, '不在该房间中')
+    return
+  }
+
+  const texas = gameRuntimeRegistry.getTexas(String(roomId))
+  if (!texas) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
+    return
+  }
+  if (texas.room.getPlayerSeatStatusById(userId) !== 'on-set') {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '仅在座玩家可发送内置语音')
     return
   }
 
