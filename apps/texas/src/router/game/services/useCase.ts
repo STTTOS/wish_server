@@ -388,7 +388,8 @@ export class StartGameUseCase {
       matchStartedAt: Date.now(),
       rollbackManager,
       pendingTexasSeatRemovalUserIds: new Set(),
-      quitBlockedUntilBlindsPosted: false
+      /** 与 `eventBinder` 的 `onLock` 一致：首局从注册起至领域事件 `BlindsPosted` 处理完前禁止 FoldDueToLeave */
+      quitBlockedUntilBlindsPosted: true
     })
 
     const { drainTexasDomainEvents } = bindTexasLifecycleEvents({
@@ -413,7 +414,6 @@ export class StartGameUseCase {
       await this.#delay(
         gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs()
       )
-      gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, true)
       texas.setPlayerRoles()
       await transitionRoomGameStatus(roomId, 'starting_hand')
 

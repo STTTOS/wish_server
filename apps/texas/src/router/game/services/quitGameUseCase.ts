@@ -37,8 +37,9 @@ type QuitTxResult =
 /**
  * 退出对局：
  * - **局间**（`between_hands`）：删 `RoomMember`、立刻 `room.removeById`、广播、断 /game。
+ * - **`isQuitBlockedUntilBlindsPosted`**：`onLock`/首局注册起至领域事件 `BlindsPosted` 处理完前禁止退出（与 Core 非 `in_hand` 时 `canFoldDueToLeave` 恒为假无关）。
  * - **本手 `texas.canFoldDueToLeave(userId)` 为真**：先 `FoldDueToLeave` 并 drain，再删 `RoomMember`；环上摘座延到本手 `reset` 后。
- * - **`starting_hand`**：不可退出。
+ * - **`starting_hand`**：不可退出（与上条重叠时仍保留，防状态机与运行时标志短暂不一致）。
  */
 export class QuitGameUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
@@ -68,28 +69,33 @@ export class QuitGameUseCase {
       return { ok: true, data: null }
     }
 
-    if (pre.gameStatus === 'starting_hand') {
-      return {
-        ok: false,
-        status: HTTP_STATUS.CONFLICT,
-        message: '本手正在准备开局，请稍后再退出对局'
-      }
-    }
-
-    let didFoldDueToLeave = false
     const texasPre = gameRuntimeRegistry.getTexas(roomKey)
     if (texasPre && !texasPre.room.has(userId)) {
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
       return { ok: true, data: null }
     }
-    if (texasPre?.canFoldDueToLeave(userId)) {
-      if (gameRuntimeRegistry.isQuitBlockedUntilBlindsPosted(roomKey)) {
-        return {
-          ok: false,
-          status: HTTP_STATUS.CONFLICT,
-          message: '本手已从倒计时锁定至开牌前，请在盲注公布后再退出对局'
-        }
+
+    if (pre.gameStatus === 'starting_hand') {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '本手正在准备开局, 请在盲注公布后再退出对局'
       }
+    }
+
+    if (
+      texasPre &&
+      gameRuntimeRegistry.isQuitBlockedUntilBlindsPosted(roomKey)
+    ) {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '本手已从锁定至盲注完成前，请在盲注公布后再退出对局'
+      }
+    }
+
+    let didFoldDueToLeave = false
+    if (texasPre?.canFoldDueToLeave(userId)) {
       try {
         texasPre.dispatchCommand({ type: 'FoldDueToLeave', playerId: userId })
         await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
