@@ -19,7 +19,6 @@ export function createTexasAndSeatPlayers(params: {
     lowestBetAmount: roomInfo.lowestBetAmount,
     maximumCountOfPlayers: MAX_PLAYERS_COUNT,
     initialChips: roomInfo.initialChips,
-    thinkingTime: roomInfo.thinkingTime,
     user: { id: roomInfo.owner.id, name: roomInfo.owner.name }
   })
 
