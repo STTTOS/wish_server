@@ -1,0 +1,17 @@
+{
+  "name": "@wishufree/texas-ws-contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Texas game HTTP/WS shared contract types",
+  "types": "index.d.ts",
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "peerDependencies": {
+    "texas-poker-core": ">=1.4.18"
+  }
+}

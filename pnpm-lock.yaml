@@ -171,6 +171,9 @@ importers:
 
   apps/texas:
     dependencies:
+      '@wishufree/texas-ws-contract':
+        specifier: workspace:*
+        version: link:../../packages/texas-ws-contract
       redis:
         specifier: ^5.11.0
         version: 5.11.0
@@ -198,6 +201,12 @@ importers:
         version: 8.57.1
 
   packages/prettier-config: {}
+
+  packages/texas-ws-contract:
+    dependencies:
+      texas-poker-core:
+        specifier: '>=1.4.18'
+        version: 1.4.19
 
   packages/tsconfig: {}
 
