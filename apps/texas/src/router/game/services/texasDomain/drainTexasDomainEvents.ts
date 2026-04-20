@@ -1,16 +1,21 @@
 import type { Player } from 'texas-poker-core'
 import type { ActionType } from '@prisma/texas-client'
-import type { TexasDomainEvent } from 'texas-poker-core'
 import type { TexasEventContext } from './texasEventContext'
 import type { WsMatchOverview } from '../../../../ws/ws-event-types'
 
 import { Prisma } from '@prisma/texas-client'
+import {
+  TexasError,
+  isFatalTexasErrorCode,
+  type TexasDomainEvent
+} from 'texas-poker-core'
 
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
+import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import {
   clearPlayerTurnTimeout,
@@ -149,7 +154,6 @@ async function handleHandEnded(
         commonPokes: p.pokesRevealed,
         bestRankCategory: p.bestRankCategory,
         endedAt: gameEndAt,
-        lastActionStage: p.currentStage,
         boardThroughStage: p.endStage,
         bestPokes: p.bestPokes,
         totalBetAmount
@@ -211,9 +215,7 @@ async function handleHandEnded(
       matchId: currentMatchId,
       settleList: buildSettleListForViewer(viewerUserId),
       matchOverview,
-      lastActionStage: p.currentStage,
       boardThroughStage: p.endStage,
-      pokesToReveal: p.pokesRevealed,
       bestRankCategory: p.bestRankCategory,
       gameDuration: Math.floor(
         (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
@@ -283,11 +285,20 @@ async function processTexasDomainEvent(
       )
       wsGateway.notifyRolesAssigned(roomKey, {
         matchId: currentMatchId,
-        roles: players.map((pl) => ({
-          userId: pl.userId,
-          role: pl.role,
-          actionIndex: pl.actionIndex
-        }))
+        roles: players.map((pl) => {
+          const player = texas.dealer.getById(pl.userId)
+          if (!player) {
+            logger.error(
+              `[RolesAssigned] player missing userId=${pl.userId} matchId=${currentMatchId}`
+            )
+          }
+          return {
+            userId: pl.userId,
+            role: pl.role,
+            actionIndex: pl.actionIndex,
+            balance: player?.balance ?? roomInfo.initialChips
+          }
+        })
       })
       return
     }
@@ -333,7 +344,10 @@ async function processTexasDomainEvent(
         wsGateway.notifyGameBlindsPosted(roomKey, {
           matchId,
           roomId,
-          posts: e.payload.posts,
+          posts: e.payload.posts.map((post) => ({
+            ...post,
+            balance: texas.dealer.getById(post.userId)?.balance ?? 0
+          })),
           pool: texas.pool.totalAmount
         })
       }
@@ -489,9 +503,33 @@ async function drainPendingFlowQueueWithPacing(
   }
 }
 
+function scheduleDeferredPendingFlowPacing(ctx: TexasEventContext): void {
+  void (async () => {
+    try {
+      await drainPendingFlowQueueWithPacing(ctx)
+    } catch (e: unknown) {
+      if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+        await handleFatalTexasEngineError({
+          error: e,
+          roomId: ctx.roomId,
+          roomKey: ctx.roomKey,
+          getRuntime: ctx.getRuntime
+        })
+      } else {
+        logger.error('[texas domain] deferred pacing failed', e)
+      }
+    }
+  })()
+}
+
 export type DrainAndInterpretOptions = {
   /** Core 同步返回的一批事件（已 drain，须先解释再消费队列） */
   preEvents?: readonly TexasDomainEvent[]
+  /**
+   * 为 true 时：只 await `preEvents` 解释与 `drainBufferedDomainEvents`；
+   * `pendingFlowOps` 节拍队列在后台继续跑，不阻塞 HTTP 响应。
+   */
+  deferPacing?: boolean
 }
 
 /**
@@ -506,5 +544,9 @@ export async function drainAndInterpretTexas(
     await interpretTexasDomainEvents(ctx, options.preEvents)
   }
   await drainBufferedDomainEvents(ctx)
+  if (options?.deferPacing) {
+    scheduleDeferredPendingFlowPacing(ctx)
+    return
+  }
   await drainPendingFlowQueueWithPacing(ctx)
 }

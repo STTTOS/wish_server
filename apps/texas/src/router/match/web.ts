@@ -68,7 +68,6 @@ router.post(matchWebApi('/list'), async (ctx) => {
       commonPokes: true,
       lowestBetAmount: true,
       endedAt: true,
-      lastActionStage: true,
       boardThroughStage: true,
       playerMatchRecords: {
         select: {

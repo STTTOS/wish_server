@@ -78,7 +78,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
           name: ramdomName,
           username,
           password,
-          balance: 20_000,
+          balance: 0,
           settings: {
             create: {}
           }

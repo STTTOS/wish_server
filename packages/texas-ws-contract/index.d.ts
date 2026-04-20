@@ -12,6 +12,8 @@ export type WsPlayerRolesAssignedData = {
     userId: number
     role: RoleEnum
     actionIndex: number
+    /** 本手开局、贴盲注前的桌上可下注余额（引擎真值；续局时未必等于房间 initialChips） */
+    balance: number
   }>
 }
 
@@ -28,7 +30,7 @@ export type WsGameStartData = {
 export type WsGameBlindsPostedData = {
   matchId: number
   roomId: number
-  posts: Array<{ userId: number; amount: number; kind: 'sb' | 'bb' }>
+  posts: Array<{ userId: number; amount: number; kind: 'sb' | 'bb'; balance: number }>
   pool: number
 }
 

@@ -313,8 +313,6 @@ model Match {
   endedAt           DateTime?
   // 总的下注额度
   totalBetAmount    Float?
-  // 最后一轮可操作下注结束时控制器所处阶段（与引擎 onGameEnd.currentStage 一致）
-  lastActionStage   Stage?
   // 本手公共牌实际发到哪一街（与引擎 onGameEnd.endStage 一致；可能与 lastActionStage 不同，如 turn 全下后发到 river）
   boardThroughStage Stage?
   // 公共牌

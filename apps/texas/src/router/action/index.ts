@@ -47,7 +47,8 @@ router.post(toolsApi('/take'), async (ctx) => {
       actionToTableCommand(user.id, actionType, amount)
     )
     await drainAndInterpretTexas(getTexasEventContextForRoom(roomId), {
-      preEvents
+      preEvents,
+      deferPacing: true
     })
     response.success(ctx)
   } catch (e: unknown) {

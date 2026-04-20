@@ -79,7 +79,8 @@ export class TakeActionUseCase {
         actionToTableCommand(userId, actionType, amount)
       )
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
-        preEvents
+        preEvents,
+        deferPacing: true
       })
       return { ok: true, data: null }
     } catch (e: unknown) {
