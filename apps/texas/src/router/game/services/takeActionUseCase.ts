@@ -75,10 +75,12 @@ export class TakeActionUseCase {
     }
 
     try {
-      await texas.dispatchCommand(
+      const preEvents = texas.dispatchCommand(
         actionToTableCommand(userId, actionType, amount)
       )
-      await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+      await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
+        preEvents
+      })
       return { ok: true, data: null }
     } catch (e: unknown) {
       if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {

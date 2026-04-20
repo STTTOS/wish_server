@@ -279,10 +279,12 @@ async function processOneDue(roomKey: string, p: PendingTurn): Promise<void> {
   }
 
   try {
-    await texas.dispatchCommand(cmd)
+    const preEvents = texas.dispatchCommand(cmd)
     const { drainAndInterpretTexas } = await import('./drainTexasDomainEvents')
     const { getTexasEventContextForRoom } = await import('./texasEventContext')
-    await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+    await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
+      preEvents
+    })
   } catch (e: unknown) {
     if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
       await handleFatalTexasEngineError({

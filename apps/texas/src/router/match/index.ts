@@ -18,6 +18,7 @@ import {
   gameRuntimeRegistry,
   getCurrentMatchIdWithFallback
 } from '../game/services/runtimeKit'
+import { getScheduledPlayerTurnDeadline } from '../game/services/texasDomain/playerTurnTimeoutScheduler'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
@@ -429,9 +430,20 @@ router.post(matchApi('/currentState'), async (ctx) => {
     }))
 
   const activePlayer = texas.controller.activePlayer
+  const activeUserId = activePlayer?.getUserInfo().id
+  const scheduled = getScheduledPlayerTurnDeadline(String(roomId))
+  const serverNow = Date.now()
+  const turnAligns =
+    activeUserId != null &&
+    scheduled != null &&
+    scheduled.userId === activeUserId &&
+    texas.controller.currentHandId === scheduled.handId
+
   const activePlayerInfo = {
     userInfo: activePlayer?.getUserInfo(),
-    remainThinkTime: activePlayer?.getRemainThinkTime()
+    /** 与 WS `player-action-required` 一致：剩余时间用 `deadlineAt - 本地 now`，可结合 `serverNow` 估时钟偏差 */
+    deadlineAt: turnAligns ? scheduled.deadlineAt : null,
+    serverNow: turnAligns ? serverNow : undefined
   }
 
   response.success(ctx, {

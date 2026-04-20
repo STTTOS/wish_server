@@ -9,6 +9,7 @@ export const {
   announcement,
   announcementRead,
   match,
+  matchDomainEvent,
   matchStageTimeRecord,
   playerMatchRecord,
   room,

@@ -336,6 +336,26 @@ model Match {
 
   matchError               MatchError[]
   roomChipTopUpsAfterMatch RoomChipTopUp[]
+  /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
+  domainEvents             MatchDomainEvent[]
+}
+
+/// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）
+model MatchDomainEvent {
+  id        Int      @id @default(autoincrement())
+  matchId   Int
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  roomId    Int
+  /// 会话级事件为 null；本手事件同 Core `handId`
+  handId    String?  @db.VarChar(16)
+  seq       Int
+  eventType String   @db.VarChar(48)
+  payload   Json
+
+  createdAt DateTime @default(now())
+
+  @@index([matchId, id])
+  @@index([matchId, handId, seq])
 }
 
 model MatchStageTimeRecord {

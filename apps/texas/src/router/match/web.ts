@@ -2,11 +2,13 @@ import dayjs from 'dayjs'
 import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
+import { logger } from '../../logger'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
+import { loadMatchCompositeReadModelFromDbTape } from '../game/services/matchReplayReadModel'
 import {
   user,
   match,
@@ -266,4 +268,34 @@ router.post(matchWebApi('/players/:matchId'), async (ctx) => {
     }
   })
   response.success(ctx, { list })
+})
+
+/** 管理员：从 DB 磁带重放并返回 Core 复合读模型（含底牌等敏感字段，勿对非管理员开放） */
+router.post(matchWebApi('/replay-composite/:matchId'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  const matchId = Number(ctx.params.matchId)
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
+    return
+  }
+  if (isNaN(matchId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
+    return
+  }
+  const loginUser = await user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true }
+  })
+  if (!loginUser?.isAdmin) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权限')
+    return
+  }
+  try {
+    const { tapeIssues, compositeReadModel } =
+      await loadMatchCompositeReadModelFromDbTape(matchId)
+    response.success(ctx, { tapeIssues, compositeReadModel })
+  } catch (err) {
+    logger.error('[match/replay-composite] failed', err)
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '回放投影失败')
+  }
 })

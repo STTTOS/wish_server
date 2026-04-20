@@ -414,22 +414,22 @@ export class StartGameUseCase {
       await this.#delay(
         gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs()
       )
-      texas.setPlayerRoles()
+      const roleEvents = texas.setPlayerRoles()
       await transitionRoomGameStatus(roomId, 'starting_hand')
 
-      await drainTexasDomainEvents()
+      await drainTexasDomainEvents(roleEvents)
       // 角色分配完成后, 等待2秒再发牌
       await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
-      texas.dealCards()
-      await drainTexasDomainEvents()
+      const dealEvents = texas.dealCards()
+      await drainTexasDomainEvents(dealEvents)
       rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
         rtForSnapshot.currentMatchId
       )
 
       // 发牌3秒后再开始游戏
       await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
-      texas.start()
-      await drainTexasDomainEvents()
+      const startEvents = texas.start()
+      await drainTexasDomainEvents(startEvents)
       await transitionRoomGameStatus(roomId, 'in_hand')
     } catch (e: unknown) {
       if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {

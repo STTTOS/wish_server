@@ -43,10 +43,12 @@ router.post(toolsApi('/take'), async (ctx) => {
   }
 
   try {
-    await texas.dispatchCommand(
+    const preEvents = texas.dispatchCommand(
       actionToTableCommand(user.id, actionType, amount)
     )
-    await drainAndInterpretTexas(getTexasEventContextForRoom(roomId))
+    await drainAndInterpretTexas(getTexasEventContextForRoom(roomId), {
+      preEvents
+    })
     response.success(ctx)
   } catch (e: unknown) {
     if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {

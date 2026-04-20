@@ -97,8 +97,13 @@ export class QuitGameUseCase {
     let didFoldDueToLeave = false
     if (texasPre?.canFoldDueToLeave(userId)) {
       try {
-        texasPre.dispatchCommand({ type: 'FoldDueToLeave', playerId: userId })
-        await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+        const preEvents = texasPre.dispatchCommand({
+          type: 'FoldDueToLeave',
+          playerId: userId
+        })
+        await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
+          preEvents
+        })
         didFoldDueToLeave = true
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {

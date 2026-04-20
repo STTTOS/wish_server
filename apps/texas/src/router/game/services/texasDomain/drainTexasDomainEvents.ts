@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/texas-client'
 
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
+import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
@@ -24,6 +25,33 @@ import prisma, {
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
+}
+
+/** Append-only 领域事件磁带，供回放；`createdAt` 由 DB 默认即可推算思考间隔 */
+async function appendMatchDomainEventTapeFromCtx(
+  ctx: TexasEventContext,
+  e: TexasDomainEvent
+): Promise<void> {
+  const matchId = ctx.getRuntime().currentMatchId
+  if (matchId == null) return
+  try {
+    await appendMatchDomainEventTape({
+      matchId,
+      roomId: ctx.roomId,
+      event: e
+    })
+  } catch (err) {
+    logger.warn('[MatchDomainEvent] append failed', err)
+  }
+}
+
+async function interpretTexasDomainEvents(
+  ctx: TexasEventContext,
+  events: readonly TexasDomainEvent[]
+): Promise<void> {
+  for (const ev of events) {
+    await processTexasDomainEvent(ctx, ev)
+  }
 }
 
 function rankSignatureForDb(player: Player): string | null {
@@ -64,7 +92,8 @@ async function handleHandEnded(
       return
     }
 
-    texas.settle()
+    const settleEvents = texas.settle()
+    await interpretTexasDomainEvents(ctx, settleEvents)
     await flushEventsAfterSettle(ctx)
 
     const seated = texas.room.getPlayersBySeatStatus('on-set')
@@ -217,6 +246,8 @@ async function processTexasDomainEvent(
   e: TexasDomainEvent
 ): Promise<void> {
   const { texas, roomId, roomKey, roomInfo, wsGateway, getRuntime } = ctx
+
+  await appendMatchDomainEventTapeFromCtx(ctx, e)
 
   switch (e.type) {
     case 'RolesAssigned': {
@@ -444,24 +475,36 @@ async function drainPendingFlowQueueWithPacing(
   while (texas.getPendingFlowOps().length > 0) {
     const [head] = texas.getPendingFlowOps()
     if (head === 'stage_advance') {
-      texas.applyPendingStageAdvance()
+      const stepEvents = texas.applyPendingStageAdvance()
+      await interpretTexasDomainEvents(ctx, stepEvents)
       await drainBufferedDomainEvents(ctx)
       if (texas.getPendingFlowOps().length > 0) {
         await sleep(betweenStagesMs)
       }
     } else {
-      texas.flushPendingTurnHandoff()
+      const stepEvents = texas.flushPendingTurnHandoff()
+      await interpretTexasDomainEvents(ctx, stepEvents)
       await drainBufferedDomainEvents(ctx)
     }
   }
 }
 
+export type DrainAndInterpretOptions = {
+  /** Core 同步返回的一批事件（已 drain，须先解释再消费队列） */
+  preEvents?: readonly TexasDomainEvent[]
+}
+
 /**
- * 排空 Texas 领域事件缓冲并按运行时配置节拍消费 `pendingFlowOps`。
+ * 解释领域事件并按运行时配置节拍消费 `pendingFlowOps`。
+ * 与 texas-poker-core 同步返回 API 对齐：`dispatchCommand` / `applyPendingStageAdvance` 等返回值经 `preEvents` 传入。
  */
 export async function drainAndInterpretTexas(
-  ctx: TexasEventContext
+  ctx: TexasEventContext,
+  options?: DrainAndInterpretOptions
 ): Promise<void> {
+  if (options?.preEvents?.length) {
+    await interpretTexasDomainEvents(ctx, options.preEvents)
+  }
   await drainBufferedDomainEvents(ctx)
   await drainPendingFlowQueueWithPacing(ctx)
 }

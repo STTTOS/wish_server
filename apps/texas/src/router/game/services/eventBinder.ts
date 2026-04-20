@@ -1,6 +1,10 @@
 import type { BindTexasLifecycleParams } from './types'
 
-import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
+import {
+  TexasError,
+  isFatalTexasErrorCode,
+  type TexasDomainEvent
+} from 'texas-poker-core'
 
 import { match } from '../../../models'
 import { transitionRoomGameStatus } from './stateMachine'
@@ -15,7 +19,9 @@ import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngin
  * Core 固定经 `pendingFlowOps` 延迟进街与交权；由 `drainAndInterpretTexas` 消费并带可配置 sleep。
  */
 export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
-  drainTexasDomainEvents: () => Promise<void>
+  drainTexasDomainEvents: (
+    preEvents?: readonly TexasDomainEvent[]
+  ) => Promise<void>
 } {
   const { texas, roomId, roomKey, roomInfo, runtimeRegistry, wsGateway } =
     params
@@ -32,7 +38,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     wsGateway,
     getRuntime
   })
-  const drainTexasDomainEvents = () => drainAndInterpretTexas(ctx)
+  const drainTexasDomainEvents = (preEvents?: readonly TexasDomainEvent[]) =>
+    drainAndInterpretTexas(ctx, preEvents?.length ? { preEvents } : undefined)
 
   registerNextHandHooks(roomId, {
     canStart: () =>
@@ -63,8 +70,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     onAssignRoles: async () => {
       try {
         // 根据新加入/离开的玩家 重排位置, 并将位置信息推送给客户端
-        texas.setPlayerRoles('rearrange')
-        await drainTexasDomainEvents()
+        const roleEvents = texas.setPlayerRoles('rearrange')
+        await drainTexasDomainEvents(roleEvents)
         getRuntime().rollbackManager.snapshotPlayersAtHandStart(
           getRuntime().currentMatchId!
         )
@@ -82,8 +89,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     },
     onDeal: async () => {
       try {
-        texas.dealCards()
-        await drainTexasDomainEvents()
+        const dealEvents = texas.dealCards()
+        await drainTexasDomainEvents(dealEvents)
         getRuntime().rollbackManager.snapshotPlayersAtHandStart(
           getRuntime().currentMatchId!
         )
@@ -101,8 +108,8 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     },
     onStart: async () => {
       try {
-        texas.start()
-        await drainTexasDomainEvents()
+        const startEvents = texas.start()
+        await drainTexasDomainEvents(startEvents)
         await transitionRoomGameStatus(roomId, 'in_hand')
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
