@@ -97,6 +97,18 @@ async function handleHandEnded(
       return
     }
 
+    // 仍有一条街的 endAt 未写（例如跑马路未为后续亮牌街建表）：只闭合「最新一条」仍为 null 的时间轴
+    const openStageRow = await matchStageTimeRecord.findFirst({
+      where: { matchId: currentMatchId, endAt: null },
+      orderBy: [{ startAt: 'desc' }, { id: 'desc' }]
+    })
+    if (openStageRow) {
+      await matchStageTimeRecord.update({
+        where: { id: openStageRow.id },
+        data: { endAt: gameEndAt }
+      })
+    }
+
     const settleEvents = texas.settle()
     await interpretTexasDomainEvents(ctx, settleEvents)
     await flushEventsAfterSettle(ctx)
