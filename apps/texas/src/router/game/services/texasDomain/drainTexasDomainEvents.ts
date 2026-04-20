@@ -408,18 +408,22 @@ async function processTexasDomainEvent(
     case 'StageAdvanced': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      await matchStageTimeRecord.update({
+      // `update` 按 matchId_stage 在记录不存在时会抛 Prisma P2025（Record not found）。
+      // 跑马路多段亮牌时，后续 fromStage 可能从未 insert（未为纯亮牌街建表），故用 updateMany：无行则 0 更新、不抛错。
+      await matchStageTimeRecord.updateMany({
         where: {
-          matchId_stage: {
-            matchId,
-            stage: e.payload.fromStage
-          }
+          matchId,
+          stage: e.payload.fromStage,
+          endAt: null
         },
         data: { endAt: new Date() }
       })
-      await matchStageTimeRecord.create({
-        data: { matchId, stage: e.payload.toStage }
-      })
+      // 跑马路仅亮公牌：关闭 fromStage 即可，不为 toStage 建新行
+      if (e.payload.advanceKind !== 'runout_reveal') {
+        await matchStageTimeRecord.create({
+          data: { matchId, stage: e.payload.toStage }
+        })
+      }
       wsGateway.notifyStageChanged(roomKey, {
         matchId,
         stage: e.payload.toStage,
