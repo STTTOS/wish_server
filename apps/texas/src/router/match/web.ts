@@ -89,13 +89,13 @@ router.post(matchWebApi('/list'), async (ctx) => {
     ctx,
     withList(
       list.map(({ matchError, playerMatchRecords, ...rest }) => {
-        const { code, id, initialChips } = rest.room
+        const { activeCode, id, initialChips } = rest.room
 
         return {
           ...rest,
           roomId: id,
           initialChips,
-          roomCode: code,
+          roomCode: activeCode ?? '',
           memberCount: playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
           endedAt: dayjs(rest.endedAt).format(timeFormat),

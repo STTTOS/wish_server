@@ -121,8 +121,6 @@ model MatchError {
 
 model Room {
   id              Int             @id @default(autoincrement())
-  // 房间代码（历史展示保留）
-  code            String
   // 当前可用于邀请加入的 code（软删时置空以释放码空间）
   activeCode      String?         @unique
   // 房间在业务侧的对局状态；语义见 schema 中 RoomGameStatus 各枚举注释

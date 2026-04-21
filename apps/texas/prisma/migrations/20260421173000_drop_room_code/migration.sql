@@ -1,0 +1,2 @@
+ALTER TABLE `Room`
+  DROP COLUMN `code`;

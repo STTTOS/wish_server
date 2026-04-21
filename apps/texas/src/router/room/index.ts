@@ -77,7 +77,7 @@ router.post(roomApiClient('/list'), async (ctx) => {
   const result = rooms.map(
     ({
       id,
-      code,
+      activeCode,
       lowestBetAmount,
       thinkingTime,
       createdAt,
@@ -88,7 +88,7 @@ router.post(roomApiClient('/list'), async (ctx) => {
     }) => {
       return {
         id,
-        code,
+        code: activeCode ?? '',
         owner: {
           ...owner,
           pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
@@ -195,7 +195,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
   }
   const {
     id,
-    code,
+    activeCode,
     isPrivate,
     thinkingTime,
     lowestBetAmount,
@@ -206,7 +206,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
 
   response.success(ctx, {
     id,
-    code,
+    code: activeCode ?? '',
     owner: {
       ...owner,
       pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'

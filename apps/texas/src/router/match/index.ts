@@ -116,7 +116,7 @@ router.post(matchApi('/list'), async (ctx) => {
   const listForResponse = records.map(({ match, ...restRecord }) => {
     const {
       id: matchId,
-      room: { code: roomCode, initialChips },
+      room: { activeCode, initialChips },
       _count,
       startedAt,
       endedAt,
@@ -126,7 +126,7 @@ router.post(matchApi('/list'), async (ctx) => {
       ...restRecord,
       ...restMatch,
       matchId,
-      roomCode,
+      roomCode: activeCode ?? '',
       initialChips,
       replaySupported: _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
@@ -155,7 +155,7 @@ router.post(matchApi('/rooms'), async (ctx) => {
     .sort((a, b) => b.lastMatchAt.getTime() - a.lastMatchAt.getTime())
     .map((stat) => ({
       roomId: stat.roomId,
-      roomCode: stat.room.code,
+      roomCode: stat.room.activeCode ?? '',
       lowestBetAmount: stat.room.lowestBetAmount,
       thinkingTime: stat.room.thinkingTime,
       isPrivate: stat.room.isPrivate,
@@ -308,7 +308,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   }
 
   const {
-    room: { code: roomCode, id: roomId, initialChips },
+    room: { activeCode, id: roomId, initialChips },
     endedAt,
     records,
     startedAt,
@@ -390,7 +390,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   response.success(ctx, {
     ...restMatchInfo,
     roomId,
-    roomCode,
+    roomCode: activeCode ?? '',
     initialChips,
     memberCount: playerMatchRecords.length,
     startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
@@ -505,7 +505,7 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       /** 本局是否在 `MatchDomainEvent` 落过领域事件磁带；历史对局可能为 false，仅可展示结算等、无 tape 回放 */
       replaySupported,
       roomId: matchInfo.roomId,
-      roomCode: matchInfo.room.code,
+      roomCode: matchInfo.room.activeCode ?? '',
       initialChips: matchInfo.room.initialChips,
       lowestBetAmount: matchInfo.room.lowestBetAmount,
       thinkingTime: matchInfo.room.thinkingTime,

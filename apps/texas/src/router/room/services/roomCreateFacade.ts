@@ -87,7 +87,7 @@ export class RoomCreateFacade {
             room: {
               select: {
                 id: true,
-                code: true,
+                activeCode: true,
                 ownerId: true
               }
             }
@@ -101,7 +101,7 @@ export class RoomCreateFacade {
               kind: 'existing' as const,
               data: {
                 roomId: joinedRoom.room.id,
-                roomCode: joinedRoom.room.code
+                roomCode: joinedRoom.room.activeCode ?? ''
               }
             }
           }
@@ -118,7 +118,6 @@ export class RoomCreateFacade {
           try {
             const createdRoom = await tx.room.create({
               data: {
-                code: roomCode,
                 activeCode: roomCode,
                 isPrivate,
                 thinkingTime,
@@ -151,7 +150,7 @@ export class RoomCreateFacade {
               if (targets.includes('activeOwnerId')) {
                 const existed = await tx.room.findFirst({
                   where: { activeOwnerId: userId },
-                  select: { id: true, code: true }
+                  select: { id: true, activeCode: true }
                 })
                 if (existed) {
                   // 并发冲突下幂等：唯一约束命中后返回已存在房间
@@ -160,7 +159,7 @@ export class RoomCreateFacade {
                     kind: 'existing' as const,
                     data: {
                       roomId: existed.id,
-                      roomCode: existed.code
+                      roomCode: existed.activeCode ?? ''
                     }
                   }
                 }
@@ -173,7 +172,6 @@ export class RoomCreateFacade {
 
               if (
                 targets.includes('activeCode') ||
-                targets.includes('code') ||
                 targets.includes('Room_activeCode_key')
               ) {
                 continue
