@@ -8,7 +8,6 @@ import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
-import { loadMatchReplayTapeForViewer } from '../game/services/matchReplayReadModel'
 import {
   match,
   roomMember,
@@ -20,6 +19,10 @@ import {
   getCurrentMatchIdWithFallback
 } from '../game/services/runtimeKit'
 import { getScheduledPlayerTurnDeadline } from '../game/services/texasDomain/playerTurnTimeoutScheduler'
+import {
+  loadMatchReplayTapeForViewer,
+  loadMatchCompositeReadModelFromDbTape
+} from '../game/services/matchReplayReadModel'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
@@ -393,7 +396,8 @@ router.post(matchApi('/detail'), async (ctx) => {
 
 /**
  * 回放磁带（参与者可见）：返回按 DB 追加顺序的领域事件磁带。
- * 仅保留本人私牌，其他玩家 `HoleCardsDealt` 会脱敏为空数组。
+ * 仅保留本人私牌，其他玩家 `HoleCardsDealt` 会脱敏为空数组；
+ * 同时返回按 viewer 掩码后的终局 `settleList`（排序与线上 game-end 一致）。
  */
 router.post(matchApi('/replayTape'), async (ctx) => {
   const userId = ctx.state.user!.id
@@ -435,7 +439,51 @@ router.post(matchApi('/replayTape'), async (ctx) => {
     return
   }
 
-  const replay = await loadMatchReplayTapeForViewer(matchId, userId)
+  const [replay, replayComposite] = await Promise.all([
+    loadMatchReplayTapeForViewer(matchId, userId),
+    loadMatchCompositeReadModelFromDbTape(matchId)
+  ])
+  const isNoShowdownSingleWinner =
+    replayComposite.compositeReadModel.lastHandEnded?.showHandPokes === false
+  const unfoldedOnSetCount = matchInfo.playerMatchRecords.filter(
+    (record) => !record.isFold
+  ).length
+  const settleList = [...matchInfo.playerMatchRecords]
+    .sort((a, b) => {
+      if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+      if (!a.isFold && !b.isFold) {
+        if (a.rankStrength !== b.rankStrength) {
+          return b.rankStrength - a.rankStrength
+        }
+        return (Number(b.wager) || 0) - (Number(a.wager) || 0)
+      }
+      return (Number(b.wager) || 0) - (Number(a.wager) || 0)
+    })
+    .map((record) => {
+      const isSelf = record.userId === userId
+      const hideHoleCardsFromViewer =
+        !isSelf && (record.isFold || isNoShowdownSingleWinner)
+      const visible = settleRecordVisibleFields({
+        isSelf,
+        isFold: record.isFold,
+        hideHoleCardsFromViewer,
+        handPokes: record.handPokes,
+        rankCategory: record.rankCategory,
+        rankStrength: record.rankStrength
+      })
+      return {
+        userId: record.userId,
+        balance: Number(record.balanceAfterHand ?? 0),
+        wager: record.wager,
+        isAllIn: record.isAllIn,
+        isFold: record.isFold,
+        canVoluntaryShowHand: record.isFold || unfoldedOnSetCount === 1,
+        handPokes: visible.handPokes,
+        rankCategory: visible.rankCategory,
+        rankStrength: visible.rankStrength
+      }
+    })
+
   response.success(ctx, {
     meta: {
       matchId: matchInfo.id,
@@ -457,12 +505,13 @@ router.post(matchApi('/replayTape'), async (ctx) => {
         avatarUrl: record.user.avatarUrl,
         balanceAtHandStart: record.balanceAtHandStart,
         avatarKey: record.user.avatarKey,
-        pokerBackgroundKey: record.user.pokerBackgroundKey,
-        balanceAfterHand: record.balanceAfterHand
+        pokerBackgroundKey: record.user.pokerBackgroundKey
+        // balanceAfterHand: record.balanceAfterHand
       }))
     },
     tape: replay.tape,
-    tapeIssues: replay.tapeIssues
+    tapeIssues: replay.tapeIssues,
+    settleList
   })
 })
 
