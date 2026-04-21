@@ -32,7 +32,7 @@ export class RoomMembersFacade {
   constructor(private readonly gateway: WaitingRoomGateway) {}
 
   async execute(input: {
-    roomCode: string
+    roomId: number
     userId: number
   }): Promise<GetRoomMembersResult> {
     const auth = await validateRoomMembersAuth(input)

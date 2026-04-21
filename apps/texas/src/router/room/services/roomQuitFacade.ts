@@ -21,10 +21,10 @@ export class RoomQuitFacade {
   constructor(private readonly waitingRoomGateway: WaitingRoomGateway) {}
 
   async execute(input: {
-    roomCode: unknown
+    roomId: unknown
     userId: number
   }): Promise<RoomQuitResult> {
-    const auth = await validateRoomQuitAuth({ roomCode: input.roomCode })
+    const auth = await validateRoomQuitAuth({ roomId: input.roomId })
     if (!auth.ok) return auth
 
     // 房间已软删：幂等退出，只保证 socket 状态一致

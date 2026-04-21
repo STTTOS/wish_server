@@ -142,23 +142,23 @@ router.post(roomApiClient('/join'), async (ctx) => {
 
 // 客户端：退出房间（幂等：房间已删、或已不在成员表中、或重复调用均返回成功）
 router.post(roomApiClient('/quit'), async (ctx) => {
-  const { roomCode } = ctx.request.body as { roomCode?: unknown }
+  const { roomId } = ctx.request.body as { roomId?: unknown }
   const userId = ctx.state.user!.id
 
-  const result = await roomQuitFacade.execute({ roomCode, userId })
+  const result = await roomQuitFacade.execute({ roomId, userId })
   respondFromApiResult(ctx, result, { okMessage: '已退出房间', okData: null })
 })
 
 // 客户端：房主踢人
 router.post(roomApiClient('/kick'), async (ctx) => {
-  const { roomCode, targetUserId } = ctx.request.body as {
-    roomCode?: unknown
+  const { roomId, targetUserId } = ctx.request.body as {
+    roomId?: unknown
     targetUserId?: unknown
   }
   const operatorId = ctx.state.user!.id
 
   const result = await roomKickFacade.execute({
-    roomCode,
+    roomId,
     targetUserId,
     operatorId
   })
@@ -167,16 +167,15 @@ router.post(roomApiClient('/kick'), async (ctx) => {
 
 // 客户端：查询房间详情（思考时间、是否公开、大盲注）
 router.post(roomApiClient('/detail'), async (ctx) => {
-  const { roomCode }: { roomCode?: string } = ctx.request.body
-
-  if (!roomCode || !roomCode.trim()) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomCode')
+  const roomId = Number((ctx.request.body as { roomId?: unknown })?.roomId)
+  if (!Number.isFinite(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
 
   const roomInfo = await room.findUnique({
     where: {
-      code: roomCode.trim().toUpperCase()
+      id: roomId
     },
     include: {
       owner: {
@@ -223,14 +222,14 @@ router.post(roomApiClient('/detail'), async (ctx) => {
 
 /**
  * 客户端：查询房间成员列表（含 `isOnline` / `isWaitingRoomOnline`）。
- * Body: `roomCode`（必填）。房间摘要请用 `.../room/detail`。
+ * Body: `roomId`（必填）。房间摘要请用 `.../room/detail`。
  */
 router.post(roomApiClient('/members'), async (ctx) => {
-  const { roomCode } = ctx.request.body as { roomCode?: string }
+  const roomId = Number((ctx.request.body as { roomId?: unknown })?.roomId)
   const userId = ctx.state.user!.id
 
   const result = await roomMembersFacade.execute({
-    roomCode: roomCode ?? '',
+    roomId,
     userId
   })
   if (!result.ok) {

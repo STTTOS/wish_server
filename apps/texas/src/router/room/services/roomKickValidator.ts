@@ -7,27 +7,27 @@ export type RoomKickAuthData = { roomId: number }
 export type RoomKickAuthResult = ApiResult<RoomKickAuthData>
 
 export async function validateRoomKickAuth(input: {
-  roomCode: unknown
+  roomId: unknown
   targetUserId: unknown
   operatorId: number
 }): Promise<RoomKickAuthResult> {
-  const { roomCode, targetUserId, operatorId } = input
+  const { targetUserId, operatorId } = input
+  const roomId = Number(input.roomId)
   if (
-    typeof roomCode !== 'string' ||
-    !roomCode.trim() ||
+    !Number.isFinite(roomId) ||
+    roomId <= 0 ||
     typeof targetUserId !== 'number' ||
     !Number.isFinite(targetUserId)
   ) {
     return {
       ok: false,
       status: HTTP_STATUS.BAD_REQUEST,
-      message: '参数异常：需要 roomCode 和 targetUserId'
+      message: '参数异常：需要 roomId 和 targetUserId'
     }
   }
 
-  const code = roomCode.trim().toUpperCase()
   const roomInfo = await room.findUnique({
-    where: { code },
+    where: { id: roomId },
     select: { id: true, ownerId: true, gameStatus: true, deletedAt: true }
   })
 
