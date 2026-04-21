@@ -387,9 +387,11 @@ model BetRecord {
   match   Match? @relation(fields: [matchId], references: [id], onDelete: Cascade)
   matchId Int?
 
-  // 与 texas-poker-core 领域事件对齐，业务层按 (matchId, domainHandId, domainEventSeq) 去重写入
-  domainHandId   String?
-  domainEventSeq Int?
+  // 与 texas-poker-core 领域事件对齐，业务层按 (matchId, domainHandId, domainEventSeq, userId) 去重写入
+  domainHandId   String
+  domainEventSeq Int
+
+  @@unique([matchId, domainHandId, domainEventSeq, userId])
 }
 
 // 记录游戏胜利的玩家

@@ -359,6 +359,18 @@ async function processTexasDomainEvent(
       gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
       const matchId = getRuntime().currentMatchId
       if (matchId != null) {
+        await betRecord.createMany({
+          data: e.payload.posts.map((post) => ({
+            userId: post.userId,
+            actionType: 'bet' as ActionType,
+            amount: post.amount,
+            stage: 'pre_flop',
+            matchId,
+            domainHandId: e.payload.handId,
+            domainEventSeq: e.payload.seq
+          })),
+          skipDuplicates: true
+        })
         wsGateway.notifyGameBlindsPosted(roomKey, {
           matchId,
           roomId,
@@ -380,29 +392,31 @@ async function processTexasDomainEvent(
     case 'PlayerActed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      const dup = await betRecord.findFirst({
-        where: {
-          matchId,
-          domainHandId: e.payload.handId,
-          domainEventSeq: e.payload.seq
-        }
-      })
-      if (dup) return
-
-      clearPlayerTurnTimeout(roomKey)
-
       const amount = e.payload.amount ?? 0
-      const row = await betRecord.create({
-        data: {
-          userId: e.payload.userId,
-          actionType: e.payload.actionType as ActionType,
-          amount,
-          stage: e.payload.street,
-          matchId,
-          domainHandId: e.payload.handId,
-          domainEventSeq: e.payload.seq
+      let row: { id: number }
+      try {
+        row = await betRecord.create({
+          data: {
+            userId: e.payload.userId,
+            actionType: e.payload.actionType as ActionType,
+            amount,
+            stage: e.payload.street,
+            matchId,
+            domainHandId: e.payload.handId,
+            domainEventSeq: e.payload.seq
+          },
+          select: { id: true }
+        })
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002'
+        ) {
+          return
         }
-      })
+        throw err
+      }
+      clearPlayerTurnTimeout(roomKey)
       const player = texas.dealer.find(
         (pl) => pl.getUserInfo().id === e.payload.userId
       )
