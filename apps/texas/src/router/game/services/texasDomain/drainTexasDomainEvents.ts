@@ -277,8 +277,12 @@ async function processTexasDomainEvent(
       })
       const { players } = e.payload
       await prisma.$transaction(
-        players.map((pl) =>
-          prisma.playerMatchRecord.upsert({
+        players.map((pl) => {
+          const player = texas.dealer.getById(pl.userId)
+          const balanceAtHandStart = Math.round(
+            player?.balance ?? roomInfo.initialChips
+          )
+          return prisma.playerMatchRecord.upsert({
             where: {
               matchId_userId: {
                 matchId: currentMatchId,
@@ -289,11 +293,12 @@ async function processTexasDomainEvent(
               matchId: currentMatchId,
               userId: pl.userId,
               role: pl.role,
-              handPokes: []
+              handPokes: [],
+              balanceAtHandStart
             },
-            update: { role: pl.role }
+            update: { role: pl.role, balanceAtHandStart }
           })
-        )
+        })
       )
       wsGateway.notifyRolesAssigned(roomKey, {
         matchId: currentMatchId,
@@ -304,11 +309,12 @@ async function processTexasDomainEvent(
               `[RolesAssigned] player missing userId=${pl.userId} matchId=${currentMatchId}`
             )
           }
+          const balance = player?.balance ?? roomInfo.initialChips
           return {
             userId: pl.userId,
             role: pl.role,
             actionIndex: pl.actionIndex,
-            balance: player?.balance ?? roomInfo.initialChips
+            balance
           }
         })
       })

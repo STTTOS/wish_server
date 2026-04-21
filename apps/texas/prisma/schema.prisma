@@ -291,6 +291,8 @@ model PlayerMatchRecord {
   totalBetAmount   Int           @default(0)
   isFold           Boolean       @default(false)
   isAllIn          Boolean       @default(false)
+  /// 本手开局（`RolesAssigned` / 贴盲前）桌上可下注余额；含局间补码后与引擎一致，用于回放起始栈；勿与 balanceAfterHand 混用
+  balanceAtHandStart Int?
   /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
   balanceAfterHand Int?
   /// 局间主动亮牌（HTTP）成功时间；用于幂等，避免重复 WS 推送
