@@ -8,6 +8,7 @@ import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
+import { loadMatchReplayTapeForViewer } from '../game/services/matchReplayReadModel'
 import {
   match,
   roomMember,
@@ -387,6 +388,80 @@ router.post(matchApi('/detail'), async (ctx) => {
     endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null,
     settleRecords,
     actionRecords
+  })
+})
+
+/**
+ * 回放磁带（参与者可见）：返回按 DB 追加顺序的领域事件磁带。
+ * 仅保留本人私牌，其他玩家 `HoleCardsDealt` 会脱敏为空数组。
+ */
+router.post(matchApi('/replayTape'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { matchId }: { matchId?: number } = ctx.request.body ?? {}
+  if (!matchId) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 matchId')
+    return
+  }
+
+  const matchInfo = await match.findUnique({
+    where: { id: matchId, endedAt: { not: null } },
+    include: {
+      room: true,
+      playerMatchRecords: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+              avatarKey: true,
+              pokerBackgroundKey: true
+            }
+          }
+        }
+      }
+    }
+  })
+  if (!matchInfo) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
+    return
+  }
+
+  const participated = matchInfo.playerMatchRecords.some(
+    (record) => record.userId === userId
+  )
+  if (!participated) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权查看该对局')
+    return
+  }
+
+  const replay = await loadMatchReplayTapeForViewer(matchId, userId)
+  response.success(ctx, {
+    meta: {
+      matchId: matchInfo.id,
+      roomId: matchInfo.roomId,
+      roomCode: matchInfo.room.code,
+      initialChips: matchInfo.room.initialChips,
+      lowestBetAmount: matchInfo.room.lowestBetAmount,
+      thinkingTime: matchInfo.room.thinkingTime,
+      selfUserId: userId,
+      startedAt: matchInfo.startedAt
+        ? dayjs(matchInfo.startedAt).format(timeFormat)
+        : null,
+      endedAt: matchInfo.endedAt
+        ? dayjs(matchInfo.endedAt).format(timeFormat)
+        : null,
+      members: matchInfo.playerMatchRecords.map((record) => ({
+        userId: record.userId,
+        name: record.user.name,
+        avatarUrl: record.user.avatarUrl,
+        avatarKey: record.user.avatarKey,
+        pokerBackgroundKey: record.user.pokerBackgroundKey,
+        balanceAfterHand: record.balanceAfterHand
+      }))
+    },
+    tape: replay.tape,
+    tapeIssues: replay.tapeIssues
   })
 })
 

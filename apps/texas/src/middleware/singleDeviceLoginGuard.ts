@@ -42,7 +42,6 @@ export default async (
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '登录已失效，请重新登录')
     return
   }
-
   if (latestSession.sessionId !== parsedUser.sessionId) {
     response.error(
       ctx,
