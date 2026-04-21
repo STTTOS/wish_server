@@ -38,7 +38,7 @@ export async function validateRoomJoinAuth(input: {
   }
 
   const roomInfo = await room.findUnique({
-    where: { code: roomCode.trim().toUpperCase() },
+    where: { activeCode: roomCode.trim().toUpperCase() },
     select: { id: true, ownerId: true, gameStatus: true, deletedAt: true }
   })
 

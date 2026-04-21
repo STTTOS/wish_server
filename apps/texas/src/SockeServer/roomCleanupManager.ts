@@ -45,7 +45,7 @@ export class RoomCleanupManager {
       await prisma.$transaction(async (tx) => {
         await tx.room.update({
           where: { id: roomIdNumber },
-          data: { deletedAt: new Date(), activeOwnerId: null }
+          data: { deletedAt: new Date(), activeOwnerId: null, activeCode: null }
         })
         await tx.roomMember.deleteMany({ where: { roomId: roomIdNumber } })
       })

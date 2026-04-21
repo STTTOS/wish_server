@@ -138,7 +138,8 @@ export class StartGameUseCase {
         data: {
           gameStatus: 'waiting',
           deletedAt: new Date(),
-          activeOwnerId: null
+          activeOwnerId: null,
+          activeCode: null
         }
       })
       await tx.roomMember.deleteMany({ where: { roomId } })

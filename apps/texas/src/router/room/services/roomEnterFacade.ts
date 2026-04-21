@@ -41,7 +41,7 @@ export class RoomEnterFacade {
     }
 
     const row = await prisma.room.findUnique({
-      where: { code },
+      where: { activeCode: code },
       select: { id: true, gameStatus: true, deletedAt: true }
     })
     if (!row || row.deletedAt) {

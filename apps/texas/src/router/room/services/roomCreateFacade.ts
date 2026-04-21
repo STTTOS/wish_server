@@ -14,6 +14,16 @@ import {
 } from './roomCreateValidator'
 
 export type RoomCreateResult = ApiResult<{ roomId: number; roomCode: string }>
+const MAX_ROOM_CODE_RETRIES = 8
+
+function getP2002Targets(err: Prisma.PrismaClientKnownRequestError): string[] {
+  const target = err.meta?.target as unknown
+  if (Array.isArray(target)) {
+    return target.filter((x): x is string => typeof x === 'string')
+  }
+  if (typeof target === 'string') return [target]
+  return []
+}
 
 export class RoomCreateFacade {
   constructor(private readonly waitingRoomGateway: WaitingRoomGateway) {}
@@ -103,62 +113,80 @@ export class RoomCreateFacade {
           }
         }
 
-        const roomCode = generateRoomCode()
-        try {
-          const createdRoom = await tx.room.create({
-            data: {
-              code: roomCode,
-              isPrivate,
-              thinkingTime,
-              lowestBetAmount,
-              initialChips,
-              ownerId: userInfo.id,
-              activeOwnerId: userInfo.id
-            }
-          })
-          await tx.roomMember.create({
-            data: { roomId: createdRoom.id, userId: userInfo.id }
-          })
-
-          return {
-            ok: true as const,
-            kind: 'created' as const,
-            data: {
-              roomId: createdRoom.id,
-              roomCode,
-              createdAt: createdRoom.createdAt,
-              owner: userInfo
-            }
-          }
-        } catch (error) {
-          if (
-            error instanceof Prisma.PrismaClientKnownRequestError &&
-            error.code === 'P2002'
-          ) {
-            // 并发冲突统一回查 owner 的有效房间：
-            // 查到则幂等成功，查不到再返回冲突。
-            const existed = await tx.room.findFirst({
-              where: { activeOwnerId: userId },
-              select: { id: true, code: true }
+        for (let attempt = 0; attempt < MAX_ROOM_CODE_RETRIES; attempt++) {
+          const roomCode = generateRoomCode()
+          try {
+            const createdRoom = await tx.room.create({
+              data: {
+                code: roomCode,
+                activeCode: roomCode,
+                isPrivate,
+                thinkingTime,
+                lowestBetAmount,
+                initialChips,
+                ownerId: userInfo.id,
+                activeOwnerId: userInfo.id
+              }
             })
-            if (existed) {
-              // 并发冲突下幂等：唯一约束命中后返回已存在房间
-              return {
-                ok: true as const,
-                kind: 'existing' as const,
-                data: {
-                  roomId: existed.id,
-                  roomCode: existed.code
-                }
+            await tx.roomMember.create({
+              data: { roomId: createdRoom.id, userId: userInfo.id }
+            })
+
+            return {
+              ok: true as const,
+              kind: 'created' as const,
+              data: {
+                roomId: createdRoom.id,
+                roomCode,
+                createdAt: createdRoom.createdAt,
+                owner: userInfo
               }
             }
-            return {
-              ok: false as const,
-              status: HTTP_STATUS.CONFLICT,
-              message: '创建房间冲突,请重试'
+          } catch (error) {
+            if (
+              error instanceof Prisma.PrismaClientKnownRequestError &&
+              error.code === 'P2002'
+            ) {
+              const targets = getP2002Targets(error)
+              if (targets.includes('activeOwnerId')) {
+                const existed = await tx.room.findFirst({
+                  where: { activeOwnerId: userId },
+                  select: { id: true, code: true }
+                })
+                if (existed) {
+                  // 并发冲突下幂等：唯一约束命中后返回已存在房间
+                  return {
+                    ok: true as const,
+                    kind: 'existing' as const,
+                    data: {
+                      roomId: existed.id,
+                      roomCode: existed.code
+                    }
+                  }
+                }
+                return {
+                  ok: false as const,
+                  status: HTTP_STATUS.CONFLICT,
+                  message: '创建房间冲突,请重试'
+                }
+              }
+
+              if (
+                targets.includes('activeCode') ||
+                targets.includes('code') ||
+                targets.includes('Room_activeCode_key')
+              ) {
+                continue
+              }
             }
+            throw error
           }
-          throw error
+        }
+
+        return {
+          ok: false as const,
+          status: HTTP_STATUS.CONFLICT,
+          message: '房间号繁忙, 请重试'
         }
       }
     )
