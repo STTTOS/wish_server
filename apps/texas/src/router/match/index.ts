@@ -9,16 +9,17 @@ import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import {
-  match,
-  roomMember,
-  userRoomStat,
-  playerMatchRecord
-} from '../../models'
-import {
   gameRuntimeRegistry,
   getCurrentMatchIdWithFallback
 } from '../game/services/runtimeKit'
 import { getScheduledPlayerTurnDeadline } from '../game/services/texasDomain/playerTurnTimeoutScheduler'
+import {
+  match,
+  roomMember,
+  userRoomStat,
+  matchDomainEvent,
+  playerMatchRecord
+} from '../../models'
 import {
   loadMatchReplayTapeForViewer,
   loadMatchCompositeReadModelFromDbTape
@@ -88,7 +89,10 @@ router.post(matchApi('/list'), async (ctx) => {
       select: {
         match: {
           include: {
-            room: true
+            room: true,
+            _count: {
+              select: { domainEvents: true }
+            }
           }
         },
         id: true,
@@ -113,6 +117,7 @@ router.post(matchApi('/list'), async (ctx) => {
     const {
       id: matchId,
       room: { code: roomCode, initialChips },
+      _count,
       startedAt,
       endedAt,
       ...restMatch
@@ -123,6 +128,7 @@ router.post(matchApi('/list'), async (ctx) => {
       matchId,
       roomCode,
       initialChips,
+      replaySupported: _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
     }
@@ -398,6 +404,7 @@ router.post(matchApi('/detail'), async (ctx) => {
  * 回放磁带（参与者可见）：返回按 DB 追加顺序的领域事件磁带。
  * 仅保留本人私牌，其他玩家 `HoleCardsDealt` 会脱敏为空数组；
  * 同时返回按 viewer 掩码后的终局 `settleList`（排序与线上 game-end 一致）。
+ * `meta.replaySupported`：本局是否在 `MatchDomainEvent` 有落盘；无磁带时 `tape` 为空且不会查库加载磁带。
  */
 router.post(matchApi('/replayTape'), async (ctx) => {
   const userId = ctx.state.user!.id
@@ -407,25 +414,29 @@ router.post(matchApi('/replayTape'), async (ctx) => {
     return
   }
 
-  const matchInfo = await match.findUnique({
-    where: { id: matchId, endedAt: { not: null } },
-    include: {
-      room: true,
-      playerMatchRecords: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true,
-              avatarKey: true,
-              pokerBackgroundKey: true
+  const [matchInfo, domainEventCount] = await Promise.all([
+    match.findUnique({
+      where: { id: matchId, endedAt: { not: null } },
+      include: {
+        room: true,
+        playerMatchRecords: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                avatarKey: true,
+                pokerBackgroundKey: true
+              }
             }
           }
         }
       }
-    }
-  })
+    }),
+    matchDomainEvent.count({ where: { matchId } })
+  ])
+  const replaySupported = domainEventCount > 0
   if (!matchInfo) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
@@ -436,6 +447,10 @@ router.post(matchApi('/replayTape'), async (ctx) => {
   )
   if (!participated) {
     response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权查看该对局')
+    return
+  }
+  if (!replaySupported) {
+    response.error(ctx, HTTP_STATUS.CONFLICT, '该对局暂无可回放磁带')
     return
   }
 
@@ -487,6 +502,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
   response.success(ctx, {
     meta: {
       matchId: matchInfo.id,
+      /** 本局是否在 `MatchDomainEvent` 落过领域事件磁带；历史对局可能为 false，仅可展示结算等、无 tape 回放 */
+      replaySupported,
       roomId: matchInfo.roomId,
       roomCode: matchInfo.room.code,
       initialChips: matchInfo.room.initialChips,
