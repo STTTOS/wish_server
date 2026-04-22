@@ -23,7 +23,6 @@ type QuitTxResult =
       kind: 'done'
       restCount: number
       deletedRoom: boolean
-      newOwnerId: number | null
       /**
        * true：`RoomMember` 已删，环上 `removeById` 延至本手 `Texas.reset()` 之后（见 `pendingLeaveByUserId`）。
        * false：局间退出，本流程已同步 `removeById`。
@@ -141,7 +140,6 @@ export class QuitGameUseCase {
         where: { id: roomId },
         select: {
           id: true,
-          ownerId: true,
           gameStatus: true,
           deletedAt: true
         }
@@ -180,24 +178,6 @@ export class QuitGameUseCase {
 
       const memberCount = await tx.roomMember.count({ where: { roomId } })
 
-      let newOwnerId: number | null = null
-      if (latestRoom.ownerId === userId && memberCount > 1) {
-        const nextOwnerMember = await tx.roomMember.findFirst({
-          where: { roomId, userId: { not: userId } },
-          orderBy: { joinedAt: 'asc' }
-        })
-        if (nextOwnerMember) {
-          await tx.room.update({
-            where: { id: roomId },
-            data: {
-              ownerId: nextOwnerMember.userId,
-              activeOwnerId: nextOwnerMember.userId
-            }
-          })
-          newOwnerId = nextOwnerMember.userId
-        }
-      }
-
       await tx.roomMember.delete({
         where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
       })
@@ -216,7 +196,6 @@ export class QuitGameUseCase {
         kind: 'done',
         restCount,
         deletedRoom,
-        newOwnerId,
         deferTexasSeatRemoval: didFoldDueToLeave
       }
     })
@@ -243,9 +222,6 @@ export class QuitGameUseCase {
 
     if (texas) {
       try {
-        if (txRes.newOwnerId != null) {
-          texas.room.setOwnerById(txRes.newOwnerId)
-        }
         gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
         if (!txRes.deferTexasSeatRemoval) {
           texas.room.removeById(userId)
@@ -273,7 +249,11 @@ export class QuitGameUseCase {
     this.wsGateway.notifyPlayerLeftGame(roomKey, { roomId, userId })
 
     if (!txRes.deferTexasSeatRemoval) {
-      this.wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+      this.wsGateway.notifyPlayerQuitGame(
+        roomKey,
+        { roomId, userId },
+        { excludeUserId: userId }
+      )
     }
 
     if (txRes.deletedRoom) {

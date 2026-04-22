@@ -521,6 +521,30 @@ class SocketServer {
   }
 
   /**
+   * @description 向 /game 房间广播，但排除指定 userId（用于离场类事件避免推给已退出本人）。
+   */
+  broadcastGameRoomExcept(
+    roomId: string,
+    excludedUserId: number,
+    data: Parameters<Socket['send']>[0]
+  ) {
+    const visibleUserIds = this.#getUserIdsInGameRoom(roomId).filter(
+      (uid) => uid !== excludedUserId
+    )
+    logger.info(
+      `broadcastGameRoomExcept, ${visibleUserIds}, excluded=${excludedUserId}, data: ${JSON.stringify(
+        data
+      )}`
+    )
+    recordGameRoomBroadcast(roomId, data)
+    for (const socket of this.#getSocketsInGameRoom(roomId)) {
+      const uid = socket.data.userId as number | undefined
+      if (uid === excludedUserId) continue
+      this.#gameNs.to(socket.id).emit('message', data)
+    }
+  }
+
+  /**
    * @description 向 /game 指定用户推送消息
    */
   broadcastGameToUser(userId: number, data: Parameters<Socket['send']>[0]) {

@@ -243,7 +243,11 @@ async function handleHandEnded(
     const removedAfterHandEndUserIds =
       gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
     for (const userId of removedAfterHandEndUserIds) {
-      wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+      wsGateway.notifyPlayerQuitGame(
+        roomKey,
+        { roomId, userId },
+        { excludeUserId: userId }
+      )
     }
     const newlySeatedUserIds: number[] = []
     for (const watcher of texas.room.getPlayersBySeatStatus('hang')) {

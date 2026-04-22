@@ -207,11 +207,20 @@ export class GameWsGateway {
     ws.disconnectUserGameSockets(roomId, userId)
   }
 
-  notifyPlayerQuitGame(roomKey: string, data: WsPlayerQuitGameData) {
-    ws.broadcastGameRoom(roomKey, {
+  notifyPlayerQuitGame(
+    roomKey: string,
+    data: WsPlayerQuitGameData,
+    options?: { excludeUserId?: number }
+  ) {
+    const msg: WsMessage<'player-quit-game'> = {
       type: 'player-quit-game',
       data
-    })
+    }
+    if (options?.excludeUserId != null) {
+      ws.broadcastGameRoomExcept(roomKey, options.excludeUserId, msg)
+      return
+    }
+    ws.broadcastGameRoom(roomKey, msg)
   }
 
   notifyPlayerLeftGame(roomKey: string, data: WsPlayerLeftGameData) {
