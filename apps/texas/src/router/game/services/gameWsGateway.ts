@@ -223,11 +223,20 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, msg)
   }
 
-  notifyPlayerLeftGame(roomKey: string, data: WsPlayerLeftGameData) {
-    ws.broadcastGameRoom(roomKey, {
+  notifyPlayerLeftGame(
+    roomKey: string,
+    data: WsPlayerLeftGameData,
+    options?: { excludeUserId?: number }
+  ) {
+    const msg: WsMessage<'player-left-game'> = {
       type: 'player-left-game',
       data
-    })
+    }
+    if (options?.excludeUserId != null) {
+      ws.broadcastGameRoomExcept(roomKey, options.excludeUserId, msg)
+      return
+    }
+    ws.broadcastGameRoom(roomKey, msg)
   }
 
   notifyGameRoomClosed(

@@ -246,7 +246,11 @@ export class QuitGameUseCase {
       }
     }
 
-    this.wsGateway.notifyPlayerLeftGame(roomKey, { roomId, userId })
+    this.wsGateway.notifyPlayerLeftGame(
+      roomKey,
+      { roomId, userId },
+      { excludeUserId: userId }
+    )
 
     if (!txRes.deferTexasSeatRemoval) {
       this.wsGateway.notifyPlayerQuitGame(
