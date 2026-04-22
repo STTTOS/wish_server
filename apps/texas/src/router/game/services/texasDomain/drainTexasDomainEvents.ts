@@ -592,7 +592,7 @@ async function drainPendingFlowQueueWithPacing(
 
   while (texas.getPendingFlowOps().length > 0) {
     const [head] = texas.getPendingFlowOps()
-    if (head === 'stage_advance') {
+    if (head?.kind === 'stage_advance') {
       const stepEvents = texas.applyPendingStageAdvance()
       await interpretTexasDomainEvents(ctx, stepEvents)
       await drainBufferedDomainEvents(ctx)

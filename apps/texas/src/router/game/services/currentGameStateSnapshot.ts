@@ -42,7 +42,7 @@ export type FetchCurrentGameStatePayload = {
     // boardThroughStage: Stage
     defaultBets: Array<{ userId: number; balance: number; amount: number }>
     engineRoomSeatStatus: RoomStatus
-    pendingFlowOps: import('texas-poker-core').PendingFlowOpKind[]
+    pendingFlowOps: import('texas-poker-core').PendingFlowOp[]
   }
   activePlayerInfo: {
     userInfo: { id: number; name: string }
@@ -116,13 +116,12 @@ export async function buildFetchCurrentGameStatePayload(input: {
       handId != null &&
       pendingTurn.handId === handId
 
-    const offered = active.hasEmittedTurnOffer()
     activePlayerInfo = {
       userInfo: active.getUserInfo(),
       deadlineAt: turnMatchesActive ? pendingTurn.deadlineAt : null,
       serverNow: turnMatchesActive ? serverNow : undefined,
-      allowedActions: offered ? [...active.getAllowedActions()] : [],
-      restrict: offered ? active.getRestrict() : undefined
+      allowedActions: [...active.getAllowedActions()],
+      restrict: active.getRestrict()
     }
   }
 
