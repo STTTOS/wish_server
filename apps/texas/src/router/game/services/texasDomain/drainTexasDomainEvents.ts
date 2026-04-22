@@ -462,12 +462,10 @@ async function processTexasDomainEvent(
     case 'PlayerActed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      const isLeaveGameFold =
-        String(e.payload.actionType) === 'fold' &&
-        gameRuntimeRegistry.consumePendingLeaveGameFoldReason(
-          roomKey,
-          e.payload.userId
-        )
+      const actionReason =
+        (e.payload as { reason?: string }).reason === 'leave_game'
+          ? 'leave_game'
+          : undefined
       const amount = e.payload.amount ?? 0
       let row: { id: number }
       try {
@@ -505,7 +503,7 @@ async function processTexasDomainEvent(
         userId: e.payload.userId,
         actionId: row.id,
         actionType: e.payload.actionType,
-        ...(isLeaveGameFold ? { reason: 'leave_game' as const } : {}),
+        ...(actionReason ? { reason: actionReason } : {}),
         amount,
         pool: texas.pool.totalAmount,
         totalBetAmount: player.totalBetAmount,
@@ -543,6 +541,31 @@ async function processTexasDomainEvent(
     case 'TurnOffered': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
+      if (
+        gameRuntimeRegistry.consumeQueuedLeaveAutoFold(
+          roomKey,
+          e.payload.userId
+        )
+      ) {
+        try {
+          const leaveEvents = texas.dispatchCommand({
+            type: 'FoldDueToLeave',
+            playerId: e.payload.userId
+          })
+          await interpretTexasDomainEvents(ctx, leaveEvents)
+          await drainBufferedDomainEvents(ctx)
+          return
+        } catch (err) {
+          gameRuntimeRegistry.restoreQueuedLeaveAutoFold(
+            roomKey,
+            e.payload.userId
+          )
+          logger.error(
+            `[TurnOffered] auto FoldDueToLeave failed roomKey=${roomKey} userId=${e.payload.userId}`,
+            err
+          )
+        }
+      }
       const serverNow = Date.now()
       const thinkingTimeMs = roomInfo.thinkingTime * 1000
       const deadlineAt = serverNow + thinkingTimeMs

@@ -37,9 +37,8 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
     currentMatchId: 100,
     matchStartedAt: Date.now(),
     rollbackManager: noopRollbackManager,
-    pendingTexasSeatRemovalUserIds: new Set(),
+    pendingLeaveByUserId: new Map(),
     pendingPostBigBlindUserIds: new Set(),
-    pendingLeaveGameFoldUserIds: new Set(),
     quitBlockedUntilBlindsPosted: false
   })
 
@@ -63,9 +62,8 @@ test('GameRuntimeRegistry current match read/write', () => {
     currentMatchId: 200,
     matchStartedAt: Date.now(),
     rollbackManager: noopRollbackManager,
-    pendingTexasSeatRemovalUserIds: new Set(),
+    pendingLeaveByUserId: new Map(),
     pendingPostBigBlindUserIds: new Set(),
-    pendingLeaveGameFoldUserIds: new Set(),
     quitBlockedUntilBlindsPosted: false
   })
 

@@ -16,18 +16,20 @@ export type GameRuntime = {
   matchStartedAt: number
   rollbackManager: MatchRollbackManager
   /**
-   * 本手进行中已删库离房、须在 `Texas.reset()` 解锁座后执行的 `room.removeById`。
-   * 与「先 FoldDueToLeave、局间再摘环」一致。
+   * 本手中途离场的聚合状态：
+   * - `autoFoldOnTurn`: 轮到该玩家时由业务层自动下发 `FoldDueToLeave`
+   * - `removeAfterHandEnd`: 本手结束后 `Texas.reset()` 解锁座再 `room.removeById`
    */
-  pendingTexasSeatRemovalUserIds: Set<number>
+  pendingLeaveByUserId: Map<
+    number,
+    { autoFoldOnTurn: boolean; removeAfterHandEnd: boolean }
+  >
   /**
    * `onLock`（或首局分配角色前）至本手领域事件 `BlindsPosted` 处理完成前，禁止局内退出。
    */
   quitBlockedUntilBlindsPosted: boolean
   /** 下手开局后需尝试 `PostBigBlind` 的新入座玩家。 */
   pendingPostBigBlindUserIds: Set<number>
-  /** 本手中途离场触发的强制弃牌用户（用于 player-action-taken.reason=leave_game）。 */
-  pendingLeaveGameFoldUserIds: Set<number>
 }
 
 /**
@@ -74,14 +76,13 @@ export class GameRuntimeRegistry {
     runtime.currentMatchId = matchId
   }
 
-  /** 本手 `reset` 解锁座后，摘掉已离房但仍留在环上的玩家（见 `pendingTexasSeatRemovalUserIds`）。 */
+  /** 本手 `reset` 解锁座后，摘掉已离房但仍留在环上的玩家（见 `pendingLeaveByUserId`）。 */
   flushDeferredTexasSeatRemovals(roomKey: string): number[] {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime?.texas) return []
-    const pending = runtime.pendingTexasSeatRemovalUserIds
-    if (pending.size === 0) return []
     const removedUserIds: number[] = []
-    for (const userId of [...pending]) {
+    for (const [userId, state] of [...runtime.pendingLeaveByUserId.entries()]) {
+      if (!state.removeAfterHandEnd) continue
       try {
         if (runtime.texas.room.has(userId)) {
           runtime.texas.room.removeById(userId)
@@ -93,15 +94,52 @@ export class GameRuntimeRegistry {
           e
         )
       }
-      pending.delete(userId)
+      runtime.pendingLeaveByUserId.delete(userId)
     }
     return removedUserIds
   }
 
-  enqueueDeferredTexasSeatRemoval(roomKey: string, userId: number): void {
+  queueLeaveDuringHand(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
-    runtime.pendingTexasSeatRemovalUserIds.add(userId)
+    const current = runtime.pendingLeaveByUserId.get(userId)
+    runtime.pendingLeaveByUserId.set(userId, {
+      autoFoldOnTurn: true,
+      removeAfterHandEnd: true,
+      ...(current ?? {})
+    })
+  }
+
+  cancelQueuedLeave(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingLeaveByUserId.delete(userId)
+  }
+
+  consumeQueuedLeaveAutoFold(roomKey: string, userId: number): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return false
+    const current = runtime.pendingLeaveByUserId.get(userId)
+    if (!current?.autoFoldOnTurn) return false
+    if (current.removeAfterHandEnd) {
+      runtime.pendingLeaveByUserId.set(userId, {
+        autoFoldOnTurn: false,
+        removeAfterHandEnd: true
+      })
+    } else {
+      runtime.pendingLeaveByUserId.delete(userId)
+    }
+    return true
+  }
+
+  restoreQueuedLeaveAutoFold(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    const current = runtime.pendingLeaveByUserId.get(userId)
+    runtime.pendingLeaveByUserId.set(userId, {
+      autoFoldOnTurn: true,
+      removeAfterHandEnd: current?.removeAfterHandEnd ?? true
+    })
   }
 
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {
@@ -132,26 +170,6 @@ export class GameRuntimeRegistry {
     const out = [...runtime.pendingPostBigBlindUserIds]
     runtime.pendingPostBigBlindUserIds.clear()
     return out
-  }
-
-  enqueuePendingLeaveGameFold(roomKey: string, userId: number): void {
-    const runtime = this.#runtimes.get(roomKey)
-    if (!runtime) return
-    runtime.pendingLeaveGameFoldUserIds.add(userId)
-  }
-
-  removePendingLeaveGameFold(roomKey: string, userId: number): void {
-    const runtime = this.#runtimes.get(roomKey)
-    if (!runtime) return
-    runtime.pendingLeaveGameFoldUserIds.delete(userId)
-  }
-
-  consumePendingLeaveGameFoldReason(roomKey: string, userId: number): boolean {
-    const runtime = this.#runtimes.get(roomKey)
-    if (!runtime) return false
-    if (!runtime.pendingLeaveGameFoldUserIds.has(userId)) return false
-    runtime.pendingLeaveGameFoldUserIds.delete(userId)
-    return true
   }
 
   /** 销毁运行时：reset Texas 后移除上下文。 */

@@ -1,15 +1,10 @@
 import type { ApiVoidResult } from '../../../utils/apiResult'
 
-import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
-
 import prisma from '../../../models'
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
-import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
-import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
-import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 import {
   cancelNextHandCountdown,
   unregisterNextHandHooks
@@ -28,7 +23,7 @@ type QuitTxResult =
       deletedRoom: boolean
       newOwnerId: number | null
       /**
-       * true：`RoomMember` 已删，环上 `removeById` 延至本手 `Texas.reset()` 之后（见 `pendingTexasSeatRemovalUserIds`）。
+       * true：`RoomMember` 已删，环上 `removeById` 延至本手 `Texas.reset()` 之后（见 `pendingLeaveByUserId`）。
        * false：局间退出，本流程已同步 `removeById`。
        */
       deferTexasSeatRemoval: boolean
@@ -38,7 +33,8 @@ type QuitTxResult =
  * 退出对局：
  * - **局间**（`between_hands`）：删 `RoomMember`、立刻 `room.removeById`、广播、断 /game。
  * - **`isQuitBlockedUntilBlindsPosted`**：`onLock`/首局注册起至领域事件 `BlindsPosted` 处理完前禁止退出（与 Core 非 `in_hand` 时 `canFoldDueToLeave` 恒为假无关）。
- * - **本手 `texas.canFoldDueToLeave(userId)` 为真**：先 `FoldDueToLeave` 并 drain，再删 `RoomMember`；环上摘座延到本手 `reset` 后。
+ * - **进行中**（`in_hand`）：业务层登记离场队列；到该玩家 `TurnOffered` 时再自动 `FoldDueToLeave`，
+ *   环上摘座延到本手 `reset` 后。
  * - **`starting_hand`**：不可退出（与上条重叠时仍保留，防状态机与运行时标志短暂不一致）。
  */
 export class QuitGameUseCase {
@@ -94,37 +90,17 @@ export class QuitGameUseCase {
       }
     }
 
-    let didFoldDueToLeave = false
-    if (texasPre?.canFoldDueToLeave(userId)) {
-      try {
-        gameRuntimeRegistry.enqueuePendingLeaveGameFold(roomKey, userId)
-        const preEvents = texasPre.dispatchCommand({
-          type: 'FoldDueToLeave',
-          playerId: userId
-        })
-        await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
-          preEvents
-        })
-        didFoldDueToLeave = true
-      } catch (e: unknown) {
-        if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
-          await handleFatalTexasEngineError({
-            error: e,
-            roomId,
-            roomKey,
-            getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
-          })
-        }
-        gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
-        const message = e instanceof Error ? e.message : '退出失败'
-        return { ok: false, status: HTTP_STATUS.CONFLICT, message }
-      }
-    } else if (pre.gameStatus === 'in_hand') {
+    const shouldDeferTexasSeatRemoval = pre.gameStatus === 'in_hand'
+    if (pre.gameStatus === 'in_hand' && !texasPre) {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
         message: '房间状态与对局引擎不一致，请稍后重试或联系管理员'
       }
+    }
+
+    if (shouldDeferTexasSeatRemoval) {
+      gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
     }
 
     const txRes: QuitTxResult = await prisma.$transaction(async (tx) => {
@@ -155,7 +131,7 @@ export class QuitGameUseCase {
         }
       }
 
-      if (latestRoom.gameStatus === 'in_hand' && !didFoldDueToLeave) {
+      if (latestRoom.gameStatus === 'in_hand' && !shouldDeferTexasSeatRemoval) {
         return {
           kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
@@ -210,12 +186,12 @@ export class QuitGameUseCase {
         restCount,
         deletedRoom,
         newOwnerId,
-        deferTexasSeatRemoval: didFoldDueToLeave
+        deferTexasSeatRemoval: shouldDeferTexasSeatRemoval
       }
     })
 
     if (txRes.kind === 'fail') {
-      gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
       return {
         ok: false,
         status: txRes.status,
@@ -224,12 +200,14 @@ export class QuitGameUseCase {
     }
 
     if (txRes.kind === 'noop') {
-      gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
       return { ok: true, data: null }
     }
 
-    gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
+    if (!txRes.deferTexasSeatRemoval) {
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+    }
     const texas = gameRuntimeRegistry.getTexas(roomKey)
 
     if (texas) {
@@ -237,11 +215,8 @@ export class QuitGameUseCase {
         if (txRes.newOwnerId != null) {
           texas.room.setOwnerById(txRes.newOwnerId)
         }
-        gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
         gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
-        if (txRes.deferTexasSeatRemoval) {
-          gameRuntimeRegistry.enqueueDeferredTexasSeatRemoval(roomKey, userId)
-        } else {
+        if (!txRes.deferTexasSeatRemoval) {
           texas.room.removeById(userId)
         }
       } catch (e) {

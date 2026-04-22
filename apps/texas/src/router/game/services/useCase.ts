@@ -401,9 +401,8 @@ export class StartGameUseCase {
       currentMatchId,
       matchStartedAt: Date.now(),
       rollbackManager,
-      pendingTexasSeatRemovalUserIds: new Set(),
+      pendingLeaveByUserId: new Map(),
       pendingPostBigBlindUserIds: new Set(),
-      pendingLeaveGameFoldUserIds: new Set(),
       /** 与 `eventBinder` 的 `onLock` 一致：首局从注册起至领域事件 `BlindsPosted` 处理完前禁止 FoldDueToLeave */
       quitBlockedUntilBlindsPosted: true
     })
