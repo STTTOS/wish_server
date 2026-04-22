@@ -8,13 +8,16 @@ import {
   type TexasDomainEvent
 } from 'texas-poker-core'
 
-import { match } from '../../../models'
+import prisma, { match } from '../../../models'
 import { transitionRoomGameStatus } from './stateMachine'
 import { autoTopUpOnSeatPlayersAtHandLock } from './chipTopUpUseCase'
 import { buildTexasEventContext } from './texasDomain/texasEventContext'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
-import { registerNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
+import {
+  registerNextHandHooks,
+  unregisterNextHandHooks
+} from '../../../gameRuntime/nextHandCountdown'
 
 /**
  * 注册局间倒计时钩子，并返回领域事件排空函数（持久化 / WS / `pendingFlowOps` 节拍）。
@@ -50,13 +53,35 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
 
   registerNextHandHooks(roomId, {
     canStart: () =>
-      canStartNextHandByStatus(texas.controller.status) &&
-      texas.room.getPlayersBySeatStatus('on-set').length >= 2,
+      runtimeRegistry.hasTexas(roomKey) &&
+      canStartNextHandByStatus(texas.controller.status),
     onLock: async () => {
       setQuitBlocked(true)
       texas.reset()
       // 锁座, 新加入的玩家落到观战席
       texas.lockSeats()
+      const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
+      if (seatedCount < 2) {
+        await prisma.$transaction(async (tx) => {
+          await tx.room.update({
+            where: { id: roomId },
+            data: {
+              deletedAt: new Date(),
+              activeOwnerId: null,
+              activeCode: null
+            }
+          })
+          await tx.roomMember.deleteMany({ where: { roomId } })
+        })
+        wsGateway.notifyGameRoomClosed(roomKey, {
+          roomId,
+          reason: 'insufficient_players'
+        })
+        wsGateway.broadcastRoomListRoomDeleted(roomId)
+        unregisterNextHandHooks(roomId)
+        runtimeRegistry.destroyRuntime(roomKey)
+        return
+      }
       await autoTopUpOnSeatPlayersAtHandLock({
         roomId,
         roomKey,

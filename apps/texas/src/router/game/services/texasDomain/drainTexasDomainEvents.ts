@@ -16,6 +16,7 @@ import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
+import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -26,11 +27,6 @@ import prisma, {
   room as roomModel,
   matchStageTimeRecord
 } from '../../../../models'
-import {
-  cancelNextHandCountdown,
-  unregisterNextHandHooks,
-  maybeStartNextHandCountdown
-} from '../../../../gameRuntime/nextHandCountdown'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -259,29 +255,6 @@ async function handleHandEnded(
       } catch {
         // ignore: player may be removed concurrently
       }
-    }
-    const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-    if (seatedCount < 2) {
-      await prisma.$transaction(async (tx) => {
-        await tx.room.update({
-          where: { id: roomId },
-          data: {
-            deletedAt: new Date(),
-            activeOwnerId: null,
-            activeCode: null
-          }
-        })
-        await tx.roomMember.deleteMany({ where: { roomId } })
-      })
-      cancelNextHandCountdown(roomId)
-      unregisterNextHandHooks(roomId)
-      wsGateway.notifyGameRoomClosed(roomKey, {
-        roomId,
-        reason: 'insufficient_players'
-      })
-      wsGateway.broadcastRoomListRoomDeleted(roomId)
-      gameRuntimeRegistry.destroyRuntime(roomKey)
-      return
     }
 
     if (newlySeatedUserIds.length > 0) {

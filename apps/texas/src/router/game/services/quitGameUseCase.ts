@@ -1,14 +1,11 @@
-import type { ApiVoidResult } from '../../../utils/apiResult'
+import type { ApiResult } from '../../../utils/apiResult'
 
 import prisma from '../../../models'
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
-import {
-  cancelNextHandCountdown,
-  unregisterNextHandHooks
-} from '../../../gameRuntime/nextHandCountdown'
+import { unregisterNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
 
 type QuitTxResult =
   | { kind: 'noop' }
@@ -40,10 +37,19 @@ type QuitTxResult =
 export class QuitGameUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
 
+  static readonly CONTEXT = {
+    IN_HAND: 'in_hand',
+    AFTER_GAME_END: 'after_game_end'
+  } as const
+
+  static readonly DEFAULT_SUCCESS_PAYLOAD = {
+    quitContext: QuitGameUseCase.CONTEXT.AFTER_GAME_END
+  } as const
+
   async execute(input: {
     userId: number
     roomId: number
-  }): Promise<ApiVoidResult> {
+  }): Promise<ApiResult<{ quitContext: 'in_hand' | 'after_game_end' }>> {
     const { userId, roomId } = input
     const roomKey = String(roomId)
 
@@ -53,7 +59,7 @@ export class QuitGameUseCase {
     })
     if (!pre || pre.deletedAt) {
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: null }
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
     }
 
     const memberPre = await prisma.roomMember.findUnique({
@@ -62,13 +68,13 @@ export class QuitGameUseCase {
     })
     if (!memberPre) {
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: null }
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
     }
 
     const texasPre = gameRuntimeRegistry.getTexas(roomKey)
     if (texasPre && !texasPre.room.has(userId)) {
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: null }
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
     }
 
     if (pre.gameStatus === 'starting_hand') {
@@ -202,7 +208,7 @@ export class QuitGameUseCase {
     if (txRes.kind === 'noop') {
       gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: null }
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
     }
 
     if (!txRes.deferTexasSeatRemoval) {
@@ -230,11 +236,6 @@ export class QuitGameUseCase {
           logger.error('[quitGame] unregisterNextHandHooks failed', e)
         }
         gameRuntimeRegistry.destroyRuntime(roomKey)
-      } else {
-        const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-        if (txRes.restCount < 2 || seatedCount < 2) {
-          cancelNextHandCountdown(roomId)
-        }
       }
     } else if (txRes.deletedRoom) {
       try {
@@ -261,6 +262,13 @@ export class QuitGameUseCase {
 
     this.wsGateway.disconnectUserGameSockets(roomId, userId)
 
-    return { ok: true, data: null }
+    return {
+      ok: true,
+      data: {
+        quitContext: txRes.deferTexasSeatRemoval
+          ? QuitGameUseCase.CONTEXT.IN_HAND
+          : QuitGameUseCase.CONTEXT.AFTER_GAME_END
+      }
+    }
   }
 }

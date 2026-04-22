@@ -81,6 +81,27 @@ function broadcastCancelled(roomId: number) {
   broadcastNextHandCountdown(roomId, msg)
 }
 
+function stopActiveCountdown(
+  roomId: number,
+  options?: { broadcastCancelled?: boolean }
+) {
+  const state = countdowns.get(roomId)
+  if (!state) return
+
+  clearTimeout(state.lockTimer)
+  clearTimeout(state.assignRolesTimer)
+  clearTimeout(state.dealTimer)
+  clearTimeout(state.startTimer)
+  countdowns.delete(roomId)
+
+  if (options?.broadcastCancelled) {
+    broadcastCancelled(roomId)
+    logger.info(`[next-hand-countdown] cancelled, roomId=${roomId}`)
+    return
+  }
+  logger.info(`[next-hand-countdown] stopped silently, roomId=${roomId}`)
+}
+
 export function cancelNextHandCountdown(roomId: number) {
   const pendingPush = pendingPushByRoomId.get(roomId)
   if (pendingPush) {
@@ -91,18 +112,7 @@ export function cancelNextHandCountdown(roomId: number) {
     )
     return
   }
-
-  const state = countdowns.get(roomId)
-  if (!state) return
-
-  clearTimeout(state.lockTimer)
-  clearTimeout(state.assignRolesTimer)
-  clearTimeout(state.dealTimer)
-  clearTimeout(state.startTimer)
-  countdowns.delete(roomId)
-
-  broadcastCancelled(roomId)
-  logger.info(`[next-hand-countdown] cancelled, roomId=${roomId}`)
+  stopActiveCountdown(roomId, { broadcastCancelled: true })
 }
 
 export function registerNextHandHooks(roomId: number, hooks: NextHandHooks) {
@@ -127,15 +137,6 @@ function startCountdownAfterPushDelay(roomId: number) {
       `[next-hand-countdown] skip after delay, status=${String(
         texas.controller.status
       )}, roomId=${roomId}`
-    )
-    return
-  }
-
-  const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-  if (seatedCount < 2) {
-    broadcastCancelled(roomId)
-    logger.info(
-      `[next-hand-countdown] skip after delay, seatedCount=${seatedCount}, roomId=${roomId}`
     )
     return
   }
@@ -171,7 +172,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   // lockAt 到达, 坐席锁定, 不可再退出游戏
   const lockTimer = setTimeout(async () => {
     try {
-      if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+      if (!hooks.canStart()) return stopActiveCountdown(roomId)
       await hooks.onLock()
       logger.info(`[next-hand-countdown] lock done, roomId=${roomId}`)
     } catch (e) {
@@ -183,7 +184,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   // endsAt 到达, 分配角色
   const assignRolesTimer = setTimeout(async () => {
     try {
-      if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+      if (!hooks.canStart()) return stopActiveCountdown(roomId)
       await hooks.onAssignRoles()
       logger.info(`[next-hand-countdown] assign roles done, roomId=${roomId}`)
     } catch (e) {
@@ -199,7 +200,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   const dealAfter = gameRuntimeConfig.getNextHandDealAfterEndMs()
   const dealDelay = endsOffset + dealAfter
   const dealTimer = setTimeout(async () => {
-    if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+    if (!hooks.canStart()) return stopActiveCountdown(roomId)
     try {
       await hooks.onDeal()
       logger.info(`[next-hand-countdown] deal done, roomId=${roomId}`)
@@ -212,7 +213,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   const startAfter = gameRuntimeConfig.getNextHandStartAfterDealMs()
   const startDelay = dealDelay + startAfter
   const startTimer = setTimeout(async () => {
-    if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+    if (!hooks.canStart()) return stopActiveCountdown(roomId)
     try {
       await hooks.onStart()
       logger.info(`[next-hand-countdown] start done, roomId=${roomId}`)
@@ -278,15 +279,6 @@ export function maybeStartNextHandCountdown(roomId: number) {
       `[next-hand-countdown] skip start, status=${String(
         texas.controller.status
       )}, roomId=${roomId}`
-    )
-    return
-  }
-
-  const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-  if (seatedCount < 2) {
-    broadcastCancelled(roomId)
-    logger.info(
-      `[next-hand-countdown] skip start, seatedCount=${seatedCount}, roomId=${roomId}`
     )
     return
   }
