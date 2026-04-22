@@ -43,9 +43,14 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
   const drainTexasDomainEvents = (preEvents?: readonly TexasDomainEvent[]) =>
     drainAndInterpretTexas(ctx, preEvents?.length ? { preEvents } : undefined)
 
+  const canStartNextHandByStatus = (status: unknown): boolean => {
+    const normalized = String(status)
+    return normalized === 'idle' || normalized === 'between_hands'
+  }
+
   registerNextHandHooks(roomId, {
     canStart: () =>
-      (texas.controller.status as unknown as string) === 'idle' &&
+      canStartNextHandByStatus(texas.controller.status) &&
       texas.room.getPlayersBySeatStatus('on-set').length >= 2,
     onLock: async () => {
       setQuitBlocked(true)

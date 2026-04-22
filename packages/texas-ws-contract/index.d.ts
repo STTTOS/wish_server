@@ -170,6 +170,11 @@ export type WsPlayerQuitGameData = {
   userId: number
 }
 
+export type WsGameRoomClosedData = {
+  roomId: number
+  reason: 'insufficient_players'
+}
+
 export type WsPlayersPostedBigBlindData = {
   roomId: number
   matchId: number | null
@@ -225,6 +230,7 @@ export type WsEventDataMap = {
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
   'player-quit-game': WsPlayerQuitGameData
+  'game-room-closed': WsGameRoomClosedData
   'players-posted-big-blind': WsPlayersPostedBigBlindData
   'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
   'game-room-replay': WsGameRoomReplayData

@@ -232,6 +232,7 @@ export class QuitGameUseCase {
         if (txRes.newOwnerId != null) {
           texas.room.setOwnerById(txRes.newOwnerId)
         }
+        gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
         if (txRes.deferTexasSeatRemoval) {
           gameRuntimeRegistry.enqueueDeferredTexasSeatRemoval(roomKey, userId)
         } else {
@@ -248,8 +249,11 @@ export class QuitGameUseCase {
           logger.error('[quitGame] unregisterNextHandHooks failed', e)
         }
         gameRuntimeRegistry.destroyRuntime(roomKey)
-      } else if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
-        cancelNextHandCountdown(roomId)
+      } else {
+        const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
+        if (txRes.restCount < 2 || seatedCount < 2) {
+          cancelNextHandCountdown(roomId)
+        }
       }
     } else if (txRes.deletedRoom) {
       try {

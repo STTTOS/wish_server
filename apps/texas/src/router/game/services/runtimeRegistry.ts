@@ -115,6 +115,12 @@ export class GameRuntimeRegistry {
     runtime.pendingPostBigBlindUserIds.add(userId)
   }
 
+  removePendingPostBigBlind(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingPostBigBlindUserIds.delete(userId)
+  }
+
   consumePendingPostBigBlind(roomKey: string): number[] {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime || runtime.pendingPostBigBlindUserIds.size === 0) return []

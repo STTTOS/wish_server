@@ -46,6 +46,11 @@ type NextHandCountdownBroadcaster = (
 
 let nextHandCountdownBroadcaster: NextHandCountdownBroadcaster | null = null
 
+function canStartFromControllerStatus(status: unknown): boolean {
+  const normalized = String(status)
+  return normalized === 'idle' || normalized === 'between_hands'
+}
+
 /**
  * 注入 next-hand 倒计时广播实现（通常由 SocketServer 在启动时注册）。
  */
@@ -117,7 +122,7 @@ function startCountdownAfterPushDelay(roomId: number) {
     return
   }
 
-  if ((texas.controller.status as unknown as string) !== 'idle') {
+  if (!canStartFromControllerStatus(texas.controller.status)) {
     logger.info(
       `[next-hand-countdown] skip after delay, status=${String(
         texas.controller.status
@@ -268,7 +273,7 @@ export function maybeStartNextHandCountdown(roomId: number) {
     return
   }
 
-  if ((texas.controller.status as unknown as string) !== 'idle') {
+  if (!canStartFromControllerStatus(texas.controller.status)) {
     logger.info(
       `[next-hand-countdown] skip start, status=${String(
         texas.controller.status

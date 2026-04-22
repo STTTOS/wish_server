@@ -213,6 +213,16 @@ export class GameWsGateway {
     })
   }
 
+  notifyGameRoomClosed(
+    roomKey: string,
+    data: WsMessage<'game-room-closed'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'game-room-closed',
+      data
+    })
+  }
+
   notifyPlayersPostedBigBlind(
     roomKey: string,
     data: WsMessage<'players-posted-big-blind'>['data']

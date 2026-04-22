@@ -16,7 +16,6 @@ import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
-import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -27,6 +26,11 @@ import prisma, {
   room as roomModel,
   matchStageTimeRecord
 } from '../../../../models'
+import {
+  cancelNextHandCountdown,
+  unregisterNextHandHooks,
+  maybeStartNextHandCountdown
+} from '../../../../gameRuntime/nextHandCountdown'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -236,6 +240,10 @@ async function handleHandEnded(
       totalBetAmount
     }))
     texas.unlockSeats()
+    // 游戏结束后, 轮换庄家位置
+    // 在其他玩家加入时, 有新的BB anchor
+    texas.rotateRolesForNewHand()
+
     gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
     const newlySeatedUserIds: number[] = []
     for (const watcher of texas.room.getPlayersBySeatStatus('hang')) {
@@ -248,6 +256,30 @@ async function handleHandEnded(
         // ignore: player may be removed concurrently
       }
     }
+    const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
+    if (seatedCount < 2) {
+      await prisma.$transaction(async (tx) => {
+        await tx.room.update({
+          where: { id: roomId },
+          data: {
+            deletedAt: new Date(),
+            activeOwnerId: null,
+            activeCode: null
+          }
+        })
+        await tx.roomMember.deleteMany({ where: { roomId } })
+      })
+      cancelNextHandCountdown(roomId)
+      unregisterNextHandHooks(roomId)
+      wsGateway.notifyGameRoomClosed(roomKey, {
+        roomId,
+        reason: 'insufficient_players'
+      })
+      wsGateway.broadcastRoomListRoomDeleted(roomId)
+      gameRuntimeRegistry.destroyRuntime(roomKey)
+      return
+    }
+
     if (newlySeatedUserIds.length > 0) {
       wsGateway.notifyPlayersPostedBigBlind(roomKey, {
         roomId,
@@ -258,9 +290,6 @@ async function handleHandEnded(
       })
     }
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
-    // 游戏结束后, 轮换庄家位置
-    // 在其他玩家加入时, 有新的BB anchor
-    texas.rotateRolesForNewHand()
 
     getRuntime().rollbackManager.clearInvalidatedFlag(currentMatchId)
     getRuntime().rollbackManager.clearSnapshot(currentMatchId)
