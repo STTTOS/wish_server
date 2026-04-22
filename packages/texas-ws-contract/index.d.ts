@@ -51,8 +51,6 @@ export type WsPlayerActionTakenData = {
   userId: number
   actionId: number
   actionType: ActionType
-  /** `leave_game` 表示由中途离场触发的强制弃牌（FoldDueToLeave） */
-  reason?: 'leave_game'
   amount: number
   pool: number
   totalBetAmount: number

@@ -462,10 +462,6 @@ async function processTexasDomainEvent(
     case 'PlayerActed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      const actionReason =
-        (e.payload as { reason?: string }).reason === 'leave_game'
-          ? 'leave_game'
-          : undefined
       const amount = e.payload.amount ?? 0
       let row: { id: number }
       try {
@@ -503,7 +499,6 @@ async function processTexasDomainEvent(
         userId: e.payload.userId,
         actionId: row.id,
         actionType: e.payload.actionType,
-        ...(actionReason ? { reason: actionReason } : {}),
         amount,
         pool: texas.pool.totalAmount,
         totalBetAmount: player.totalBetAmount,
