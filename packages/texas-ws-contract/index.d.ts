@@ -172,6 +172,12 @@ export type WsPlayerQuitGameData = {
   userId: number
 }
 
+/** 玩家已提交退出（用于客户端提示，不代表已从牌桌摘除）。 */
+export type WsPlayerLeftGameData = {
+  roomId: number
+  userId: number
+}
+
 export type WsGameRoomClosedData = {
   roomId: number
   reason: 'insufficient_players'
@@ -238,6 +244,7 @@ export type WsEventDataMap = {
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
+  'player-left-game': WsPlayerLeftGameData
   'player-quit-game': WsPlayerQuitGameData
   'game-room-closed': WsGameRoomClosedData
   'players-seated': WsPlayersSeatedData

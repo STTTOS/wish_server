@@ -1,6 +1,7 @@
 import type {
   WsMessage,
   RoomWsMessage,
+  WsPlayerLeftGameData,
   WsPlayerQuitGameData,
   WsPlayerRolesAssignedData,
   WsPlayerHandVoluntarilyShownData
@@ -209,6 +210,13 @@ export class GameWsGateway {
   notifyPlayerQuitGame(roomKey: string, data: WsPlayerQuitGameData) {
     ws.broadcastGameRoom(roomKey, {
       type: 'player-quit-game',
+      data
+    })
+  }
+
+  notifyPlayerLeftGame(roomKey: string, data: WsPlayerLeftGameData) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'player-left-game',
       data
     })
   }
