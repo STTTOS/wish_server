@@ -1,11 +1,16 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
+import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
+
 import prisma from '../../../models'
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
+import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
 import { unregisterNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
+import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 
 type QuitTxResult =
   | { kind: 'noop' }
@@ -30,8 +35,7 @@ type QuitTxResult =
  * 退出对局：
  * - **局间**（`between_hands`）：删 `RoomMember`、立刻 `room.removeById`、广播、断 /game。
  * - **`isQuitBlockedUntilBlindsPosted`**：`onLock`/首局注册起至领域事件 `BlindsPosted` 处理完前禁止退出（与 Core 非 `in_hand` 时 `canFoldDueToLeave` 恒为假无关）。
- * - **进行中**（`in_hand`）：业务层登记离场队列；到该玩家 `TurnOffered` 时再自动 `FoldDueToLeave`，
- *   环上摘座延到本手 `reset` 后。
+ * - **本手 `texas.canFoldDueToLeave(userId)` 为真**：先 `FoldDueToLeave` 并 drain，再删 `RoomMember`；环上摘座延到本手 `reset` 后。
  * - **`starting_hand`**：不可退出（与上条重叠时仍保留，防状态机与运行时标志短暂不一致）。
  */
 export class QuitGameUseCase {
@@ -96,17 +100,38 @@ export class QuitGameUseCase {
       }
     }
 
-    const shouldDeferTexasSeatRemoval = pre.gameStatus === 'in_hand'
-    if (pre.gameStatus === 'in_hand' && !texasPre) {
+    let didFoldDueToLeave = false
+    if (texasPre?.canFoldDueToLeave(userId)) {
+      try {
+        // 先入队「本手结束后摘环」，防止 FoldDueToLeave 触发 HandEnded 早于事务提交。
+        gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
+        const preEvents = texasPre.dispatchCommand({
+          type: 'FoldDueToLeave',
+          playerId: userId
+        })
+        await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
+          preEvents
+        })
+        didFoldDueToLeave = true
+      } catch (e: unknown) {
+        if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+          await handleFatalTexasEngineError({
+            error: e,
+            roomId,
+            roomKey,
+            getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
+          })
+        }
+        gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+        const message = e instanceof Error ? e.message : '退出失败'
+        return { ok: false, status: HTTP_STATUS.CONFLICT, message }
+      }
+    } else if (pre.gameStatus === 'in_hand') {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
         message: '房间状态与对局引擎不一致，请稍后重试或联系管理员'
       }
-    }
-
-    if (shouldDeferTexasSeatRemoval) {
-      gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
     }
 
     const txRes: QuitTxResult = await prisma.$transaction(async (tx) => {
@@ -137,7 +162,7 @@ export class QuitGameUseCase {
         }
       }
 
-      if (latestRoom.gameStatus === 'in_hand' && !shouldDeferTexasSeatRemoval) {
+      if (latestRoom.gameStatus === 'in_hand' && !didFoldDueToLeave) {
         return {
           kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
@@ -192,7 +217,7 @@ export class QuitGameUseCase {
         restCount,
         deletedRoom,
         newOwnerId,
-        deferTexasSeatRemoval: shouldDeferTexasSeatRemoval
+        deferTexasSeatRemoval: didFoldDueToLeave
       }
     })
 

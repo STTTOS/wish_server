@@ -401,7 +401,7 @@ export class StartGameUseCase {
       currentMatchId,
       matchStartedAt: Date.now(),
       rollbackManager,
-      pendingLeaveByUserId: new Map(),
+      pendingLeaveByUserId: new Set(),
       pendingPostBigBlindUserIds: new Set(),
       /** 与 `eventBinder` 的 `onLock` 一致：首局从注册起至领域事件 `BlindsPosted` 处理完前禁止 FoldDueToLeave */
       quitBlockedUntilBlindsPosted: true

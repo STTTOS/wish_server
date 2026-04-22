@@ -509,31 +509,6 @@ async function processTexasDomainEvent(
     case 'TurnOffered': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      if (
-        gameRuntimeRegistry.consumeQueuedLeaveAutoFold(
-          roomKey,
-          e.payload.userId
-        )
-      ) {
-        try {
-          const leaveEvents = texas.dispatchCommand({
-            type: 'FoldDueToLeave',
-            playerId: e.payload.userId
-          })
-          await interpretTexasDomainEvents(ctx, leaveEvents)
-          await drainBufferedDomainEvents(ctx)
-          return
-        } catch (err) {
-          gameRuntimeRegistry.restoreQueuedLeaveAutoFold(
-            roomKey,
-            e.payload.userId
-          )
-          logger.error(
-            `[TurnOffered] auto FoldDueToLeave failed roomKey=${roomKey} userId=${e.payload.userId}`,
-            err
-          )
-        }
-      }
       const serverNow = Date.now()
       const thinkingTimeMs = roomInfo.thinkingTime * 1000
       const deadlineAt = serverNow + thinkingTimeMs

@@ -17,13 +17,9 @@ export type GameRuntime = {
   rollbackManager: MatchRollbackManager
   /**
    * 本手中途离场的聚合状态：
-   * - `autoFoldOnTurn`: 轮到该玩家时由业务层自动下发 `FoldDueToLeave`
-   * - `removeAfterHandEnd`: 本手结束后 `Texas.reset()` 解锁座再 `room.removeById`
+   * - 集合内 userId 会在本手结束后 `Texas.reset()` 解锁座再 `room.removeById`
    */
-  pendingLeaveByUserId: Map<
-    number,
-    { autoFoldOnTurn: boolean; removeAfterHandEnd: boolean }
-  >
+  pendingLeaveByUserId: Set<number>
   /**
    * `onLock`（或首局分配角色前）至本手领域事件 `BlindsPosted` 处理完成前，禁止局内退出。
    */
@@ -81,8 +77,7 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime?.texas) return []
     const removedUserIds: number[] = []
-    for (const [userId, state] of [...runtime.pendingLeaveByUserId.entries()]) {
-      if (!state.removeAfterHandEnd) continue
+    for (const userId of [...runtime.pendingLeaveByUserId]) {
       try {
         if (runtime.texas.room.has(userId)) {
           runtime.texas.room.removeById(userId)
@@ -102,44 +97,13 @@ export class GameRuntimeRegistry {
   queueLeaveDuringHand(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
-    const current = runtime.pendingLeaveByUserId.get(userId)
-    runtime.pendingLeaveByUserId.set(userId, {
-      autoFoldOnTurn: true,
-      removeAfterHandEnd: true,
-      ...(current ?? {})
-    })
+    runtime.pendingLeaveByUserId.add(userId)
   }
 
   cancelQueuedLeave(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
     runtime.pendingLeaveByUserId.delete(userId)
-  }
-
-  consumeQueuedLeaveAutoFold(roomKey: string, userId: number): boolean {
-    const runtime = this.#runtimes.get(roomKey)
-    if (!runtime) return false
-    const current = runtime.pendingLeaveByUserId.get(userId)
-    if (!current?.autoFoldOnTurn) return false
-    if (current.removeAfterHandEnd) {
-      runtime.pendingLeaveByUserId.set(userId, {
-        autoFoldOnTurn: false,
-        removeAfterHandEnd: true
-      })
-    } else {
-      runtime.pendingLeaveByUserId.delete(userId)
-    }
-    return true
-  }
-
-  restoreQueuedLeaveAutoFold(roomKey: string, userId: number): void {
-    const runtime = this.#runtimes.get(roomKey)
-    if (!runtime) return
-    const current = runtime.pendingLeaveByUserId.get(userId)
-    runtime.pendingLeaveByUserId.set(userId, {
-      autoFoldOnTurn: true,
-      removeAfterHandEnd: current?.removeAfterHandEnd ?? true
-    })
   }
 
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {
