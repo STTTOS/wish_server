@@ -58,6 +58,59 @@ test('notifyPlayerQuitGame excludes leaver when requested', () => {
   }
 })
 
+test('notifyPlayerQuitGame broadcasts full room by default', () => {
+  const gateway = new GameWsGateway()
+  const roomKey = '166'
+  const payload = { roomId: 166, userId: 7 }
+  const calls: Array<{
+    method: 'room' | 'except'
+    roomKey: string
+    excludeUserId?: number
+    message: unknown
+  }> = []
+
+  const originBroadcast = ws.broadcastGameRoom.bind(ws)
+  const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+
+  ;(
+    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
+  ).broadcastGameRoom = (rk, msg) => {
+    calls.push({ method: 'room', roomKey: rk, message: msg })
+  }
+  ;(
+    ws as typeof ws & {
+      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+    }
+  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+    calls.push({
+      method: 'except',
+      roomKey: rk,
+      excludeUserId: uid,
+      message: msg
+    })
+  }
+
+  try {
+    gateway.notifyPlayerQuitGame(roomKey, payload)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0]?.method, 'room')
+    assert.equal(calls[0]?.roomKey, roomKey)
+    assert.deepEqual(calls[0]?.message, {
+      type: 'player-quit-game',
+      data: payload
+    })
+  } finally {
+    ;(
+      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
+    ).broadcastGameRoom = originBroadcast
+    ;(
+      ws as typeof ws & {
+        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+      }
+    ).broadcastGameRoomExcept = originBroadcastExcept
+  }
+})
+
 test('notifyPlayerLeftGame excludes leaver when requested', () => {
   const gateway = new GameWsGateway()
   const roomKey = '67'
@@ -96,6 +149,59 @@ test('notifyPlayerLeftGame excludes leaver when requested', () => {
     assert.equal(calls[0]?.method, 'except')
     assert.equal(calls[0]?.roomKey, roomKey)
     assert.equal(calls[0]?.excludeUserId, 2)
+    assert.deepEqual(calls[0]?.message, {
+      type: 'player-left-game',
+      data: payload
+    })
+  } finally {
+    ;(
+      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
+    ).broadcastGameRoom = originBroadcast
+    ;(
+      ws as typeof ws & {
+        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+      }
+    ).broadcastGameRoomExcept = originBroadcastExcept
+  }
+})
+
+test('notifyPlayerLeftGame broadcasts full room by default', () => {
+  const gateway = new GameWsGateway()
+  const roomKey = '167'
+  const payload = { roomId: 167, userId: 8 }
+  const calls: Array<{
+    method: 'room' | 'except'
+    roomKey: string
+    excludeUserId?: number
+    message: unknown
+  }> = []
+
+  const originBroadcast = ws.broadcastGameRoom.bind(ws)
+  const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+
+  ;(
+    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
+  ).broadcastGameRoom = (rk, msg) => {
+    calls.push({ method: 'room', roomKey: rk, message: msg })
+  }
+  ;(
+    ws as typeof ws & {
+      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+    }
+  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+    calls.push({
+      method: 'except',
+      roomKey: rk,
+      excludeUserId: uid,
+      message: msg
+    })
+  }
+
+  try {
+    gateway.notifyPlayerLeftGame(roomKey, payload)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0]?.method, 'room')
+    assert.equal(calls[0]?.roomKey, roomKey)
     assert.deepEqual(calls[0]?.message, {
       type: 'player-left-game',
       data: payload
