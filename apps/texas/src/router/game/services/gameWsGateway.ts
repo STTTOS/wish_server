@@ -203,6 +203,16 @@ export class GameWsGateway {
     })
   }
 
+  notifyPlayersPostedBigBlind(
+    roomKey: string,
+    data: WsMessage<'players-posted-big-blind'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'players-posted-big-blind',
+      data
+    })
+  }
+
   notifyPlayerHandVoluntarilyShown(
     roomKey: string,
     data: WsPlayerHandVoluntarilyShownData

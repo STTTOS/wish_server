@@ -217,6 +217,26 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 }
 ```
 
+### `players-posted-big-blind`
+
+用途：对局中途加入的玩家入座通知 + 翻前补缴大盲结果。`seatedUserIds` 用于客户端刷新 `playerSet`（拉取成员后更新 UI）；`posts` 用于按行动样式渲染“补缴大盲”下注表现。
+
+```ts
+{
+  roomId: number
+  matchId: number | null
+  seatedUserIds: number[]
+  posts: Array<{
+    userId: number
+    amount: number
+    balance: number
+    totalBetAmount: number
+    currentStageBetAmount: number
+  }>
+  pool: number
+}
+```
+
 **配套 HTTP**（需登录，路径以项目 `apiPrefixClient` + `/game/chipTopUp` 为准）：
 
 - 方法：`POST`
@@ -316,5 +336,6 @@ type WsEventType =
   | 'game-stage-changed'
   | 'game-end'
   | 'player-chip-top-up'
+  | 'players-posted-big-blind'
   | 'game-room-replay'
 ```

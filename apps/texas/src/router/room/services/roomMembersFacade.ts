@@ -6,6 +6,7 @@ import dayjs from 'dayjs'
 import { timeFormat } from '../../../config'
 import { roomMember } from '../../../models'
 import { validateRoomMembersAuth } from './roomMembersValidator'
+import { gameRuntimeRegistry } from '../../game/services/runtimeRegistry'
 
 export type RoomMemberClientRow = {
   userId: number
@@ -19,6 +20,8 @@ export type RoomMemberClientRow = {
   isOnline: boolean
   /** 是否仅在 `/waiting-room` 在线 */
   isWaitingRoomOnline: boolean
+  /** 运行时座位状态（对局中可区分在座/观战） */
+  gameSeatStatus?: 'on_set' | 'hang' | null
 }
 
 export type GetRoomMembersResult = ApiResult<{
@@ -47,6 +50,7 @@ export class RoomMembersFacade {
     ownerId: number
   ): Promise<RoomMemberClientRow[]> {
     const { waiting, game } = this.gateway.getPresence(roomId)
+    const texas = gameRuntimeRegistry.getTexas(String(roomId))
     const rows = await roomMember.findMany({
       where: { roomId },
       include: {
@@ -74,7 +78,8 @@ export class RoomMembersFacade {
         joinedAt: dayjs(joinedAt).format(timeFormat),
         isOwner: ownerId === u.id,
         isOnline: onWaiting || onGame,
-        isWaitingRoomOnline: onWaiting
+        isWaitingRoomOnline: onWaiting,
+        gameSeatStatus: texas?.room.getPlayerSeatStatusById(u.id) ?? null
       }
     })
   }

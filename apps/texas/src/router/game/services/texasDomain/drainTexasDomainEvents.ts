@@ -237,6 +237,26 @@ async function handleHandEnded(
     }))
     texas.unlockSeats()
     gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
+    const newlySeatedUserIds: number[] = []
+    for (const watcher of texas.room.getPlayersBySeatStatus('hang')) {
+      try {
+        texas.room.seat(watcher)
+        const uid = watcher.getUserInfo().id
+        newlySeatedUserIds.push(uid)
+        gameRuntimeRegistry.enqueuePendingPostBigBlind(roomKey, uid)
+      } catch {
+        // ignore: player may be removed concurrently
+      }
+    }
+    if (newlySeatedUserIds.length > 0) {
+      wsGateway.notifyPlayersPostedBigBlind(roomKey, {
+        roomId,
+        matchId: currentMatchId,
+        seatedUserIds: newlySeatedUserIds,
+        posts: [],
+        pool: texas.pool.totalAmount
+      })
+    }
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
     // 游戏结束后, 轮换庄家位置
     // 在其他玩家加入时, 有新的BB anchor
@@ -384,6 +404,25 @@ async function processTexasDomainEvent(
       return
     }
     case 'PostedBigBlind':
+      {
+        const matchId = getRuntime().currentMatchId
+        if (matchId != null) {
+          await betRecord.createMany({
+            data: [
+              {
+                userId: e.payload.userId,
+                actionType: 'bet' as ActionType,
+                amount: e.payload.amount,
+                stage: 'pre_flop',
+                matchId,
+                domainHandId: e.payload.handId,
+                domainEventSeq: e.payload.seq
+              }
+            ],
+            skipDuplicates: true
+          })
+        }
+      }
       return
     case 'PotUpdated':
     case 'TurnEnded':

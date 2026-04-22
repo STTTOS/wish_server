@@ -170,6 +170,20 @@ export type WsPlayerQuitGameData = {
   userId: number
 }
 
+export type WsPlayersPostedBigBlindData = {
+  roomId: number
+  matchId: number | null
+  seatedUserIds: number[]
+  posts: Array<{
+    userId: number
+    amount: number
+    balance: number
+    totalBetAmount: number
+    currentStageBetAmount: number
+  }>
+  pool: number
+}
+
 export type WsPlayerHandVoluntarilyShownData = {
   roomId: number
   matchId: number
@@ -211,6 +225,7 @@ export type WsEventDataMap = {
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
   'player-quit-game': WsPlayerQuitGameData
+  'players-posted-big-blind': WsPlayersPostedBigBlindData
   'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
   'game-room-replay': WsGameRoomReplayData
 }

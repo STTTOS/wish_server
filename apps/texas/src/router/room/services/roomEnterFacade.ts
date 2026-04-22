@@ -5,6 +5,7 @@ import prisma from '../../../models'
 import { RoomJoinFacade } from './roomJoinFacade'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { JoinGameUseCase } from '../../game/services/joinGameUseCase'
+import { gameRuntimeRegistry } from '../../game/services/runtimeRegistry'
 
 /** `POST /room/enter` 成功体：与 `room/join`、`game/join` 语义对齐，便于客户端统一解析 */
 export type RoomEnterSuccessData = {
@@ -12,6 +13,7 @@ export type RoomEnterSuccessData = {
   gameStatus: RoomGameStatus
   joinedAs: 'waiting_room' | 'game_table'
   gameRuntimeAttached: boolean
+  currentMatchId: number | null
 }
 
 export type RoomEnterResult = ApiResult<RoomEnterSuccessData>
@@ -71,11 +73,13 @@ export class RoomEnterFacade {
           roomId: r.data.roomId,
           gameStatus: r.data.gameStatus,
           joinedAs: r.data.joinedAs,
-          gameRuntimeAttached: r.data.gameRuntimeAttached
+          gameRuntimeAttached: r.data.gameRuntimeAttached,
+          currentMatchId: null
         }
       }
     }
 
+    const roomKey = String(row.id)
     const g = await this.joinGame.execute({
       roomId: row.id,
       userId: input.userId
@@ -95,7 +99,8 @@ export class RoomEnterFacade {
         roomId: row.id,
         gameStatus: row.gameStatus,
         joinedAs: 'game_table',
-        gameRuntimeAttached: true
+        gameRuntimeAttached: gameRuntimeRegistry.hasTexas(roomKey),
+        currentMatchId: gameRuntimeRegistry.getCurrentMatchId(roomKey) ?? null
       }
     }
   }

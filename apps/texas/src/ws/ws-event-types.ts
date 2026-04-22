@@ -31,6 +31,7 @@ export type {
   WsPlayerBuiltInVoiceData,
   WsPlayerChipTopUpData,
   WsPlayerHandDealtData,
+  WsPlayersPostedBigBlindData,
   WsPlayerHandVoluntarilyShownData,
   WsPlayerQuitGameData,
   WsPlayerRolesAssignedData

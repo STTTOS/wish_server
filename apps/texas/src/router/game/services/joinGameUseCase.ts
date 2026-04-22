@@ -8,6 +8,7 @@ import {
 } from 'texas-poker-core'
 
 import prisma from '../../../models'
+import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { MAX_PLAYERS_COUNT } from '../../../constants/game'
@@ -27,6 +28,8 @@ type EnsureMemberTxResult =
  * - Core `room.status === 'seats_locked'`：仅 `join` 观战；`seats_open`：`join` 后 `seat`。
  */
 export class JoinGameUseCase {
+  #wsGateway = new GameWsGateway()
+
   async #ensureRoomMemberForNonWaitingRoom(input: {
     roomId: number
     userId: number
@@ -153,6 +156,13 @@ export class JoinGameUseCase {
         return { ok: false, status: ensured.status, message: ensured.message }
       }
       createdNewMember = ensured.createdNewMember
+      if (createdNewMember) {
+        const memberCount = await prisma.roomMember.count({ where: { roomId } })
+        this.#wsGateway.broadcastRoomListMemberCountChanged({
+          roomId,
+          memberCount
+        })
+      }
     }
 
     const texas = gameRuntimeRegistry.getTexas(roomKey)
@@ -160,6 +170,11 @@ export class JoinGameUseCase {
       if (createdNewMember) {
         await prisma.roomMember.delete({
           where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+        })
+        const memberCount = await prisma.roomMember.count({ where: { roomId } })
+        this.#wsGateway.broadcastRoomListMemberCountChanged({
+          roomId,
+          memberCount
         })
       }
       return {
@@ -179,6 +194,15 @@ export class JoinGameUseCase {
       if (seatStatus === 'hang') {
         if (engineRoomStatus === 'seats_open') {
           texas.room.seatById(userId)
+          gameRuntimeRegistry.enqueuePendingPostBigBlind(roomKey, userId)
+          const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
+          this.#wsGateway.notifyPlayersPostedBigBlind(roomKey, {
+            roomId,
+            matchId: runtime.currentMatchId,
+            seatedUserIds: [userId],
+            posts: [],
+            pool: texas.pool.totalAmount
+          })
           await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
         }
         return { ok: true, data: null }
@@ -211,6 +235,15 @@ export class JoinGameUseCase {
       } else {
         texas.room.join(player)
         texas.room.seat(player)
+        gameRuntimeRegistry.enqueuePendingPostBigBlind(roomKey, userId)
+        const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
+        this.#wsGateway.notifyPlayersPostedBigBlind(roomKey, {
+          roomId,
+          matchId: runtime.currentMatchId,
+          seatedUserIds: [userId],
+          posts: [],
+          pool: texas.pool.totalAmount
+        })
       }
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
       return { ok: true, data: null }
@@ -220,6 +253,13 @@ export class JoinGameUseCase {
         try {
           await prisma.roomMember.delete({
             where: { roomId_userId: { roomId, userId } } // eslint-disable-line camelcase
+          })
+          const memberCount = await prisma.roomMember.count({
+            where: { roomId }
+          })
+          this.#wsGateway.broadcastRoomListMemberCountChanged({
+            roomId,
+            memberCount
           })
         } catch {
           /* ignore */

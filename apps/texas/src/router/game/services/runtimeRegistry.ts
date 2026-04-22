@@ -24,6 +24,8 @@ export type GameRuntime = {
    * `onLock`（或首局分配角色前）至本手领域事件 `BlindsPosted` 处理完成前，禁止局内退出。
    */
   quitBlockedUntilBlindsPosted: boolean
+  /** 下手开局后需尝试 `PostBigBlind` 的新入座玩家。 */
+  pendingPostBigBlindUserIds: Set<number>
 }
 
 /**
@@ -105,6 +107,20 @@ export class GameRuntimeRegistry {
 
   isQuitBlockedUntilBlindsPosted(roomKey: string): boolean {
     return Boolean(this.#runtimes.get(roomKey)?.quitBlockedUntilBlindsPosted)
+  }
+
+  enqueuePendingPostBigBlind(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingPostBigBlindUserIds.add(userId)
+  }
+
+  consumePendingPostBigBlind(roomKey: string): number[] {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime || runtime.pendingPostBigBlindUserIds.size === 0) return []
+    const out = [...runtime.pendingPostBigBlindUserIds]
+    runtime.pendingPostBigBlindUserIds.clear()
+    return out
   }
 
   /** 销毁运行时：reset Texas 后移除上下文。 */
