@@ -5,11 +5,11 @@ import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { roomMember, room as roomModel } from '../../../models'
 
 /**
- * 校验“房主点击开始游戏”请求，返回后续流程所需上下文。
+ * 校验“waiting-room 房主点击开始游戏”请求，返回后续流程所需上下文。
  */
 export async function validateStartGameRequest(
   roomId: number,
-  ownerId: number
+  lobbyOwnerId: number
 ): Promise<StartGameValidationResult> {
   const roomInfo = await roomModel.findUnique({
     where: { id: roomId },
@@ -18,11 +18,11 @@ export async function validateStartGameRequest(
   if (!roomInfo || roomInfo.deletedAt) {
     return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '房间不存在' }
   }
-  if (roomInfo.ownerId !== ownerId) {
+  if (roomInfo.ownerId !== lobbyOwnerId) {
     return {
       ok: false,
       status: HTTP_STATUS.FORBIDDEN,
-      message: '仅房主可开始游戏'
+      message: '仅等待房房主可开始游戏'
     }
   }
   const roomGameStatus = roomInfo.gameStatus

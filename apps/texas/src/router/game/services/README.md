@@ -35,3 +35,4 @@
 - 默认优先通过 `flow/`、`runtimeKit/` 引入，避免跨文件深层依赖。
 - 清理运行时统一调用 `destroyRuntime`，不要仅做 delete。
 - 需要当前 matchId 时优先调用 `getCurrentMatchIdWithFallback`。
+- `owner` 语义只用于 waiting-room 治理；in-game 编排统一使用 `starterUserId` / `runtimeStarterUserId` 描述开局引导用户。

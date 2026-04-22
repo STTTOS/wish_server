@@ -388,7 +388,7 @@ export class StartGameUseCase {
     const texas = createTexasAndSeatPlayers({
       roomInfo: runtimeRoomInfo,
       members: connectedMembers,
-      ownerId: runtimeStarterUserId
+      starterUserId: runtimeStarterUserId
     })
     /** 所有玩家加载完后, 等待3s再通知玩家进入游戏 */
     await this.#delay(3000)
@@ -476,8 +476,8 @@ export class StartGameUseCase {
   }
 
   /** 校验 + 切 entering + 推送 game-entering，返回供后台 #runStartFlow 使用的数据。 */
-  async requestStart(roomId: number, ownerId: number) {
-    const validated = await validateStartGameRequest(roomId, ownerId)
+  async requestStart(roomId: number, lobbyOwnerId: number) {
+    const validated = await validateStartGameRequest(roomId, lobbyOwnerId)
     if (!validated.ok) return validated
 
     const { members } = validated.data
@@ -489,7 +489,7 @@ export class StartGameUseCase {
       ok: true as const,
       data: {
         roomId,
-        lobbyOwnerId: ownerId,
+        lobbyOwnerId,
         roomInfo: validated.data.roomInfo,
         members,
         roomKey: String(roomId),

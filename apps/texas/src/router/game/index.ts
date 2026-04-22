@@ -72,19 +72,19 @@ router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {
 // 以下开始新增接口
 
 /**
- * 客户端：房主点击开始游戏（进入对局）
+ * 客户端：waiting-room 房主点击开始游戏（进入对局）
  * url: client/game/entring
  * body: { roomId: number }
  */
 router.post(gameClientApi('/entring'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body ?? {}
-  const ownerId = ctx.state.user!.id
+  const lobbyOwnerId = ctx.state.user!.id
   if (!roomId || !Number.isInteger(roomId)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
 
-  const requested = await startGameUseCase.requestStart(roomId, ownerId)
+  const requested = await startGameUseCase.requestStart(roomId, lobbyOwnerId)
   if (!requested.ok) {
     respondFromApiResult(ctx, requested)
     return

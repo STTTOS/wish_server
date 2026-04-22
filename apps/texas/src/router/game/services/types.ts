@@ -5,12 +5,14 @@ import type { GameRuntimeRegistry } from './runtimeRegistry'
 
 export type StartRoomInfo = {
   id: number
+  /** waiting-room owner id snapshot */
   ownerId: number
   deletedAt: Date | null
   lowestBetAmount: number
   initialChips: number
   thinkingTime: number
   isPrivate: boolean
+  /** waiting-room owner profile snapshot (for entering -> in-game bootstrap only) */
   owner: {
     id: number
     name: string

@@ -82,3 +82,4 @@
 - 新业务逻辑优先放在 `flow` / `runtimeKit` 对应层，不要回流到路由大函数。
 - 运行时清理统一调用 `destroyRuntime`，避免仅 delete 导致状态残留。
 - 需要当前手 `matchId` 时，优先使用 `getCurrentMatchIdWithFallback`。
+- owner 仅属于 waiting-room 治理语义；in-game 流程使用 `runtimeStarterUserId`，避免把治理语义带入牌局引擎。
