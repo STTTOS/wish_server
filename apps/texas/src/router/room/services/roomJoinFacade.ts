@@ -1,7 +1,7 @@
 import type { ApiResult } from '../../../utils/apiResult'
 import type { RoomGameStatus } from '@prisma/texas-client'
 import type { WaitingRoomGateway } from './waitingRoomGateway'
-import type { WsWaitingRoomMemberJoinedData } from '../ws-event-types'
+import type { WsWaitingRoomMemberJoinedData } from '@wishufree/texas-ws-contract'
 
 import dayjs from 'dayjs'
 import { Prisma } from '@prisma/texas-client'

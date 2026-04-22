@@ -8,7 +8,7 @@ import type {
   WsWaitingRoomOwnerChangedData,
   WsRoomListMemberCountChangedData,
   WsRoomListPlaySessionChangedData
-} from '../ws-event-types'
+} from '@wishufree/texas-ws-contract'
 
 /**
  * 等待房 / 游戏房 WS 在线态查询入口（Facade 与路由不直接依赖 SocketServer 细节）。

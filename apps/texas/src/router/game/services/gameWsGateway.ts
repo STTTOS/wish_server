@@ -1,10 +1,10 @@
-import type { RoomWsMessage } from '../../room/ws-event-types'
 import type {
   WsMessage,
+  RoomWsMessage,
   WsPlayerQuitGameData,
   WsPlayerRolesAssignedData,
   WsPlayerHandVoluntarilyShownData
-} from '../../../ws/ws-event-types'
+} from '@wishufree/texas-ws-contract'
 
 import { ws } from '../../../server'
 

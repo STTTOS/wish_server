@@ -1,4 +1,4 @@
-import type { WsMessage } from '../ws/ws-event-types'
+import type { WsMessage } from '@wishufree/texas-ws-contract'
 
 import { logger } from '../logger'
 import { gameRuntimeConfig } from '../utils/gameRuntimeConfig'

@@ -1,4 +1,4 @@
-import type { WsMatchOverview } from '../../../ws/ws-event-types'
+import type { WsMatchOverview } from '@wishufree/texas-ws-contract'
 
 import prisma from '../../../models'
 import {

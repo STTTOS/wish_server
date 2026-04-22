@@ -1,6 +1,6 @@
 # WS 事件参考（给 App）
 
-基于 `apps/texas/src/ws/ws-event-types.ts` 整理。
+基于 `packages/texas-ws-contract/index.d.ts` 整理。
 
 ## 消息包格式
 

@@ -1,5 +1,4 @@
-import type { WsMessage } from '../ws/ws-event-types'
-import type { RoomWsMessage } from '../router/room/ws-event-types'
+import type { WsMessage, RoomWsMessage } from '@wishufree/texas-ws-contract'
 
 import { OnlineStatus } from 'texas-poker-core'
 import { Server, Socket, Namespace } from 'socket.io'

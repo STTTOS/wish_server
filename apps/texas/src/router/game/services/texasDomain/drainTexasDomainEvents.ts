@@ -1,7 +1,7 @@
 import type { Player } from 'texas-poker-core'
 import type { ActionType } from '@prisma/texas-client'
 import type { TexasEventContext } from './texasEventContext'
-import type { WsMatchOverview } from '../../../../ws/ws-event-types'
+import type { WsMatchOverview } from '@wishufree/texas-ws-contract'
 
 import { Prisma } from '@prisma/texas-client'
 import {
