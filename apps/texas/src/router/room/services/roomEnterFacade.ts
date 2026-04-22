@@ -6,6 +6,7 @@ import { RoomJoinFacade } from './roomJoinFacade'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { JoinGameUseCase } from '../../game/services/joinGameUseCase'
 import { gameRuntimeRegistry } from '../../game/services/runtimeRegistry'
+import { getCurrentMatchIdWithFallback } from '../../game/services/currentMatch'
 
 /** `POST /room/enter` 成功体：与 `room/join`、`game/join` 语义对齐，便于客户端统一解析 */
 export type RoomEnterSuccessData = {
@@ -29,22 +30,33 @@ export class RoomEnterFacade {
   ) {}
 
   async execute(input: {
-    roomCode: string
+    roomCode?: string
+    roomId?: number
     userId: number
   }): Promise<RoomEnterResult> {
-    const raw = typeof input.roomCode === 'string' ? input.roomCode : ''
-    const code = raw.trim().toUpperCase()
-    if (!code) {
+    const normalizedRoomId =
+      typeof input.roomId === 'number' &&
+      Number.isFinite(input.roomId) &&
+      input.roomId > 0
+        ? Math.trunc(input.roomId)
+        : null
+    const rawCode = typeof input.roomCode === 'string' ? input.roomCode : ''
+    const code = rawCode.trim().toUpperCase()
+
+    if (normalizedRoomId == null && !code) {
       return {
         ok: false,
         status: HTTP_STATUS.BAD_REQUEST,
-        message: '房间代码不能为空'
+        message: '房间参数不能为空'
       }
     }
 
     const row = await prisma.room.findUnique({
-      where: { activeCode: code },
-      select: { id: true, gameStatus: true, deletedAt: true }
+      where:
+        normalizedRoomId != null
+          ? { id: normalizedRoomId }
+          : { activeCode: code },
+      select: { id: true, gameStatus: true, deletedAt: true, activeCode: true }
     })
     if (!row || row.deletedAt) {
       return {
@@ -55,8 +67,16 @@ export class RoomEnterFacade {
     }
 
     if (row.gameStatus === 'waiting') {
+      const roomCodeForJoin = row.activeCode ?? code
+      if (!roomCodeForJoin) {
+        return {
+          ok: false,
+          status: HTTP_STATUS.CONFLICT,
+          message: '等待房缺少有效房间代码，请刷新后重试'
+        }
+      }
       const r = await this.roomJoin.execute({
-        roomCode: input.roomCode,
+        roomCode: roomCodeForJoin,
         userId: input.userId
       })
       if (!r.ok) {
@@ -93,6 +113,8 @@ export class RoomEnterFacade {
       }
     }
 
+    const currentMatchId = await getCurrentMatchIdWithFallback(row.id)
+
     return {
       ok: true,
       data: {
@@ -100,7 +122,7 @@ export class RoomEnterFacade {
         gameStatus: row.gameStatus,
         joinedAs: 'game_table',
         gameRuntimeAttached: gameRuntimeRegistry.hasTexas(roomKey),
-        currentMatchId: gameRuntimeRegistry.getCurrentMatchId(roomKey) ?? null
+        currentMatchId
       }
     }
   }

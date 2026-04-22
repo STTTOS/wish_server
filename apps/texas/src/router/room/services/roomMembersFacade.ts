@@ -69,6 +69,10 @@ export class RoomMembersFacade {
     return rows.map(({ joinedAt, user: u }) => {
       const onWaiting = waiting.has(u.id)
       const onGame = game.has(u.id)
+      const runtimeSeatStatus =
+        texas?.room.getPlayerSeatStatusById(u.id) ?? null
+      const gameSeatStatus =
+        runtimeSeatStatus === 'on-set' ? 'on_set' : runtimeSeatStatus
       return {
         userId: u.id,
         name: u.name,
@@ -79,7 +83,7 @@ export class RoomMembersFacade {
         isOwner: ownerId === u.id,
         isOnline: onWaiting || onGame,
         isWaitingRoomOnline: onWaiting,
-        gameSeatStatus: texas?.room.getPlayerSeatStatusById(u.id) ?? null
+        gameSeatStatus
       }
     })
   }

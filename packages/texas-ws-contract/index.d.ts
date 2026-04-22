@@ -237,6 +237,87 @@ export type WsMessage<T extends WsEventType = WsEventType> = {
   data: WsEventDataMap[T]
 }
 
+/**
+ * room-list / waiting-room 命名空间事件（不属于 /game 流）。
+ */
+export type WsWaitingRoomMemberJoinedData = {
+  userId: number
+  name: string
+  avatarUrl: string | null
+  avatarKey: string
+  pokerBackgroundKey: string
+  joinedAt: string
+  isOwner: boolean
+}
+
+export type WsWaitingRoomMemberLeftData = {
+  userId: number
+  reason: 'quit' | 'kick'
+  operatorId?: number
+}
+
+export type WsWaitingRoomMemberPresenceData = {
+  userId: number
+  online: boolean
+}
+
+export type WsWaitingRoomOwnerChangedData = {
+  oldOwnerId: number
+  newOwnerId: number
+}
+
+export type WsRoomListMemberCountChangedData = {
+  roomId: number
+  memberCount: number
+}
+
+export type WsRoomListPlaySession = 'lobby' | 'in_game'
+
+export type WsRoomListPlaySessionChangedData = {
+  roomId: number
+  playSession: WsRoomListPlaySession
+}
+
+export type WsRoomListRoomDeletedData = {
+  roomId: number
+}
+
+export type WsRoomListRoomCreatedData = {
+  id: number
+  code: string
+  owner: {
+    id: number
+    name: string
+    avatarUrl: string | null
+    avatarKey: string
+    pokerBackgroundKey: string
+  }
+  initialChips: number
+  thinkingTime: number
+  lowestBetAmount: number
+  createdAt: string
+  memberCount: number
+  playSession: WsRoomListPlaySession
+}
+
+export type RoomWsEventDataMap = {
+  'waiting-room-member-joined': WsWaitingRoomMemberJoinedData
+  'waiting-room-member-left': WsWaitingRoomMemberLeftData
+  'waiting-room-member-presence': WsWaitingRoomMemberPresenceData
+  'waiting-room-owner-changed': WsWaitingRoomOwnerChangedData
+  'room-list-member-count-changed': WsRoomListMemberCountChangedData
+  'room-list-play-session-changed': WsRoomListPlaySessionChangedData
+  'room-list-room-deleted': WsRoomListRoomDeletedData
+  'room-list-room-created': WsRoomListRoomCreatedData
+}
+
+export type RoomWsEventType = keyof RoomWsEventDataMap
+
+export type RoomWsMessage<T extends RoomWsEventType = RoomWsEventType> = {
+  type: T
+  data: RoomWsEventDataMap[T]
+}
+
 export type PostGameTakeActionParams = {
   actionType: ActionType
   amount?: number

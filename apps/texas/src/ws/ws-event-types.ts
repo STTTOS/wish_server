@@ -34,5 +34,17 @@ export type {
   WsPlayersPostedBigBlindData,
   WsPlayerHandVoluntarilyShownData,
   WsPlayerQuitGameData,
-  WsPlayerRolesAssignedData
+  WsPlayerRolesAssignedData,
+  RoomWsEventDataMap,
+  RoomWsEventType,
+  RoomWsMessage,
+  WsRoomListMemberCountChangedData,
+  WsRoomListPlaySession,
+  WsRoomListPlaySessionChangedData,
+  WsRoomListRoomCreatedData,
+  WsRoomListRoomDeletedData,
+  WsWaitingRoomMemberJoinedData,
+  WsWaitingRoomMemberLeftData,
+  WsWaitingRoomMemberPresenceData,
+  WsWaitingRoomOwnerChangedData
 } from '@wishufree/texas-ws-contract'

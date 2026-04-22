@@ -163,12 +163,19 @@ export class StartGameUseCase {
   async #handleBackWaitingRoom(input: {
     roomId: number
     ownerId: number
+    isPrivate: boolean
     newOwnerId: number
     connectedUserIds: number[]
     kickedUserIds: number[]
   }) {
-    const { roomId, ownerId, newOwnerId, connectedUserIds, kickedUserIds } =
-      input
+    const {
+      roomId,
+      ownerId,
+      isPrivate,
+      newOwnerId,
+      connectedUserIds,
+      kickedUserIds
+    } = input
 
     await prisma.$transaction(async (tx) => {
       await tx.room.update({
@@ -188,6 +195,12 @@ export class StartGameUseCase {
 
     this.#broadcastOwnerChangedIfNeeded(roomId, ownerId, newOwnerId)
     this.#disconnectUsers(roomId, kickedUserIds)
+    if (!isPrivate) {
+      this.wsGateway.broadcastRoomListPlaySessionChanged({
+        roomId,
+        playSession: 'lobby'
+      })
+    }
     this.wsGateway.broadcastRoomListMemberCountChanged({
       roomId,
       memberCount: 1
@@ -496,6 +509,7 @@ export class StartGameUseCase {
           await this.#handleBackWaitingRoom({
             roomId: snapshot.roomId,
             ownerId: snapshot.ownerId,
+            isPrivate: snapshot.roomInfo.isPrivate,
             newOwnerId: plan.newOwnerId,
             connectedUserIds: plan.connectedUserIds,
             kickedUserIds: plan.kickedUserIds
@@ -508,10 +522,14 @@ export class StartGameUseCase {
     } catch (e: unknown) {
       gameRuntimeRegistry.destroyRuntime(roomKey)
       this.wsGateway.untrackEntering(roomId)
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'waiting' }
-      })
+      try {
+        await transitionRoomGameStatus(roomId, 'waiting')
+      } catch {
+        await roomModel.update({
+          where: { id: roomId },
+          data: { gameStatus: 'waiting' }
+        })
+      }
       logger.error('[entring] start game flow failed', e)
     }
   }

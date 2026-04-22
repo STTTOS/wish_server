@@ -13,6 +13,7 @@ const fakeRoomInfo = {
   lowestBetAmount: 10,
   initialChips: 1000,
   thinkingTime: 30,
+  isPrivate: false,
   owner: { id: 1, name: 'o' }
 } satisfies StartRoomInfo
 

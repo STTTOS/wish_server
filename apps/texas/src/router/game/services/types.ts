@@ -10,6 +10,7 @@ export type StartRoomInfo = {
   lowestBetAmount: number
   initialChips: number
   thinkingTime: number
+  isPrivate: boolean
   owner: {
     id: number
     name: string

@@ -6,7 +6,8 @@ import type {
   WsWaitingRoomMemberLeftData,
   WsWaitingRoomMemberJoinedData,
   WsWaitingRoomOwnerChangedData,
-  WsRoomListMemberCountChangedData
+  WsRoomListMemberCountChangedData,
+  WsRoomListPlaySessionChangedData
 } from '../ws-event-types'
 
 /**
@@ -42,6 +43,18 @@ export class WaitingRoomGateway {
     const data: WsRoomListMemberCountChangedData = { roomId, memberCount }
     const msg: RoomWsMessage<'room-list-member-count-changed'> = {
       type: 'room-list-member-count-changed',
+      data
+    }
+    this.socket.broadcastRoomList(msg)
+  }
+
+  broadcastRoomListPlaySessionChanged(
+    roomId: number,
+    playSession: WsRoomListPlaySessionChangedData['playSession']
+  ) {
+    const data: WsRoomListPlaySessionChangedData = { roomId, playSession }
+    const msg: RoomWsMessage<'room-list-play-session-changed'> = {
+      type: 'room-list-play-session-changed',
       data
     }
     this.socket.broadcastRoomList(msg)

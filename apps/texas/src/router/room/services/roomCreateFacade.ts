@@ -8,6 +8,7 @@ import prisma from '../../../models'
 import { timeFormat } from '../../../config'
 import { generateRoomCode } from '../../../utils/roomCode'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { roomPlaySessionFromGameStatus } from '../roomPlaySession'
 import {
   type RoomCreateInput,
   validateRoomCreateAuth
@@ -213,7 +214,8 @@ export class RoomCreateFacade {
         thinkingTime,
         lowestBetAmount,
         createdAt: dayjs(createdAt).format(timeFormat),
-        memberCount: 1
+        memberCount: 1,
+        playSession: roomPlaySessionFromGameStatus('waiting')
       })
     }
 

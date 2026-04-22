@@ -107,16 +107,45 @@ router.post(roomApiClient('/list'), async (ctx) => {
 })
 
 /**
- * 客户端：统一「进房」入口（`roomCode`）。服务端按 `gameStatus` 分派：`waiting` → 等房入表；否则 → 对局入桌（同 `game/join`）。
+ * 客户端：通过房间代码解析 `roomId`（代码仅作为入口凭证；后续链路统一用 roomId）。
+ */
+router.post(roomApiClient('/resolve'), async (ctx) => {
+  const { roomCode } = (ctx.request.body ?? {}) as { roomCode?: unknown }
+  const normalizedCode =
+    typeof roomCode === 'string' ? roomCode.trim().toUpperCase() : ''
+  if (!normalizedCode) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomCode')
+    return
+  }
+  const roomInfo = await room.findUnique({
+    where: { activeCode: normalizedCode },
+    select: { id: true, deletedAt: true }
+  })
+  if (!roomInfo || roomInfo.deletedAt) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在或房间代码错误')
+    return
+  }
+  response.success(ctx, { roomId: roomInfo.id })
+})
+
+/**
+ * 客户端：统一「进房」入口（`roomId` 优先，兼容 `roomCode`）。
+ * 服务端按 `gameStatus` 分派：`waiting` → 等房入表；否则 → 对局入桌（同 `game/join`）。
  * 成功 `data`：`roomId`、`gameStatus`、`joinedAs`、`gameRuntimeAttached`。
  */
 router.post(roomApiClient('/enter'), async (ctx) => {
-  const { roomCode } = ctx.request.body as { roomCode?: unknown }
+  const { roomCode, roomId } = ctx.request.body as {
+    roomCode?: unknown
+    roomId?: unknown
+  }
   const userId = ctx.state.user!.id
   const normalizedRoomCode = typeof roomCode === 'string' ? roomCode : ''
+  const normalizedRoomId =
+    typeof roomId === 'number' ? roomId : Number(roomId ?? Number.NaN)
 
   const result = await roomEnterFacade.execute({
     roomCode: normalizedRoomCode,
+    roomId: normalizedRoomId,
     userId
   })
   respondFromApiResult(ctx, result, { okMessage: '加入成功' })

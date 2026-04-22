@@ -314,6 +314,25 @@ type WsMessage<T extends WsEventType = WsEventType> = {
   - **`truncated: true`**：`afterSeq < latestSeq` 但环形缓冲里已无中间消息（断线过久或消息过多被挤出）；须先拉 HTTP 快照对齐，再把本地游标设为返回的 `latestSeq`。
 - **未入缓冲的消息**：`broadcastGameToUser`（如 `player-hand-dealt`）、`broadcastGameEach` 等**不会**进入环形缓冲，仍依赖快照或既有单播逻辑。
 
+### 中途加入/重连恢复时序
+
+```mermaid
+sequenceDiagram
+  participant App
+  participant HTTP as Server /game/fetchCurrentGameState
+  participant WS as Server /game
+
+  App->>HTTP: POST /game/fetchCurrentGameState
+  HTTP-->>App: currentState + latestWsSeq
+  Note over App: 先用 currentState 恢复当前牌局 UI
+
+  App->>WS: connect /game(auth.roomId, auth.gameRoomSinceSeq=latestWsSeq)
+  WS-->>App: game-room-replay(events > latestWsSeq)
+  Note over App: 逐条重放补齐窗口期缺失事件
+
+  WS-->>App: 实时事件流
+```
+
 ---
 
 ## 事件枚举总表

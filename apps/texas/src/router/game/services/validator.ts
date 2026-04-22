@@ -58,10 +58,6 @@ export async function markRoomEnteringAndNotify(
   userIds: number[],
   wsGateway = new GameWsGateway()
 ) {
-  await roomModel.update({
-    where: { id: roomId },
-    data: { gameStatus: 'entering' }
-  })
   wsGateway.notifyEntering(roomId)
   wsGateway.trackEntering(roomId, userIds)
 }

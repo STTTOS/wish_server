@@ -176,6 +176,16 @@ export class GameWsGateway {
     ws.broadcastRoomList(msg)
   }
 
+  broadcastRoomListPlaySessionChanged(
+    data: RoomWsMessage<'room-list-play-session-changed'>['data']
+  ) {
+    const msg: RoomWsMessage<'room-list-play-session-changed'> = {
+      type: 'room-list-play-session-changed',
+      data
+    }
+    ws.broadcastRoomList(msg)
+  }
+
   broadcastRoomListRoomDeleted(roomId: number) {
     const msg: RoomWsMessage<'room-list-room-deleted'> = {
       type: 'room-list-room-deleted',
