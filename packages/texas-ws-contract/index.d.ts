@@ -51,6 +51,8 @@ export type WsPlayerActionTakenData = {
   userId: number
   actionId: number
   actionType: ActionType
+  /** `leave_game` 表示由中途离场触发的强制弃牌（FoldDueToLeave） */
+  reason?: 'leave_game'
   amount: number
   pool: number
   totalBetAmount: number
@@ -175,6 +177,13 @@ export type WsGameRoomClosedData = {
   reason: 'insufficient_players'
 }
 
+/** 局间由观战席转为在座（用于客户端刷新 PlayerSet）。 */
+export type WsPlayersSeatedData = {
+  roomId: number
+  matchId: number | null
+  userIds: number[]
+}
+
 export type WsPlayersPostedBigBlindData = {
   roomId: number
   matchId: number | null
@@ -231,6 +240,7 @@ export type WsEventDataMap = {
   'player-built-in-voice': WsPlayerBuiltInVoiceData
   'player-quit-game': WsPlayerQuitGameData
   'game-room-closed': WsGameRoomClosedData
+  'players-seated': WsPlayersSeatedData
   'players-posted-big-blind': WsPlayersPostedBigBlindData
   'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
   'game-room-replay': WsGameRoomReplayData

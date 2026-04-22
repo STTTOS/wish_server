@@ -244,7 +244,11 @@ async function handleHandEnded(
     // 在其他玩家加入时, 有新的BB anchor
     texas.rotateRolesForNewHand()
 
-    gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
+    const removedAfterHandEndUserIds =
+      gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
+    for (const userId of removedAfterHandEndUserIds) {
+      wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+    }
     const newlySeatedUserIds: number[] = []
     for (const watcher of texas.room.getPlayersBySeatStatus('hang')) {
       try {
@@ -281,12 +285,10 @@ async function handleHandEnded(
     }
 
     if (newlySeatedUserIds.length > 0) {
-      wsGateway.notifyPlayersPostedBigBlind(roomKey, {
+      wsGateway.notifyPlayersSeated(roomKey, {
         roomId,
         matchId: currentMatchId,
-        seatedUserIds: newlySeatedUserIds,
-        posts: [],
-        pool: texas.pool.totalAmount
+        userIds: newlySeatedUserIds
       })
     }
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
@@ -460,6 +462,12 @@ async function processTexasDomainEvent(
     case 'PlayerActed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
+      const isLeaveGameFold =
+        String(e.payload.actionType) === 'fold' &&
+        gameRuntimeRegistry.consumePendingLeaveGameFoldReason(
+          roomKey,
+          e.payload.userId
+        )
       const amount = e.payload.amount ?? 0
       let row: { id: number }
       try {
@@ -497,6 +505,7 @@ async function processTexasDomainEvent(
         userId: e.payload.userId,
         actionId: row.id,
         actionType: e.payload.actionType,
+        ...(isLeaveGameFold ? { reason: 'leave_game' as const } : {}),
         amount,
         pool: texas.pool.totalAmount,
         totalBetAmount: player.totalBetAmount,

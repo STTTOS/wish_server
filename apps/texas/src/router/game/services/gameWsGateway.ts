@@ -223,6 +223,16 @@ export class GameWsGateway {
     })
   }
 
+  notifyPlayersSeated(
+    roomKey: string,
+    data: WsMessage<'players-seated'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'players-seated',
+      data
+    })
+  }
+
   notifyPlayersPostedBigBlind(
     roomKey: string,
     data: WsMessage<'players-posted-big-blind'>['data']

@@ -97,6 +97,7 @@ export class QuitGameUseCase {
     let didFoldDueToLeave = false
     if (texasPre?.canFoldDueToLeave(userId)) {
       try {
+        gameRuntimeRegistry.enqueuePendingLeaveGameFold(roomKey, userId)
         const preEvents = texasPre.dispatchCommand({
           type: 'FoldDueToLeave',
           playerId: userId
@@ -114,6 +115,7 @@ export class QuitGameUseCase {
             getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
           })
         }
+        gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
         const message = e instanceof Error ? e.message : '退出失败'
         return { ok: false, status: HTTP_STATUS.CONFLICT, message }
       }
@@ -213,6 +215,7 @@ export class QuitGameUseCase {
     })
 
     if (txRes.kind === 'fail') {
+      gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
       return {
         ok: false,
         status: txRes.status,
@@ -221,10 +224,12 @@ export class QuitGameUseCase {
     }
 
     if (txRes.kind === 'noop') {
+      gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
       return { ok: true, data: null }
     }
 
+    gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
     const texas = gameRuntimeRegistry.getTexas(roomKey)
 
     if (texas) {
@@ -232,6 +237,7 @@ export class QuitGameUseCase {
         if (txRes.newOwnerId != null) {
           texas.room.setOwnerById(txRes.newOwnerId)
         }
+        gameRuntimeRegistry.removePendingLeaveGameFold(roomKey, userId)
         gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
         if (txRes.deferTexasSeatRemoval) {
           gameRuntimeRegistry.enqueueDeferredTexasSeatRemoval(roomKey, userId)
@@ -263,7 +269,9 @@ export class QuitGameUseCase {
       }
     }
 
-    this.wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+    if (!txRes.deferTexasSeatRemoval) {
+      this.wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+    }
 
     if (txRes.deletedRoom) {
       this.wsGateway.broadcastRoomListRoomDeleted(roomId)
