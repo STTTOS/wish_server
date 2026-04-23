@@ -75,9 +75,11 @@ export class QuitGameUseCase {
     }
 
     const texasPre = gameRuntimeRegistry.getTexas(roomKey)
-    if (texasPre && !texasPre.room.has(userId)) {
-      this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
+    const runtimeMissingPlayer = Boolean(texasPre && !texasPre.room.has(userId))
+    if (runtimeMissingPlayer) {
+      logger.warn(
+        `[quitGame] runtime drift detected: user not found in texas room, roomId=${roomId}, userId=${userId}`
+      )
     }
 
     if (pre.gameStatus === 'starting_hand') {
@@ -102,6 +104,7 @@ export class QuitGameUseCase {
     const seatStatusPre = texasPre?.room.getPlayerSeatStatusById(userId) ?? null
     const isInHandWatcherQuit =
       pre.gameStatus === 'in_hand' && seatStatusPre === 'hang'
+    const canBypassInHandFold = isInHandWatcherQuit || runtimeMissingPlayer
 
     let didFoldDueToLeave = false
     if (texasPre?.canFoldDueToLeave(userId)) {
@@ -129,7 +132,7 @@ export class QuitGameUseCase {
         const message = e instanceof Error ? e.message : '退出失败'
         return { ok: false, status: HTTP_STATUS.CONFLICT, message }
       }
-    } else if (pre.gameStatus === 'in_hand' && !isInHandWatcherQuit) {
+    } else if (pre.gameStatus === 'in_hand' && !canBypassInHandFold) {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
@@ -167,7 +170,7 @@ export class QuitGameUseCase {
       if (
         latestRoom.gameStatus === 'in_hand' &&
         !didFoldDueToLeave &&
-        !isInHandWatcherQuit
+        !canBypassInHandFold
       ) {
         return {
           kind: 'fail',
@@ -232,7 +235,9 @@ export class QuitGameUseCase {
       try {
         gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
         if (!txRes.deferTexasSeatRemoval) {
-          texas.room.removeById(userId)
+          if (texas.room.has(userId)) {
+            texas.room.removeById(userId)
+          }
         }
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
@@ -283,7 +288,7 @@ export class QuitGameUseCase {
       ok: true,
       data: {
         quitContext:
-          txRes.deferTexasSeatRemoval || isInHandWatcherQuit
+          txRes.deferTexasSeatRemoval || canBypassInHandFold
             ? QuitGameUseCase.CONTEXT.IN_HAND
             : QuitGameUseCase.CONTEXT.AFTER_GAME_END
       }
