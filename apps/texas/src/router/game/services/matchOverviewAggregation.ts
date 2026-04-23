@@ -72,8 +72,7 @@ export async function fetchMatchOverviewForRoom(
             id: true,
             name: true,
             avatarUrl: true,
-            avatarKey: true,
-            pokerBackgroundKey: true
+            avatarKey: true
           }
         })
       : []
@@ -107,8 +106,7 @@ export async function fetchMatchOverviewForRoom(
         userId,
         name: profile?.name ?? `玩家${userId}`,
         avatarUrl: profile?.avatarUrl ?? null,
-        avatarKey: profile?.avatarKey ?? 'cartoon/default',
-        pokerBackgroundKey: profile?.pokerBackgroundKey ?? null
+        avatarKey: profile?.avatarKey ?? 'cartoon/default'
       }
     })
     .sort((a, b) => a.userId - b.userId)

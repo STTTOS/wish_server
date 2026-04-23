@@ -88,7 +88,6 @@ export type WsPlayerProfileItem = {
   name: string
   avatarUrl: string | null
   avatarKey: string
-  pokerBackgroundKey: string | null
 }
 
 export type WsGameEndSettleItem = {
