@@ -24,7 +24,8 @@ type QuitTxResult =
       restCount: number
       deletedRoom: boolean
       /**
-       * true：`RoomMember` 已删，环上 `removeById` 延至本手 `Texas.reset()` 之后（见 `pendingLeaveByUserId`）。
+       * true：`RoomMember` 已删，但该玩家本手在座离场，环上 `removeById`
+       *       延至本手 `Texas.reset()` 之后（见 `pendingLeaveByUserId`）。
        * false：局间退出，本流程已同步 `removeById`。
        */
       deferTexasSeatRemoval: boolean
@@ -34,7 +35,8 @@ type QuitTxResult =
  * 退出对局：
  * - **局间**（`between_hands`）：删 `RoomMember`、立刻 `room.removeById`、广播、断 /game。
  * - **`isQuitBlockedUntilBlindsPosted`**：`onLock`/首局注册起至领域事件 `BlindsPosted` 处理完前禁止退出（与 Core 非 `in_hand` 时 `canFoldDueToLeave` 恒为假无关）。
- * - **本手 `texas.canFoldDueToLeave(userId)` 为真**：先 `FoldDueToLeave` 并 drain，再删 `RoomMember`；环上摘座延到本手 `reset` 后。
+ * - **`in_hand` 在座离场**：先删 `RoomMember`，环上保留到本手结束；
+ *   若正好轮到其行动则立即 `FoldDueToLeave`，否则等到其行动回合自动弃牌。
  * - **`starting_hand`**：不可退出（与上条重叠时仍保留，防状态机与运行时标志短暂不一致）。
  */
 export class QuitGameUseCase {
@@ -133,13 +135,19 @@ export class QuitGameUseCase {
     const leftWasOnSeat = seatStatusPre === 'on-set'
     const isInHandWatcherQuit =
       pre.gameStatus === 'in_hand' && seatStatusPre === 'hang'
+    const isInHandOnSeatQuit =
+      pre.gameStatus === 'in_hand' && seatStatusPre === 'on-set'
     const canBypassInHandFold = isInHandWatcherQuit || runtimeMissingPlayer
 
     let didFoldDueToLeave = false
-    if (texasPre?.canFoldDueToLeave(userId)) {
+    let queuedLeaveDuringHand = false
+    if (isInHandOnSeatQuit && !runtimeMissingPlayer) {
+      gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
+      queuedLeaveDuringHand = true
+    }
+
+    if (queuedLeaveDuringHand && texasPre?.canFoldDueToLeave(userId)) {
       try {
-        // 先入队「本手结束后摘环」，防止 FoldDueToLeave 触发 HandEnded 早于事务提交。
-        gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
         const preEvents = texasPre.dispatchCommand({
           type: 'FoldDueToLeave',
           playerId: userId
@@ -157,11 +165,17 @@ export class QuitGameUseCase {
             getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
           })
         }
-        gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+        if (queuedLeaveDuringHand) {
+          gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+        }
         const message = e instanceof Error ? e.message : '退出失败'
         return { ok: false, status: HTTP_STATUS.CONFLICT, message }
       }
-    } else if (pre.gameStatus === 'in_hand' && !canBypassInHandFold) {
+    } else if (
+      pre.gameStatus === 'in_hand' &&
+      !canBypassInHandFold &&
+      !queuedLeaveDuringHand
+    ) {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
@@ -236,7 +250,7 @@ export class QuitGameUseCase {
         kind: 'done',
         restCount,
         deletedRoom,
-        deferTexasSeatRemoval: didFoldDueToLeave
+        deferTexasSeatRemoval: queuedLeaveDuringHand
       }
     })
 

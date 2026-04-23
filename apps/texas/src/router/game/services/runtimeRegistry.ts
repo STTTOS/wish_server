@@ -106,6 +106,12 @@ export class GameRuntimeRegistry {
     runtime.pendingLeaveByUserId.delete(userId)
   }
 
+  hasQueuedLeave(roomKey: string, userId: number): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return false
+    return runtime.pendingLeaveByUserId.has(userId)
+  }
+
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
