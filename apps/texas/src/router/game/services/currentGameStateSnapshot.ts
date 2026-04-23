@@ -1,4 +1,4 @@
-import type { Texas, Stage, RoomStatus, HandLifecycle } from 'texas-poker-core'
+import type { Texas, Stage, HandLifecycle } from 'texas-poker-core'
 
 import { type RankCategory } from 'texas-poker-core'
 
@@ -39,10 +39,6 @@ export type FetchCurrentGameStatePayload = {
     stage: Stage
     pool: number
     commonPokes: import('texas-poker-core').Poke[]
-    // boardThroughStage: Stage
-    defaultBets: Array<{ userId: number; balance: number; amount: number }>
-    engineRoomSeatStatus: RoomStatus
-    pendingFlowOps: import('texas-poker-core').PendingFlowOp[]
   }
   activePlayerInfo: {
     userInfo: { id: number; name: string }
@@ -140,11 +136,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
       status: handLifecycle,
       stage: texas.controller.stage,
       pool: texas.pool.totalAmount,
-      commonPokes: inHand ? commonPokes : [],
-      // boardThroughStage: texas.controller.stage,
-      defaultBets: inHand ? [...texas.getDefaultBet()] : [],
-      engineRoomSeatStatus: texas.room.status,
-      pendingFlowOps: [...texas.getPendingFlowOps()]
+      commonPokes
     },
     activePlayerInfo,
     myHandPokes: [...myHandPokes],

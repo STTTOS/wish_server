@@ -9,13 +9,7 @@ import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import {
-  gameRuntimeRegistry,
-  getCurrentMatchIdWithFallback
-} from '../game/services/runtimeKit'
-import { getScheduledPlayerTurnDeadline } from '../game/services/texasDomain/playerTurnTimeoutScheduler'
-import {
   match,
-  roomMember,
   userRoomStat,
   matchDomainEvent,
   playerMatchRecord
@@ -529,74 +523,5 @@ router.post(matchApi('/replayTape'), async (ctx) => {
     tape: replay.tape,
     tapeIssues: replay.tapeIssues,
     settleList
-  })
-})
-
-/**
- * 获取当前对局状态（用于重连恢复）
- */
-router.post(matchApi('/currentState'), async (ctx) => {
-  const userId = ctx.state.user!.id
-  const membership = await roomMember.findFirst({
-    where: { userId, room: { deletedAt: null } },
-    select: { roomId: true }
-  })
-  const roomId = membership?.roomId
-  if (!roomId) {
-    response.error(ctx, HTTP_STATUS.CONFLICT, '当前不在对局房间中')
-    return
-  }
-
-  const texas = gameRuntimeRegistry.getTexas(String(roomId))
-  if (!texas) {
-    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
-    return
-  }
-
-  const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
-
-  const playersOnSeat = texas.room
-    .getPlayersBySeatStatus('on-set')
-    .map((player) => ({
-      role: player.getRole(),
-      action: player.getAction(),
-      userInfo: player.getUserInfo(),
-      currentStageTotalAmount: player.currentStageTotalAmount,
-      totalBetAmount: player.totalBetAmount,
-      rankCategory: player.rankSignature?.[0]
-    }))
-  const playersOnWatch = texas.room
-    .getPlayersBySeatStatus('hang')
-    .map((player) => ({
-      userInfo: player.getUserInfo()
-    }))
-
-  const activePlayer = texas.controller.activePlayer
-  const activeUserId = activePlayer?.getUserInfo().id
-  const scheduled = getScheduledPlayerTurnDeadline(String(roomId))
-  const serverNow = Date.now()
-  const turnAligns =
-    activeUserId != null &&
-    scheduled != null &&
-    scheduled.userId === activeUserId &&
-    texas.controller.currentHandId === scheduled.handId
-
-  const activePlayerInfo = {
-    userInfo: activePlayer?.getUserInfo(),
-    /** 与 WS `player-action-required` 一致：剩余时间用 `deadlineAt - 本地 now`，可结合 `serverNow` 估时钟偏差 */
-    deadlineAt: turnAligns ? scheduled.deadlineAt : null,
-    serverNow: turnAligns ? serverNow : undefined
-  }
-
-  response.success(ctx, {
-    matchId: currentMatchId,
-    roomId: Number(roomId),
-    status: texas.controller.status,
-    stage: texas.controller.stage,
-    pool: texas.pool.totalAmount,
-    commonPokes: texas.dealer.getPokes().commonPokes,
-    activePlayerInfo,
-    playersOnSeat,
-    playersOnWatch
   })
 })
