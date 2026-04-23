@@ -99,6 +99,10 @@ export class QuitGameUseCase {
       }
     }
 
+    const seatStatusPre = texasPre?.room.getPlayerSeatStatusById(userId) ?? null
+    const isInHandWatcherQuit =
+      pre.gameStatus === 'in_hand' && seatStatusPre === 'hang'
+
     let didFoldDueToLeave = false
     if (texasPre?.canFoldDueToLeave(userId)) {
       try {
@@ -125,7 +129,7 @@ export class QuitGameUseCase {
         const message = e instanceof Error ? e.message : '退出失败'
         return { ok: false, status: HTTP_STATUS.CONFLICT, message }
       }
-    } else if (pre.gameStatus === 'in_hand') {
+    } else if (pre.gameStatus === 'in_hand' && !isInHandWatcherQuit) {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
@@ -160,7 +164,11 @@ export class QuitGameUseCase {
         }
       }
 
-      if (latestRoom.gameStatus === 'in_hand' && !didFoldDueToLeave) {
+      if (
+        latestRoom.gameStatus === 'in_hand' &&
+        !didFoldDueToLeave &&
+        !isInHandWatcherQuit
+      ) {
         return {
           kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
@@ -274,9 +282,10 @@ export class QuitGameUseCase {
     return {
       ok: true,
       data: {
-        quitContext: txRes.deferTexasSeatRemoval
-          ? QuitGameUseCase.CONTEXT.IN_HAND
-          : QuitGameUseCase.CONTEXT.AFTER_GAME_END
+        quitContext:
+          txRes.deferTexasSeatRemoval || isInHandWatcherQuit
+            ? QuitGameUseCase.CONTEXT.IN_HAND
+            : QuitGameUseCase.CONTEXT.AFTER_GAME_END
       }
     }
   }
