@@ -17,17 +17,15 @@ test('notifyPlayerQuitGame excludes leaver when requested', () => {
 
   const originBroadcast = ws.broadcastGameRoom.bind(ws)
   const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+  const mutableWs = ws as typeof ws & {
+    broadcastGameRoom: typeof ws.broadcastGameRoom
+    broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+  }
 
-  ;(
-    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-  ).broadcastGameRoom = (rk, msg) => {
+  mutableWs.broadcastGameRoom = (rk, msg) => {
     calls.push({ method: 'room', roomKey: rk, message: msg })
   }
-  ;(
-    ws as typeof ws & {
-      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-    }
-  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+  mutableWs.broadcastGameRoomExcept = (rk, uid, msg) => {
     calls.push({
       method: 'except',
       roomKey: rk,
@@ -47,14 +45,8 @@ test('notifyPlayerQuitGame excludes leaver when requested', () => {
       data: payload
     })
   } finally {
-    ;(
-      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-    ).broadcastGameRoom = originBroadcast
-    ;(
-      ws as typeof ws & {
-        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-      }
-    ).broadcastGameRoomExcept = originBroadcastExcept
+    mutableWs.broadcastGameRoom = originBroadcast
+    mutableWs.broadcastGameRoomExcept = originBroadcastExcept
   }
 })
 
@@ -71,17 +63,15 @@ test('notifyPlayerQuitGame broadcasts full room by default', () => {
 
   const originBroadcast = ws.broadcastGameRoom.bind(ws)
   const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+  const mutableWs = ws as typeof ws & {
+    broadcastGameRoom: typeof ws.broadcastGameRoom
+    broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+  }
 
-  ;(
-    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-  ).broadcastGameRoom = (rk, msg) => {
+  mutableWs.broadcastGameRoom = (rk, msg) => {
     calls.push({ method: 'room', roomKey: rk, message: msg })
   }
-  ;(
-    ws as typeof ws & {
-      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-    }
-  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+  mutableWs.broadcastGameRoomExcept = (rk, uid, msg) => {
     calls.push({
       method: 'except',
       roomKey: rk,
@@ -100,14 +90,8 @@ test('notifyPlayerQuitGame broadcasts full room by default', () => {
       data: payload
     })
   } finally {
-    ;(
-      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-    ).broadcastGameRoom = originBroadcast
-    ;(
-      ws as typeof ws & {
-        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-      }
-    ).broadcastGameRoomExcept = originBroadcastExcept
+    mutableWs.broadcastGameRoom = originBroadcast
+    mutableWs.broadcastGameRoomExcept = originBroadcastExcept
   }
 })
 
@@ -124,17 +108,15 @@ test('notifyPlayerLeftGame excludes leaver when requested', () => {
 
   const originBroadcast = ws.broadcastGameRoom.bind(ws)
   const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+  const mutableWs = ws as typeof ws & {
+    broadcastGameRoom: typeof ws.broadcastGameRoom
+    broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+  }
 
-  ;(
-    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-  ).broadcastGameRoom = (rk, msg) => {
+  mutableWs.broadcastGameRoom = (rk, msg) => {
     calls.push({ method: 'room', roomKey: rk, message: msg })
   }
-  ;(
-    ws as typeof ws & {
-      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-    }
-  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+  mutableWs.broadcastGameRoomExcept = (rk, uid, msg) => {
     calls.push({
       method: 'except',
       roomKey: rk,
@@ -154,14 +136,8 @@ test('notifyPlayerLeftGame excludes leaver when requested', () => {
       data: payload
     })
   } finally {
-    ;(
-      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-    ).broadcastGameRoom = originBroadcast
-    ;(
-      ws as typeof ws & {
-        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-      }
-    ).broadcastGameRoomExcept = originBroadcastExcept
+    mutableWs.broadcastGameRoom = originBroadcast
+    mutableWs.broadcastGameRoomExcept = originBroadcastExcept
   }
 })
 
@@ -178,17 +154,15 @@ test('notifyPlayerLeftGame broadcasts full room by default', () => {
 
   const originBroadcast = ws.broadcastGameRoom.bind(ws)
   const originBroadcastExcept = ws.broadcastGameRoomExcept.bind(ws)
+  const mutableWs = ws as typeof ws & {
+    broadcastGameRoom: typeof ws.broadcastGameRoom
+    broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
+  }
 
-  ;(
-    ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-  ).broadcastGameRoom = (rk, msg) => {
+  mutableWs.broadcastGameRoom = (rk, msg) => {
     calls.push({ method: 'room', roomKey: rk, message: msg })
   }
-  ;(
-    ws as typeof ws & {
-      broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-    }
-  ).broadcastGameRoomExcept = (rk, uid, msg) => {
+  mutableWs.broadcastGameRoomExcept = (rk, uid, msg) => {
     calls.push({
       method: 'except',
       roomKey: rk,
@@ -207,13 +181,7 @@ test('notifyPlayerLeftGame broadcasts full room by default', () => {
       data: payload
     })
   } finally {
-    ;(
-      ws as typeof ws & { broadcastGameRoom: typeof ws.broadcastGameRoom }
-    ).broadcastGameRoom = originBroadcast
-    ;(
-      ws as typeof ws & {
-        broadcastGameRoomExcept: typeof ws.broadcastGameRoomExcept
-      }
-    ).broadcastGameRoomExcept = originBroadcastExcept
+    mutableWs.broadcastGameRoom = originBroadcast
+    mutableWs.broadcastGameRoomExcept = originBroadcastExcept
   }
 })
