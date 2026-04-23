@@ -40,6 +40,26 @@ type QuitTxResult =
 export class QuitGameUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
 
+  #emitAudienceSnapshot(args: {
+    roomId: number
+    roomKey: string
+    reason: 'quit' | 'sync'
+    changedUserIds: number[]
+  }) {
+    const texas = gameRuntimeRegistry.getTexas(args.roomKey)
+    if (!texas) return
+    const seatCount = texas.room.getPlayersBySeatStatus('on-set').length
+    const watchCount = texas.room.getPlayersBySeatStatus('hang').length
+    this.wsGateway.notifyGameRoomAudienceUpdated(args.roomKey, {
+      roomId: args.roomId,
+      seatCount,
+      watchCount,
+      memberCount: seatCount + watchCount,
+      reason: args.reason,
+      changedUserIds: args.changedUserIds
+    })
+  }
+
   static readonly CONTEXT = {
     IN_HAND: 'in_hand',
     AFTER_GAME_END: 'after_game_end'
@@ -67,7 +87,15 @@ export class QuitGameUseCase {
 
     const memberPre = await prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId, userId } },
-      select: { userId: true }
+      select: {
+        userId: true,
+        user: {
+          select: {
+            name: true,
+            avatarKey: true
+          }
+        }
+      }
     })
     if (!memberPre) {
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
@@ -102,6 +130,7 @@ export class QuitGameUseCase {
     }
 
     const seatStatusPre = texasPre?.room.getPlayerSeatStatusById(userId) ?? null
+    const leftWasOnSeat = seatStatusPre === 'on-set'
     const isInHandWatcherQuit =
       pre.gameStatus === 'in_hand' && seatStatusPre === 'hang'
     const canBypassInHandFold = isInHandWatcherQuit || runtimeMissingPlayer
@@ -259,11 +288,18 @@ export class QuitGameUseCase {
       }
     }
 
-    this.wsGateway.notifyPlayerLeftGame(
-      roomKey,
-      { roomId, userId },
-      { excludeUserId: userId }
-    )
+    if (leftWasOnSeat || didFoldDueToLeave) {
+      this.wsGateway.notifyPlayerLeftGame(
+        roomKey,
+        {
+          roomId,
+          userId,
+          name: memberPre.user.name || `玩家${userId}`,
+          avatarKey: memberPre.user.avatarKey || 'cartoon/default'
+        },
+        { excludeUserId: userId }
+      )
+    }
 
     if (!txRes.deferTexasSeatRemoval) {
       this.wsGateway.notifyPlayerQuitGame(
@@ -271,6 +307,14 @@ export class QuitGameUseCase {
         { roomId, userId },
         { excludeUserId: userId }
       )
+      if (!txRes.deletedRoom) {
+        this.#emitAudienceSnapshot({
+          roomId,
+          roomKey,
+          reason: 'quit',
+          changedUserIds: [userId]
+        })
+      }
     }
 
     if (txRes.deletedRoom) {

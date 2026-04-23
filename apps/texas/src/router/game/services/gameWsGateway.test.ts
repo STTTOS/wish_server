@@ -98,7 +98,12 @@ test('notifyPlayerQuitGame broadcasts full room by default', () => {
 test('notifyPlayerLeftGame excludes leaver when requested', () => {
   const gateway = new GameWsGateway()
   const roomKey = '67'
-  const payload = { roomId: 67, userId: 2 }
+  const payload = {
+    roomId: 67,
+    userId: 2,
+    name: '玩家2',
+    avatarKey: 'cartoon/default'
+  }
   const calls: Array<{
     method: 'room' | 'except'
     roomKey: string
@@ -144,7 +149,12 @@ test('notifyPlayerLeftGame excludes leaver when requested', () => {
 test('notifyPlayerLeftGame broadcasts full room by default', () => {
   const gateway = new GameWsGateway()
   const roomKey = '167'
-  const payload = { roomId: 167, userId: 8 }
+  const payload = {
+    roomId: 167,
+    userId: 8,
+    name: '玩家8',
+    avatarKey: 'cartoon/default'
+  }
   const calls: Array<{
     method: 'room' | 'except'
     roomKey: string

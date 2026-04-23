@@ -4,6 +4,7 @@ import type {
   WsPlayerLeftGameData,
   WsPlayerQuitGameData,
   WsPlayerRolesAssignedData,
+  WsGameRoomAudienceUpdatedData,
   WsPlayerHandVoluntarilyShownData
 } from '@wishufree/texas-ws-contract'
 
@@ -92,6 +93,17 @@ export class GameWsGateway {
     data: WsMessage<'player-built-in-voice'>['data']
   ) {
     ws.broadcastGameRoom(roomKey, { type: 'player-built-in-voice', data })
+  }
+
+  notifyGameRoomAudienceUpdated(
+    roomKey: string,
+    data: WsGameRoomAudienceUpdatedData
+  ) {
+    const msg: WsMessage<'game-room-audience-updated'> = {
+      type: 'game-room-audience-updated',
+      data
+    }
+    ws.broadcastGameRoom(roomKey, msg)
   }
 
   notifyGameEnd(roomKey: string, data: WsMessage<'game-end'>['data']) {
