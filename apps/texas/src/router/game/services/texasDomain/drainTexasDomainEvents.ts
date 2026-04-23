@@ -129,9 +129,36 @@ async function handleHandEnded(
       (x) => x.getStatus() !== 'out'
     ).length
 
+    const seatedUserIds = sortedSeated.map((pl) => pl.getUserInfo().id)
+    const seatedUsers =
+      seatedUserIds.length > 0
+        ? await prisma.user.findMany({
+            where: { id: { in: seatedUserIds } },
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+              avatarKey: true,
+              pokerBackgroundKey: true
+            }
+          })
+        : []
+    const seatedProfileByUserId = new Map(
+      seatedUsers.map((u) => [
+        u.id,
+        {
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+          avatarKey: u.avatarKey,
+          pokerBackgroundKey: u.pokerBackgroundKey
+        }
+      ])
+    )
+
     const buildSettleListForViewer = (viewerUserId: number) =>
       sortedSeated.map((pl) => {
         const userId = pl.getUserInfo().id
+        const profile = seatedProfileByUserId.get(userId)
         const isFold = pl.getStatus() === 'out'
         let handPokes = pl.getHandPokes()
         const hideHoleFromViewer =
@@ -141,6 +168,10 @@ async function handleHandEnded(
         }
         return {
           userId,
+          name: profile?.name ?? pl.getUserInfo().name ?? `玩家${userId}`,
+          avatarUrl: profile?.avatarUrl ?? null,
+          avatarKey: profile?.avatarKey ?? 'cartoon/default',
+          pokerBackgroundKey: profile?.pokerBackgroundKey ?? null,
           balance: pl.balance,
           wager: pl.wager,
           isAllIn: pl.getStatus() === 'allIn',
@@ -212,7 +243,11 @@ async function handleHandEnded(
       }
     })
 
-    let matchOverview: WsMatchOverview = { wagerList: [], billList: [] }
+    let matchOverview: WsMatchOverview = {
+      wagerList: [],
+      billList: [],
+      playerProfiles: []
+    }
     try {
       matchOverview = await fetchMatchOverviewForRoom(roomId)
     } catch (overviewErr) {

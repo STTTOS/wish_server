@@ -63,6 +63,22 @@ export async function fetchMatchOverviewForRoom(
     byUser.set(row.userId, prev)
   }
 
+  const userIds = Array.from(byUser.keys())
+  const users =
+    userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: {
+            id: true,
+            name: true,
+            avatarUrl: true,
+            avatarKey: true,
+            pokerBackgroundKey: true
+          }
+        })
+      : []
+  const profileByUserId = new Map(users.map((u) => [u.id, u]))
+
   const floatPositions = Array.from(byUser.entries()).map(([userId, v]) => ({
     userId,
     net: v.wagerSum
@@ -84,6 +100,18 @@ export async function fetchMatchOverviewForRoom(
     .sort((a, b) => a.userId - b.userId)
 
   const billList = buildBillListFromNetByUser(normalized)
+  const playerProfiles = userIds
+    .map((userId) => {
+      const profile = profileByUserId.get(userId)
+      return {
+        userId,
+        name: profile?.name ?? `玩家${userId}`,
+        avatarUrl: profile?.avatarUrl ?? null,
+        avatarKey: profile?.avatarKey ?? 'cartoon/default',
+        pokerBackgroundKey: profile?.pokerBackgroundKey ?? null
+      }
+    })
+    .sort((a, b) => a.userId - b.userId)
 
-  return { wagerList, billList }
+  return { wagerList, billList, playerProfiles }
 }

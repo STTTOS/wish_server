@@ -482,6 +482,10 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       })
       return {
         userId: record.userId,
+        name: record.user.name,
+        avatarUrl: record.user.avatarUrl,
+        avatarKey: record.user.avatarKey,
+        pokerBackgroundKey: record.user.pokerBackgroundKey,
         balance: Number(record.balanceAfterHand ?? 0),
         wager: record.wager,
         isAllIn: record.isAllIn,

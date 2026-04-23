@@ -80,10 +80,23 @@ export type WsMatchOverviewBillItem = {
 export type WsMatchOverview = {
   billList: WsMatchOverviewBillItem[]
   wagerList: WsMatchOverviewWagerItem[]
+  playerProfiles: WsPlayerProfileItem[]
+}
+
+export type WsPlayerProfileItem = {
+  userId: number
+  name: string
+  avatarUrl: string | null
+  avatarKey: string
+  pokerBackgroundKey: string | null
 }
 
 export type WsGameEndSettleItem = {
   userId: number
+  name: string
+  avatarUrl: string | null
+  avatarKey: string
+  pokerBackgroundKey: string | null
   balance: number
   wager: number
   isAllIn: boolean
