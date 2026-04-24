@@ -2,6 +2,7 @@ import type { Texas, Stage, HandLifecycle } from 'texas-poker-core'
 
 import { type RankCategory } from 'texas-poker-core'
 
+import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { getLatestGameRoomSeq } from '../../../SockeServer/gameRoomWsReplayBuffer'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
@@ -21,13 +22,13 @@ export type FetchCurrentGameStatePayload = {
     action: import('texas-poker-core').Player['getAction'] extends () => infer A
       ? A
       : never
-    onlineStatus: import('texas-poker-core').OnlineStatus
+    onlineStatus: 'online' | 'offline'
     rankCategory?: RankCategory
     rankStrength: number
   }>
   playersOnWatch: Array<{
     userInfo: { id: number; name: string }
-    onlineStatus: import('texas-poker-core').OnlineStatus
+    onlineStatus: 'online' | 'offline'
   }>
   matchInfo: {
     matchId: number | null
@@ -82,7 +83,10 @@ export async function buildFetchCurrentGameStatePayload(input: {
         currentStageTotalAmount: player.currentStageTotalAmount,
         totalBetAmount: player.totalBetAmount,
         action: player.getAction(),
-        onlineStatus: player.onlineStatus,
+        onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
+          roomKey,
+          player.getUserInfo().id
+        ),
         rankCategory: player.rankCategory,
         rankStrength: player.rankStrength
       }
@@ -92,7 +96,10 @@ export async function buildFetchCurrentGameStatePayload(input: {
     .getPlayersBySeatStatus('hang')
     .map((player) => ({
       userInfo: player.getUserInfo(),
-      onlineStatus: player.onlineStatus
+      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
+        roomKey,
+        player.getUserInfo().id
+      )
     }))
 
   const currentMatchId = await getCurrentMatchIdWithFallback(roomId)

@@ -85,7 +85,7 @@ export class RoomCleanupManager {
       return
     }
 
-    const allOffline = players.every((p) => p.onlineStatus === 'offline')
+    const allOffline = gameRuntimeRegistry.areAllTrackedPlayersOffline(roomId)
     if (!allOffline) return
 
     safeClearCountdown()

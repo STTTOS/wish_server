@@ -1,6 +1,5 @@
 import type { WsMessage, RoomWsMessage } from '@wishufree/texas-ws-contract'
 
-import { OnlineStatus } from 'texas-poker-core'
 import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
@@ -481,13 +480,14 @@ class SocketServer {
   #handleGameRoomConnect(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)
     const player = texas?.room.getPlayerById(userId)
-    if (player && player.onlineStatus !== 'online') {
-      player.onlineStatus = 'online'
-      this.broadcastGameRoom(channel, {
-        type: 'player-status-change',
-        data: { user: { id: userId }, status: 'online' as OnlineStatus }
-      })
-    }
+    if (!player) return
+    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
+    gameRuntimeRegistry.markUserOnline(channel, userId)
+    if (!wasOffline) return
+    this.broadcastGameRoom(channel, {
+      type: 'player-status-change',
+      data: { roomId: Number(channel), userId, status: 'online' as const }
+    })
   }
 
   /**
@@ -495,13 +495,17 @@ class SocketServer {
    */
   #handleGameRoomDisconnect(channel: string, userId: number) {
     if (!gameRuntimeRegistry.hasTexas(channel)) return
-    this.broadcastGameRoom(channel, {
-      type: 'player-status-change',
-      data: { user: { id: userId }, status: 'offline' as OnlineStatus }
-    })
-    const texas = gameRuntimeRegistry.getTexas(channel)
-    const player = texas?.room.getPlayerById(userId)
-    if (player) player.onlineStatus = 'offline'
+    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
+    gameRuntimeRegistry.markUserOffline(channel, userId)
+    if (!wasOffline) {
+      this.broadcastGameRoom(channel, {
+        type: 'player-status-change',
+        data: { roomId: Number(channel), userId, status: 'offline' as const }
+      })
+    }
+    if (!gameRuntimeRegistry.getTexas(channel)?.room.has(userId)) {
+      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+    }
 
     void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
   }

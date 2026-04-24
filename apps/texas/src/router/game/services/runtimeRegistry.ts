@@ -26,6 +26,10 @@ export type GameRuntime = {
   quitBlockedUntilBlindsPosted: boolean
   /** 下手开局后需尝试 `PostBigBlind` 的新入座玩家。 */
   pendingPostBigBlindUserIds: Set<number>
+  /** 对局内连接状态（业务层权威，避免耦合 Core Player）。 */
+  offlineUserIds: Set<number>
+  /** 离线连续手数（仅统计在座玩家），用于 2 手宽限后移出。 */
+  offlineHandCountByUserId: Map<number, number>
 }
 
 /**
@@ -140,6 +144,61 @@ export class GameRuntimeRegistry {
     const out = [...runtime.pendingPostBigBlindUserIds]
     runtime.pendingPostBigBlindUserIds.clear()
     return out
+  }
+
+  markUserOffline(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.offlineUserIds.add(userId)
+  }
+
+  markUserOnline(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.offlineUserIds.delete(userId)
+    runtime.offlineHandCountByUserId.delete(userId)
+  }
+
+  clearConnectionTracking(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.offlineUserIds.delete(userId)
+    runtime.offlineHandCountByUserId.delete(userId)
+  }
+
+  isUserOffline(roomKey: string, userId: number): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return false
+    return runtime.offlineUserIds.has(userId)
+  }
+
+  getUserConnectionStatus(
+    roomKey: string,
+    userId: number
+  ): 'online' | 'offline' {
+    return this.isUserOffline(roomKey, userId) ? 'offline' : 'online'
+  }
+
+  bumpOfflineHandCount(roomKey: string, userId: number): number {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return 0
+    const next = (runtime.offlineHandCountByUserId.get(userId) ?? 0) + 1
+    runtime.offlineHandCountByUserId.set(userId, next)
+    return next
+  }
+
+  resetOfflineHandCount(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.offlineHandCountByUserId.delete(userId)
+  }
+
+  areAllTrackedPlayersOffline(roomKey: string): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime?.texas) return false
+    const players = runtime.texas.room.getAllPlayers()
+    if (players.length === 0) return true
+    return players.every((p) => runtime.offlineUserIds.has(p.getUserInfo().id))
   }
 
   /** 销毁运行时：reset Texas 后移除上下文。 */

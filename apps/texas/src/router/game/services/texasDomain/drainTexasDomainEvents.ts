@@ -27,9 +27,93 @@ import prisma, {
   room as roomModel,
   matchStageTimeRecord
 } from '../../../../models'
+import {
+  cancelNextHandCountdown,
+  unregisterNextHandHooks
+} from '../../../../gameRuntime/nextHandCountdown'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
+}
+
+const OFFLINE_TURN_THINKING_TIME_MS = 5000
+const OFFLINE_RECONNECT_GRACE_HANDS = 2
+
+async function settleOfflineSeatGrace(
+  ctx: TexasEventContext
+): Promise<{ roomClosed: boolean }> {
+  const { texas, roomId, roomKey, wsGateway } = ctx
+  const onSeatPlayers = texas.room.getPlayersBySeatStatus('on-set')
+  if (onSeatPlayers.length === 0) return { roomClosed: false }
+
+  const toKick: number[] = []
+  for (const player of onSeatPlayers) {
+    const uid = player.getUserInfo().id
+    if (gameRuntimeRegistry.isUserOffline(roomKey, uid)) {
+      const handCount = gameRuntimeRegistry.bumpOfflineHandCount(roomKey, uid)
+      if (handCount >= OFFLINE_RECONNECT_GRACE_HANDS) {
+        toKick.push(uid)
+      }
+    } else {
+      gameRuntimeRegistry.resetOfflineHandCount(roomKey, uid)
+    }
+  }
+
+  if (toKick.length === 0) return { roomClosed: false }
+
+  const txResult = await prisma.$transaction(async (tx) => {
+    await tx.roomMember.deleteMany({
+      where: { roomId, userId: { in: toKick } }
+    })
+    const memberCount = await tx.roomMember.count({ where: { roomId } })
+    if (memberCount === 0) {
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          deletedAt: new Date(),
+          activeOwnerId: null,
+          activeCode: null
+        }
+      })
+    }
+    return { memberCount }
+  })
+
+  for (const uid of toKick) {
+    gameRuntimeRegistry.clearConnectionTracking(roomKey, uid)
+    gameRuntimeRegistry.cancelQueuedLeave(roomKey, uid)
+    try {
+      if (texas.room.has(uid)) texas.room.removeById(uid)
+    } catch (e) {
+      logger.warn(
+        `[offline-grace] removeById failed roomId=${roomId} userId=${uid}`,
+        e
+      )
+    }
+    wsGateway.notifyPlayerQuitGame(
+      roomKey,
+      { roomId, userId: uid },
+      { excludeUserId: uid }
+    )
+  }
+
+  if (txResult.memberCount === 0) {
+    cancelNextHandCountdown(roomId)
+    unregisterNextHandHooks(roomId)
+    wsGateway.notifyGameRoomClosed(roomKey, {
+      roomId,
+      reason: 'insufficient_players'
+    })
+    wsGateway.broadcastRoomListRoomDeleted(roomId)
+    gameRuntimeRegistry.destroyRuntime(roomKey)
+    return { roomClosed: true }
+  }
+
+  wsGateway.broadcastRoomListMemberCountChanged({
+    roomId,
+    memberCount: txResult.memberCount
+  })
+  return { roomClosed: false }
 }
 
 /** Append-only 领域事件磁带，供回放；`createdAt` 由 DB 默认即可推算思考间隔 */
@@ -278,12 +362,15 @@ async function handleHandEnded(
     const removedAfterHandEndUserIds =
       gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
     for (const userId of removedAfterHandEndUserIds) {
+      gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
       wsGateway.notifyPlayerQuitGame(
         roomKey,
         { roomId, userId },
         { excludeUserId: userId }
       )
     }
+    const offlineGrace = await settleOfflineSeatGrace(ctx)
+    if (offlineGrace.roomClosed) return
     const newlySeatedUserIds: number[] = []
     for (const watcher of texas.room.getPlayersBySeatStatus('hang')) {
       try {
@@ -565,7 +652,12 @@ async function processTexasDomainEvent(
         }
       }
       const serverNow = Date.now()
-      const thinkingTimeMs = roomInfo.thinkingTime * 1000
+      const thinkingTimeMs = gameRuntimeRegistry.isUserOffline(
+        roomKey,
+        e.payload.userId
+      )
+        ? OFFLINE_TURN_THINKING_TIME_MS
+        : roomInfo.thinkingTime * 1000
       const deadlineAt = serverNow + thinkingTimeMs
       schedulePlayerTurnTimeout({
         roomKey,

@@ -39,6 +39,8 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
     rollbackManager: noopRollbackManager,
     pendingLeaveByUserId: new Set(),
     pendingPostBigBlindUserIds: new Set(),
+    offlineUserIds: new Set(),
+    offlineHandCountByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 
@@ -64,6 +66,8 @@ test('GameRuntimeRegistry current match read/write', () => {
     rollbackManager: noopRollbackManager,
     pendingLeaveByUserId: new Set(),
     pendingPostBigBlindUserIds: new Set(),
+    offlineUserIds: new Set(),
+    offlineHandCountByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 
@@ -93,6 +97,8 @@ test('flushDeferredTexasSeatRemovals removes queued user ids', () => {
     rollbackManager: noopRollbackManager,
     pendingLeaveByUserId: new Set([2]),
     pendingPostBigBlindUserIds: new Set(),
+    offlineUserIds: new Set(),
+    offlineHandCountByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 

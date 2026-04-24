@@ -177,9 +177,18 @@ export type WsPlayerBuiltInVoiceData = {
   voiceName: string
 }
 
+export type WsOnlineStatus = 'online' | 'offline'
+
 export type WsPlayerQuitGameData = {
   roomId: number
   userId: number
+}
+
+/** 对局内玩家连接状态变化（仅用于展示/倒计时策略，不代表离桌）。 */
+export type WsPlayerStatusChangeData = {
+  roomId: number
+  userId: number
+  status: WsOnlineStatus
 }
 
 /** 玩家已提交退出（用于客户端提示，不代表已从牌桌摘除）。 */
@@ -256,6 +265,7 @@ export type WsEventDataMap = {
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
+  'player-status-change': WsPlayerStatusChangeData
   'player-left-game': WsPlayerLeftGameData
   'player-quit-game': WsPlayerQuitGameData
   'game-room-closed': WsGameRoomClosedData
