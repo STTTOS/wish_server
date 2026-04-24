@@ -475,12 +475,18 @@ class SocketServer {
   }
 
   /**
-   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）时：标记玩家在线并广播
+   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：标记在线并广播
    */
   #handleGameRoomConnect(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)
-    const player = texas?.room.getPlayerById(userId)
+    if (!texas) return
+    const player = texas.room.getPlayerById(userId)
     if (!player) return
+    const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
+    if (!isOnSeat) {
+      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+      return
+    }
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
     gameRuntimeRegistry.markUserOnline(channel, userId)
     if (!wasOffline) return
@@ -491,10 +497,19 @@ class SocketServer {
   }
 
   /**
-   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）时：广播玩家离线并更新 Texas 内状态
+   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：广播玩家离线
+   *（排除已中途退出/非在座）。
    */
   #handleGameRoomDisconnect(channel: string, userId: number) {
-    if (!gameRuntimeRegistry.hasTexas(channel)) return
+    const texas = gameRuntimeRegistry.getTexas(channel)
+    if (!texas) return
+    const isQueuedLeave = gameRuntimeRegistry.hasQueuedLeave(channel, userId)
+    const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
+    if (isQueuedLeave || !isOnSeat) {
+      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      return
+    }
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
     gameRuntimeRegistry.markUserOffline(channel, userId)
     if (!wasOffline) {
@@ -502,9 +517,6 @@ class SocketServer {
         type: 'player-status-change',
         data: { roomId: Number(channel), userId, status: 'offline' as const }
       })
-    }
-    if (!gameRuntimeRegistry.getTexas(channel)?.room.has(userId)) {
-      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
     }
 
     void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
