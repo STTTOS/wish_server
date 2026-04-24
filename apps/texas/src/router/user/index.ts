@@ -178,26 +178,32 @@ router.post(userWebApi('/login'), async (ctx) => {
   )
 })
 
-/** Web 端退出登录 */
-router.post(userWebApi('/logout'), async (ctx) => {
+async function handleLogout(
+  ctx: ParameterizedContext<DefaultState>,
+  scope: 'web' | 'client'
+) {
   const userId = ctx.state.user?.id
   if (userId) {
-    await clearLoginSession(userId, 'web')
+    await clearLoginSession(userId, scope)
   }
-  ctx.cookies.set('token', null, {
-    maxAge: 0,
-    httpOnly: true
-  })
+
+  if (scope === 'web') {
+    ctx.cookies.set('token', null, {
+      maxAge: 0,
+      httpOnly: true
+    })
+  }
   response.success(ctx, null, '退出成功')
+}
+
+/** Web 端退出登录 */
+router.post(userWebApi('/logout'), async (ctx) => {
+  await handleLogout(ctx, 'web')
 })
 
 /** Client 端退出登录 */
 router.post(userClientApi('/logout'), async (ctx) => {
-  const userId = ctx.state.user?.id
-  if (userId) {
-    await clearLoginSession(userId, 'client')
-  }
-  response.success(ctx, null, '退出成功')
+  await handleLogout(ctx, 'client')
 })
 
 // 此接口会被middleware接管, 必定有用户信息
