@@ -42,26 +42,6 @@ type QuitTxResult =
 export class QuitGameUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
 
-  #emitAudienceSnapshot(args: {
-    roomId: number
-    roomKey: string
-    reason: 'quit' | 'sync'
-    changedUserIds: number[]
-  }) {
-    const texas = gameRuntimeRegistry.getTexas(args.roomKey)
-    if (!texas) return
-    const seatCount = texas.room.getPlayersBySeatStatus('on-set').length
-    const watchCount = texas.room.getPlayersBySeatStatus('hang').length
-    this.wsGateway.notifyGameRoomAudienceUpdated(args.roomKey, {
-      roomId: args.roomId,
-      seatCount,
-      watchCount,
-      memberCount: seatCount + watchCount,
-      reason: args.reason,
-      changedUserIds: args.changedUserIds
-    })
-  }
-
   static readonly CONTEXT = {
     IN_HAND: 'in_hand',
     AFTER_GAME_END: 'after_game_end'
@@ -321,14 +301,6 @@ export class QuitGameUseCase {
         { roomId, userId },
         { excludeUserId: userId }
       )
-      if (!txRes.deletedRoom) {
-        this.#emitAudienceSnapshot({
-          roomId,
-          roomKey,
-          reason: 'quit',
-          changedUserIds: [userId]
-        })
-      }
     }
 
     if (txRes.deletedRoom) {

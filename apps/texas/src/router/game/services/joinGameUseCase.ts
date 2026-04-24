@@ -30,26 +30,6 @@ type EnsureMemberTxResult =
 export class JoinGameUseCase {
   #wsGateway = new GameWsGateway()
 
-  #emitAudienceSnapshot(args: {
-    roomId: number
-    roomKey: string
-    reason: 'join_watch' | 'join_seat' | 'watch_to_seat'
-    changedUserIds: number[]
-  }) {
-    const texas = gameRuntimeRegistry.getTexas(args.roomKey)
-    if (!texas) return
-    const seatCount = texas.room.getPlayersBySeatStatus('on-set').length
-    const watchCount = texas.room.getPlayersBySeatStatus('hang').length
-    this.#wsGateway.notifyGameRoomAudienceUpdated(args.roomKey, {
-      roomId: args.roomId,
-      seatCount,
-      watchCount,
-      memberCount: seatCount + watchCount,
-      reason: args.reason,
-      changedUserIds: args.changedUserIds
-    })
-  }
-
   async #ensureRoomMemberForNonWaitingRoom(input: {
     roomId: number
     userId: number
@@ -223,12 +203,6 @@ export class JoinGameUseCase {
             posts: [],
             pool: texas.pool.totalAmount
           })
-          this.#emitAudienceSnapshot({
-            roomId,
-            roomKey,
-            reason: 'watch_to_seat',
-            changedUserIds: [userId]
-          })
           await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
         }
         return { ok: true, data: null }
@@ -258,12 +232,6 @@ export class JoinGameUseCase {
 
       if (engineRoomStatus === 'seats_locked') {
         texas.room.join(player)
-        this.#emitAudienceSnapshot({
-          roomId,
-          roomKey,
-          reason: 'join_watch',
-          changedUserIds: [userId]
-        })
       } else {
         texas.room.join(player)
         texas.room.seat(player)
@@ -275,12 +243,6 @@ export class JoinGameUseCase {
           seatedUserIds: [userId],
           posts: [],
           pool: texas.pool.totalAmount
-        })
-        this.#emitAudienceSnapshot({
-          roomId,
-          roomKey,
-          reason: 'join_seat',
-          changedUserIds: [userId]
         })
       }
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
@@ -316,12 +278,6 @@ export class JoinGameUseCase {
           if (st === 'hang' && texas.room.status === 'seats_open') {
             try {
               texas.room.seatById(userId)
-              this.#emitAudienceSnapshot({
-                roomId,
-                roomKey,
-                reason: 'watch_to_seat',
-                changedUserIds: [userId]
-              })
               await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
             } catch (inner: unknown) {
               if (

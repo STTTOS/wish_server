@@ -80,25 +80,6 @@ async function flushEventsAfterSettle(ctx: TexasEventContext): Promise<void> {
   }
 }
 
-function notifyAudienceSnapshot(
-  ctx: TexasEventContext,
-  input: {
-    reason: 'watch_to_seat' | 'quit' | 'sync'
-    changedUserIds: number[]
-  }
-) {
-  const seatCount = ctx.texas.room.getPlayersBySeatStatus('on-set').length
-  const watchCount = ctx.texas.room.getPlayersBySeatStatus('hang').length
-  ctx.wsGateway.notifyGameRoomAudienceUpdated(ctx.roomKey, {
-    roomId: ctx.roomId,
-    seatCount,
-    watchCount,
-    memberCount: seatCount + watchCount,
-    reason: input.reason,
-    changedUserIds: input.changedUserIds
-  })
-}
-
 async function handleHandEnded(
   ctx: TexasEventContext,
   e: Extract<TexasDomainEvent, { type: 'HandEnded' }>
@@ -320,15 +301,6 @@ async function handleHandEnded(
         roomId,
         matchId: currentMatchId,
         userIds: newlySeatedUserIds
-      })
-    }
-    if (
-      removedAfterHandEndUserIds.length > 0 ||
-      newlySeatedUserIds.length > 0
-    ) {
-      notifyAudienceSnapshot(ctx, {
-        reason: 'sync',
-        changedUserIds: [...removedAfterHandEndUserIds, ...newlySeatedUserIds]
       })
     }
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)

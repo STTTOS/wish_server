@@ -520,7 +520,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
         avatarUrl: record.user.avatarUrl,
         balanceAtHandStart: record.balanceAtHandStart,
         avatarKey: record.user.avatarKey,
-        pokerBackgroundKey: record.user.pokerBackgroundKey
+        pokerBackgroundKey: record.user.pokerBackgroundKey,
+        gameSeatStatus: 'on_set' as const
       }))
     },
     tape: replay.tape,

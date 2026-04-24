@@ -21,7 +21,7 @@ export type RoomMemberClientRow = {
   /** 是否仅在 `/waiting-room` 在线 */
   isWaitingRoomOnline: boolean
   /** 运行时座位状态（对局中可区分在座/观战） */
-  gameSeatStatus?: 'on_set' | 'hang' | null
+  gameSeatStatus: 'on_set' | 'hang'
 }
 
 export type GetRoomMembersResult = ApiResult<{
@@ -71,8 +71,8 @@ export class RoomMembersFacade {
       const onGame = game.has(u.id)
       const runtimeSeatStatus =
         texas?.room.getPlayerSeatStatusById(u.id) ?? null
-      const gameSeatStatus =
-        runtimeSeatStatus === 'on-set' ? 'on_set' : runtimeSeatStatus
+      const gameSeatStatus: 'on_set' | 'hang' =
+        runtimeSeatStatus === 'hang' ? 'hang' : 'on_set'
       return {
         userId: u.id,
         name: u.name,

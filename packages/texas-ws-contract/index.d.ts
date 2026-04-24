@@ -182,23 +182,6 @@ export type WsPlayerQuitGameData = {
   userId: number
 }
 
-export type WsGameRoomAudienceUpdatedReason =
-  | 'join_watch'
-  | 'join_seat'
-  | 'watch_to_seat'
-  | 'quit'
-  | 'sync'
-
-/** 对局房间观众快照（权威 seat/watch 计数）。 */
-export type WsGameRoomAudienceUpdatedData = {
-  roomId: number
-  seatCount: number
-  watchCount: number
-  memberCount: number
-  reason: WsGameRoomAudienceUpdatedReason
-  changedUserIds?: number[]
-}
-
 /** 玩家已提交退出（用于客户端提示，不代表已从牌桌摘除）。 */
 export type WsPlayerLeftGameData = {
   roomId: number
@@ -273,7 +256,6 @@ export type WsEventDataMap = {
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData
-  'game-room-audience-updated': WsGameRoomAudienceUpdatedData
   'player-left-game': WsPlayerLeftGameData
   'player-quit-game': WsPlayerQuitGameData
   'game-room-closed': WsGameRoomClosedData
