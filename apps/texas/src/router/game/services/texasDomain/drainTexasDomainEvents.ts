@@ -39,6 +39,21 @@ function sleep(ms: number): Promise<void> {
 const OFFLINE_TURN_THINKING_TIME_MS = 5000
 const OFFLINE_RECONNECT_GRACE_HANDS = 2
 
+/**
+ * 结算「离线在座玩家宽限策略」。
+ *
+ * 调用时机：
+ * - 仅在每手 HandEnded 结尾调用一次（不在手内调用），按「手」累计离线宽限计数。
+ *
+ * 规则：
+ * - 只统计 `on-set` 玩家（观战不参与对局离线治理）。
+ * - 玩家在线则清零其离线手数；离线则 +1。
+ * - 达到阈值（当前为 2 手）后：从 roomMember 与桌上移除，并广播 `player-quit-game`。
+ * - 若移除后房间无成员：关闭房间并销毁运行时。
+ *
+ * 返回值：
+ * - `{ roomClosed: true }` 表示已关闭房间，调用方应立即结束后续开新手流程。
+ */
 async function settleOfflineSeatGrace(
   ctx: TexasEventContext
 ): Promise<{ roomClosed: boolean }> {
@@ -652,6 +667,10 @@ async function processTexasDomainEvent(
         }
       }
       const serverNow = Date.now()
+      /**
+       * 离线托管：轮到离线玩家时不再使用房间常规思考时长，统一短计时 5s。
+       * 到期后仍走既有 timeout 分支（CheckDueToTimeout/FoldDueToTimeout）。
+       */
       const thinkingTimeMs = gameRuntimeRegistry.isUserOffline(
         roomKey,
         e.payload.userId

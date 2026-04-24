@@ -476,6 +476,9 @@ class SocketServer {
 
   /**
    * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：标记在线并广播
+   * 设计约束：
+   * - 只处理 `on-set` 玩家，观战的连断不影响当局离线托管逻辑。
+   * - 先写 runtime 状态，再决定是否推送 `player-status-change`（去重）。
    */
   #handleGameRoomConnect(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)
@@ -499,6 +502,9 @@ class SocketServer {
   /**
    * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：广播玩家离线
    *（排除已中途退出/非在座）。
+   * 设计约束：
+   * - 中途退出（queued leave）或非在座（含观战）不推送离线事件。
+   * - 离线事件仅服务于当局 seat 托管和 UI 呈现，避免语义污染。
    */
   #handleGameRoomDisconnect(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)

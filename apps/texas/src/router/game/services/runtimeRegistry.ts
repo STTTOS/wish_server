@@ -149,12 +149,17 @@ export class GameRuntimeRegistry {
   markUserOffline(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
+    /** 仅标记连接态；是否广播由 SocketServer 按 seat/leave 语义判断。 */
     runtime.offlineUserIds.add(userId)
   }
 
   markUserOnline(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
+    /**
+     * 在线即清离线累计手数：
+     * 宽限策略按“连续离线手数”计算，重连后必须从 0 重新累计。
+     */
     runtime.offlineUserIds.delete(userId)
     runtime.offlineHandCountByUserId.delete(userId)
   }
@@ -162,6 +167,7 @@ export class GameRuntimeRegistry {
   clearConnectionTracking(roomKey: string, userId: number): void {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return
+    /** 用于离桌/观战/中途退出场景，避免残留离线痕迹污染下一手判断。 */
     runtime.offlineUserIds.delete(userId)
     runtime.offlineHandCountByUserId.delete(userId)
   }
@@ -182,6 +188,7 @@ export class GameRuntimeRegistry {
   bumpOfflineHandCount(roomKey: string, userId: number): number {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return 0
+    /** 每手 HandEnded 最多 +1；达到阈值后由领域解释器执行踢人。 */
     const next = (runtime.offlineHandCountByUserId.get(userId) ?? 0) + 1
     runtime.offlineHandCountByUserId.set(userId, next)
     return next
@@ -197,6 +204,10 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime?.texas) return false
     const players = runtime.texas.room.getAllPlayers()
+    /**
+     * 该判定用于房间清理（RoomCleanupManager）：
+     * 只要运行时里的全体玩家都被标记为离线，即可触发全离线清理路径。
+     */
     if (players.length === 0) return true
     return players.every((p) => runtime.offlineUserIds.has(p.getUserInfo().id))
   }
