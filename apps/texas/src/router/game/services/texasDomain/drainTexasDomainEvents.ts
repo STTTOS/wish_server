@@ -643,6 +643,7 @@ async function processTexasDomainEvent(
       wsGateway.notifyStageChanged(roomKey, {
         matchId,
         stage: e.payload.toStage,
+        advanceKind: e.payload.advanceKind,
         pokesToReveal: e.payload.pokesRevealedThisStep
       })
       return

@@ -61,6 +61,8 @@ export type WsPlayerActionTakenData = {
 export type WsGameStageChangedData = {
   matchId: number
   stage: StageEnum
+  /** 进街原因：正常下注轮结束 / 跑马路亮牌。 */
+  advanceKind: 'betting_round_complete' | 'runout_reveal'
   pokesToReveal: Poke[]
 }
 
