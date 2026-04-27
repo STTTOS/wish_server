@@ -15,13 +15,13 @@ import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
 import {
-  MAINTENANCE_CODE,
-  MAINTENANCE_MESSAGE
-} from '../router/system/maintenanceConstants'
-import {
   resolveWsUserFromHandshake,
   getWsRoomIdFromHandshakeAuth
 } from '../utils/wsAuth'
+import {
+  MAINTENANCE_CODE,
+  MAINTENANCE_MESSAGE
+} from '../router/system/maintenanceConstants'
 import {
   SOCKET_IO_PING_TIMEOUT_MS,
   SOCKET_IO_PING_INTERVAL_MS,
