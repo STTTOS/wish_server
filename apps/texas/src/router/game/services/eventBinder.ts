@@ -82,14 +82,6 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
         runtimeRegistry.destroyRuntime(roomKey)
         return
       }
-      await autoTopUpOnSeatPlayersAtHandLock({
-        roomId,
-        roomKey,
-        texas,
-        lowestBetAmount: roomInfo.lowestBetAmount,
-        initialChips: roomInfo.initialChips,
-        wsGateway
-      })
       const next = await match.create({
         data: {
           roomId,
@@ -98,6 +90,15 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       })
       await transitionRoomGameStatus(roomId, 'starting_hand')
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
+      await autoTopUpOnSeatPlayersAtHandLock({
+        roomId,
+        roomKey,
+        texas,
+        lowestBetAmount: roomInfo.lowestBetAmount,
+        initialChips: roomInfo.initialChips,
+        wsGateway,
+        handMatchId: next.id
+      })
     },
     onAssignRoles: async () => {
       try {

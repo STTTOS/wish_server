@@ -47,7 +47,7 @@
 
 ## 3. 关键能力增强
 
-- 实现 `game-invalidated` 事件，向客户端推送作废恢复所需快照。
+- 实现 `game-invalidated` 事件：仅 `engine_error`，无 `players`；客户端 Toast 后回首页（人数不足关房走 `game-room-closed`）。
 - 支持“回滚到开局前”：删除本手 DB 明细 + 回滚 Texas 玩家余额。
 - 引入下一手倒计时运行时管理并补充关键日志（开始/取消/失败原因）。
 

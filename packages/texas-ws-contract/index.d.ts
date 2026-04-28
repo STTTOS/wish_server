@@ -143,16 +143,12 @@ export type WsGameEnteringResolvedData = {
   ownerId: number | null
 }
 
+/** 引擎致命错误：本手 DB 已删；客户端应提示并回首页，勿再按本事件恢复桌上状态。人数不足关房见 `game-room-closed`。 */
 export type WsGameInvalidatedData = {
   roomId: number
   matchId: number
   reason: string
-  source: 'engine_error' | 'insufficient_players'
-  players: Array<{
-    userId: number
-    role: RoleEnum | null
-    balance: number
-  }>
+  source: 'engine_error'
 }
 
 export type WsNextHandCountdownStartedData = {

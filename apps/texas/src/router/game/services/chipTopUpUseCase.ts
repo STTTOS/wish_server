@@ -171,29 +171,31 @@ export type AutoTopUpAtHandLockParams = {
   lowestBetAmount: number
   initialChips: number
   wsGateway: GameWsGateway
+  /** 本手 `Match.id`（须已落库且为 runtime `currentMatchId`） */
+  handMatchId: number
 }
 
 /**
  * 下一手 `lockAt`：在座（on-set）玩家若 `round(balance) <= lowestBetAmount`，
- * 自动补入 `initialChips` 并写 `RoomChipTopUp`（`afterMatchId` = 本房最近已结束的一手，与 API 补码一致）。
+ * 自动补入 `initialChips` 并写 `RoomChipTopUp`。
+ * `handMatchId` 须为 `onLock` 内**已创建并已 `setCurrentMatchId` 的本手 `Match.id`**，
+ * 用作 `afterMatchId` 锚点，便于本手作废时 `deleteMany({ afterMatchId })`（与 HTTP 补码用「最近已结束手」区分）。
  */
 export async function autoTopUpOnSeatPlayersAtHandLock(
   params: AutoTopUpAtHandLockParams
 ): Promise<void> {
-  const { roomId, roomKey, texas, lowestBetAmount, initialChips, wsGateway } =
-    params
+  const {
+    roomId,
+    roomKey,
+    texas,
+    lowestBetAmount,
+    initialChips,
+    wsGateway,
+    handMatchId
+  } = params
   if (initialChips <= 0) return
 
-  const lastEndedMatch = await match.findFirst({
-    where: { roomId, endedAt: { not: null } },
-    orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
-    select: { id: true }
-  })
-  if (!lastEndedMatch) {
-    logger.warn('[autoChipTopUp] no ended match, skip', { roomId })
-    return
-  }
-  const afterMatchId = lastEndedMatch.id
+  const afterMatchId = handMatchId
   const seated = texas.room.getPlayersBySeatStatus('on-set')
 
   for (const player of seated) {

@@ -109,14 +109,20 @@ model AnnouncementRead {
   @@index([userId, readAt])
 }
 
-model MatchError {
-  id Int @id @default(autoincrement())
-
-  info      String   @db.LongText
+/// 引擎致命错误审计：`Match` 可能被物理删除，故 `matchId` 不与 `Match` 建外键。
+model EngineFatalIncident {
+  id     Int @id @default(autoincrement())
+  roomId Int
+  /// 作废前快照的 Match.id（非外键）：对齐日志/客户端对局号、查 `/match/error/:id`、与磁带排障；不表示库中仍有该 Match 行。
+  matchId Int
+  message String   @db.VarChar(512)
+  payload Json
   createdAt DateTime @default(now())
 
-  matchId Int
-  match   Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([matchId])
 }
 
 model Room {
@@ -140,8 +146,9 @@ model Room {
   owner           User            @relation(fields: [ownerId], references: [id])
   Match           Match[]
   members         RoomMember[]
-  roomChipTopUps  RoomChipTopUp[]
-  userRoomStats   UserRoomStat[]
+  roomChipTopUps         RoomChipTopUp[]
+  engineFatalIncidents  EngineFatalIncident[]
+  userRoomStats          UserRoomStat[]
 }
 
 enum RoomGameStatus {
@@ -170,12 +177,12 @@ model RoomMember {
   @@unique([roomId, userId])
 }
 
-// 局间补码：紧跟在 afterMatchId 这一手结束之后、下一手开始前；游戏中不可补
+// 局间补码：同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次；游戏中不可补
 model RoomChipTopUp {
   id           Int @id @default(autoincrement())
   roomId       Int
   userId       Int
-  /// 已结束的这一手 match；同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次
+  /// 幂等锚点：HTTP 补码为「最近已结束」的 `Match.id`；`lockAt` 自动补码为「本手新建」的 `Match.id`（与 `eventBinder.onLock` 顺序一致，便于作废本手时级联清理）
   afterMatchId Int
 
   /// 本次补入的筹码（通常 = 房间 initialChips）
@@ -334,7 +341,6 @@ model Match {
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
 
-  matchError               MatchError[]
   roomChipTopUpsAfterMatch RoomChipTopUp[]
   /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
   domainEvents             MatchDomainEvent[]

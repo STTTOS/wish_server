@@ -13,8 +13,8 @@ import {
   user,
   match,
   betRecord,
-  matchError,
-  playerMatchRecord
+  playerMatchRecord,
+  engineFatalIncident
 } from '../../models'
 
 const matchWebApi = combinePath(apiPrefixWeb)('/match')
@@ -74,21 +74,29 @@ router.post(matchWebApi('/list'), async (ctx) => {
           id: true
         }
       },
-      matchError: {
-        select: {
-          id: true
-        }
-      },
       room: true
     },
     orderBy: {
       startedAt: 'desc'
     }
   })
+  const matchIds = list.map((m) => m.id)
+  const fatalByMatchId =
+    matchIds.length === 0
+      ? new Map<number, number>()
+      : new Map(
+          (
+            await engineFatalIncident.groupBy({
+              by: ['matchId'],
+              where: { matchId: { in: matchIds } },
+              _count: { _all: true }
+            })
+          ).map((r) => [r.matchId, r._count._all])
+        )
   response.success(
     ctx,
     withList(
-      list.map(({ matchError, playerMatchRecords, ...rest }) => {
+      list.map(({ playerMatchRecords, ...rest }) => {
         const { activeCode, id, initialChips } = rest.room
 
         return {
@@ -99,7 +107,7 @@ router.post(matchWebApi('/list'), async (ctx) => {
           memberCount: playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
           endedAt: dayjs(rest.endedAt).format(timeFormat),
-          errorCount: matchError.length
+          errorCount: fatalByMatchId.get(rest.id) ?? 0
         }
       }),
       total
@@ -222,18 +230,19 @@ router.post(matchWebApi('/error/:id'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
-  const list = await matchError.findMany({
-    where: {
-      matchId: id
-    }
+  const list = await engineFatalIncident.findMany({
+    where: { matchId: id },
+    orderBy: { createdAt: 'desc' }
   })
   response.success(ctx, {
-    list: list.map((item) => {
-      return {
-        ...item,
-        createdAt: formatTime(item.createdAt)
-      }
-    })
+    list: list.map((item) => ({
+      id: item.id,
+      roomId: item.roomId,
+      matchId: item.matchId,
+      message: item.message,
+      payload: item.payload,
+      createdAt: formatTime(item.createdAt)
+    }))
   })
 })
 

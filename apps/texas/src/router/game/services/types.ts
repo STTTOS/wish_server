@@ -37,11 +37,8 @@ export type StartGameValidationResult = ApiResult<StartGameValidatedContext>
 export type MatchRollbackManager = {
   /** 记录某一手开局快照（用于作废回滚和客户端恢复） */
   snapshotPlayersAtHandStart: (matchId: number) => void
-  /** 作废当前手并回滚 DB/内存，再推送 game-invalidated */
-  invalidateAndRollbackMatch: (
-    source: 'engine_error' | 'insufficient_players',
-    reason: string
-  ) => Promise<void>
+  /** 引擎致命错误：删本手入库数据、恢复引擎余额快照、推送 `game-invalidated`（不含桌上恢复载荷）。 */
+  invalidateAndRollbackMatch: (reason: string) => Promise<void>
   clearInvalidatedFlag: (matchId: number) => void
   clearSnapshot: (matchId: number) => void
 }

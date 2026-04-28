@@ -250,19 +250,14 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-invalidated`
 
-用途：本手作废（引擎异常/人数不足），用于客户端回滚 UI。
+用途：**仅**引擎致命错误导致本手作废；服务端已删除该 `matchId` 相关入库数据。客户端应 Toast 提示「对局发生了意料之外的错误，即将返回首页」，约 1.5s 后 `replace` 到首页，**勿**再按本事件恢复桌上状态。人数不足关房见 `game-room-closed`。
 
 ```ts
 {
   roomId: number
   matchId: number
   reason: string
-  source: 'engine_error' | 'insufficient_players'
-  players: Array<{
-    userId: number
-    role: RoleEnum | null
-    balance: number
-  }>
+  source: 'engine_error'
 }
 ```
 

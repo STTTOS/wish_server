@@ -5,17 +5,18 @@ import { logger } from '../../../logger'
 import {
   match,
   betRecord,
-  matchError,
+  roomChipTopUp,
+  matchDomainEvent,
   playerMatchRecord,
   matchStageTimeRecord
 } from '../../../models'
 
 /**
- * 负责“对局作废”的完整生命周期：
- * - 记录开局快照
- * - 回滚数据库
+ * 负责「引擎致命错误」下本手作废：
+ * - 记录开局快照（仅服务端用于恢复 Texas 余额）
+ * - 删除本手已落库数据（含 `RoomChipTopUp` 锚在本手 `Match.id` 的记录、`MatchDomainEvent` 等）
  * - 回滚 Texas 内存余额
- * - 推送 game-invalidated
+ * - 推送 `game-invalidated`（无 `players`；客户端应 toast 并回首页）
  */
 export function createMatchRollbackManager(params: {
   texas: Texas
@@ -41,10 +42,7 @@ export function createMatchRollbackManager(params: {
     matchStartSnapshots.set(matchId, snapshot)
   }
 
-  const invalidateAndRollbackMatch = async (
-    source: 'engine_error' | 'insufficient_players',
-    reason: string
-  ) => {
+  const invalidateAndRollbackMatch = async (reason: string) => {
     const runtime = runtimeRegistry.getOrThrow(roomKey)
     const matchIdToInvalidate = runtime.currentMatchId
     if (
@@ -55,15 +53,20 @@ export function createMatchRollbackManager(params: {
     invalidatedMatchIds.add(matchIdToInvalidate)
 
     try {
+      await roomChipTopUp.deleteMany({
+        where: { afterMatchId: matchIdToInvalidate }
+      })
       await Promise.all([
+        matchDomainEvent.deleteMany({
+          where: { matchId: matchIdToInvalidate }
+        }),
         matchStageTimeRecord.deleteMany({
           where: { matchId: matchIdToInvalidate }
         }),
         betRecord.deleteMany({ where: { matchId: matchIdToInvalidate } }),
         playerMatchRecord.deleteMany({
           where: { matchId: matchIdToInvalidate }
-        }),
-        matchError.deleteMany({ where: { matchId: matchIdToInvalidate } })
+        })
       ])
       await match.delete({ where: { id: matchIdToInvalidate } })
       runtime.currentMatchId = null
@@ -88,14 +91,7 @@ export function createMatchRollbackManager(params: {
         roomId,
         matchId: matchIdToInvalidate,
         reason,
-        source,
-        players:
-          snapshot ??
-          texas.room.getPlayersBySeatStatus('on-set').map((p) => ({
-            userId: p.getUserInfo().id,
-            role: p.getRole() ?? null,
-            balance: p.balance
-          }))
+        source: 'engine_error'
       },
       roomKey
     )
