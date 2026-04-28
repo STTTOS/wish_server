@@ -3,10 +3,15 @@ import type { GameRuntime } from '../runtimeRegistry'
 import { TexasError } from 'texas-poker-core'
 import { Prisma } from '@prisma/texas-client'
 
+import prisma from '../../../../models'
 import { logger } from '../../../../logger'
+import { GameWsGateway } from '../gameWsGateway'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
-import { room as roomModel, engineFatalIncident } from '../../../../models'
-import { cancelNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
+import { engineFatalIncident } from '../../../../models'
+import {
+  cancelNextHandCountdown,
+  unregisterNextHandHooks
+} from '../../../../gameRuntime/nextHandCountdown'
 
 function fatalErrorPayload(error: TexasError): Prisma.InputJsonValue {
   return {
@@ -22,6 +27,7 @@ export async function handleFatalTexasEngineError(params: {
   getRuntime: () => GameRuntime
 }): Promise<void> {
   const { error, roomId, roomKey, getRuntime } = params
+  const wsGateway = new GameWsGateway()
   const matchIdForLog = getRuntime().currentMatchId
   try {
     if (matchIdForLog != null) {
@@ -41,17 +47,43 @@ export async function handleFatalTexasEngineError(params: {
   await getRuntime().rollbackManager.invalidateAndRollbackMatch(
     error?.message ?? '引擎异常，对局已作废'
   )
-  cancelNextHandCountdown(roomId)
+
+  const runtime = getRuntime()
+  const trackedUserIds = new Set<number>([
+    ...runtime.texas.room.getAllPlayers().map((p) => p.getUserInfo().id)
+  ])
   try {
-    getRuntime().texas.resetBeforeGameStart()
+    const memberRows = await prisma.roomMember.findMany({
+      where: { roomId },
+      select: { userId: true }
+    })
+    memberRows.forEach((m) => trackedUserIds.add(m.userId))
+    await prisma.$transaction(async (tx) => {
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          deletedAt: new Date(),
+          activeOwnerId: null,
+          activeCode: null
+        }
+      })
+      await tx.roomMember.deleteMany({ where: { roomId } })
+    })
   } catch (e) {
-    logger.error('[fatal texas] resetBeforeGameStart failed', e)
+    logger.error('[fatal texas] room dissolution failed', e)
   }
-  await roomModel.update({
-    where: { id: roomId },
-    data: { gameStatus: 'between_hands' }
-  })
-  gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
+
+  wsGateway.broadcastRoomListRoomDeleted(roomId)
+  for (const userId of trackedUserIds) {
+    wsGateway.disconnectUserRoomSockets(roomId, userId)
+  }
+  try {
+    cancelNextHandCountdown(roomId)
+    unregisterNextHandHooks(roomId)
+  } catch (e) {
+    logger.error('[fatal texas] clear countdown/hooks failed', e)
+  }
+  gameRuntimeRegistry.destroyRuntime(roomKey)
   logger.error(
     `[fatal texas] roomKey=${roomKey} matchId=${matchIdForLog ?? 'null'}`,
     error

@@ -105,9 +105,6 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
         // 根据新加入/离开的玩家 重排位置, 并将位置信息推送给客户端
         const roleEvents = texas.setPlayerRoles('rearrange')
         await drainTexasDomainEvents(roleEvents)
-        getRuntime().rollbackManager.snapshotPlayersAtHandStart(
-          getRuntime().currentMatchId!
-        )
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
           await handleFatalTexasEngineError({
@@ -124,9 +121,6 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       try {
         const dealEvents = texas.dealCards()
         await drainTexasDomainEvents(dealEvents)
-        getRuntime().rollbackManager.snapshotPlayersAtHandStart(
-          getRuntime().currentMatchId!
-        )
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
           await handleFatalTexasEngineError({

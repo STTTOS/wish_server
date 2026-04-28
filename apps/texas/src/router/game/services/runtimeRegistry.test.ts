@@ -18,10 +18,8 @@ const fakeRoomInfo = {
 } satisfies StartRoomInfo
 
 const noopRollbackManager: MatchRollbackManager = {
-  snapshotPlayersAtHandStart: () => undefined,
   invalidateAndRollbackMatch: async () => Promise.resolve(),
-  clearInvalidatedFlag: () => undefined,
-  clearSnapshot: () => undefined
+  clearInvalidatedFlag: () => undefined
 }
 
 test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () => {

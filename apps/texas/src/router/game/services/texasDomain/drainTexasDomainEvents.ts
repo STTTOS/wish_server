@@ -408,7 +408,6 @@ async function handleHandEnded(
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
 
     getRuntime().rollbackManager.clearInvalidatedFlag(currentMatchId)
-    getRuntime().rollbackManager.clearSnapshot(currentMatchId)
 
     await roomModel.update({
       where: { id: roomId },

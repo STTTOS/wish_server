@@ -390,8 +390,8 @@ export class StartGameUseCase {
       members: connectedMembers,
       starterUserId: runtimeStarterUserId
     })
-    /** 所有玩家加载完后, 等待3s再通知玩家进入游戏 */
-    await this.#delay(3000)
+    /** 所有玩家加载完后, 等待2s再通知玩家进入游戏 */
+    await this.#delay(2000)
     const matchInfo = await createInitialMatchAndNotifyEntered({
       roomId,
       userIds: connectedUserIds,
@@ -401,13 +401,11 @@ export class StartGameUseCase {
     const currentMatchId = matchInfo.id
 
     const rollbackManager = createMatchRollbackManager({
-      texas,
       roomId,
       roomKey,
       runtimeRegistry: gameRuntimeRegistry,
       wsGateway: this.wsGateway
     })
-    rollbackManager.snapshotPlayersAtHandStart(currentMatchId)
     gameRuntimeRegistry.register({
       roomId,
       roomKey,
@@ -433,11 +431,9 @@ export class StartGameUseCase {
       wsGateway: this.wsGateway
     })
 
-    const rtForSnapshot = gameRuntimeRegistry.getOrThrow(roomKey)
-    if (rtForSnapshot.currentMatchId == null) {
-      throw new Error(
-        `[start game] snapshotPlayersAtHandStart: missing currentMatchId roomKey=${roomKey}`
-      )
+    const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
+    if (runtime.currentMatchId == null) {
+      throw new Error(`[start game] missing currentMatchId roomKey=${roomKey}`)
     }
 
     try {
@@ -454,9 +450,6 @@ export class StartGameUseCase {
       await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
       const dealEvents = texas.dealCards()
       await drainTexasDomainEvents(dealEvents)
-      rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
-        rtForSnapshot.currentMatchId
-      )
 
       // 发牌3秒后再开始游戏
       await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
