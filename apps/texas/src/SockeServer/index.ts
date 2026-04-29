@@ -4,8 +4,8 @@ import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
-import { room as roomModel } from '../models'
 import { isAdminUser } from '../utils/isAdminUser'
+import prisma, { room as roomModel } from '../models'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
@@ -360,12 +360,12 @@ class SocketServer {
           'reason',
           reason
         )
-        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
+        void this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
 
       socket.on('error', (error) => {
         logger.error('[/waiting-room] WebSocket connect error:', error)
-        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
+        void this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
     })
   }
@@ -443,20 +443,46 @@ class SocketServer {
     this.broadcastWaitingRoom(roomIdNumber, msg)
   }
 
-  #onWaitingRoomSocketDropped(
+  async #onWaitingRoomSocketDropped(
     socket: Socket,
     roomKey: string,
     roomIdNumber: number
   ) {
     const userId = socket.data.userId as number
     if (typeof userId === 'number') {
-      this.#maybeBroadcastWaitingRoomPresence(
-        roomKey,
-        roomIdNumber,
-        userId,
-        socket.id,
-        false
-      )
+      /**
+       * HTTP 退出/踢人已广播 `waiting-room-member-left` 并删 `RoomMember`；
+       * 随后客户端断开 waiting-room 仍会走本路径，不应再发 `waiting-room-member-presence` offline（语义重复）。
+       */
+      try {
+        const member = await prisma.roomMember.findUnique({
+          where: {
+            roomId_userId: { roomId: roomIdNumber, userId }
+          },
+          select: { userId: true }
+        })
+        if (member != null) {
+          this.#maybeBroadcastWaitingRoomPresence(
+            roomKey,
+            roomIdNumber,
+            userId,
+            socket.id,
+            false
+          )
+        }
+      } catch (e) {
+        logger.error(
+          `[waiting-room] member lookup before presence broadcast failed roomId=${roomIdNumber} userId=${userId}`,
+          e
+        )
+        this.#maybeBroadcastWaitingRoomPresence(
+          roomKey,
+          roomIdNumber,
+          userId,
+          socket.id,
+          false
+        )
+      }
     }
     void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
   }
