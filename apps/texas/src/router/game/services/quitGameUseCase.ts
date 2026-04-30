@@ -190,10 +190,16 @@ export class QuitGameUseCase {
         }
       }
 
+      /**
+       * `in_hand` 在座离场：要么已当场 `FoldDueToLeave`，要么已 `queueLeaveDuringHand`
+       *（`canFoldDueToLeave` 为假时仅排队，由 `TurnOffered` 里自动弃牌，见 `drainTexasDomainEvents`）。
+       * 二者皆无时才视为异常。
+       */
       if (
         latestRoom.gameStatus === 'in_hand' &&
         !didFoldDueToLeave &&
-        !canBypassInHandFold
+        !canBypassInHandFold &&
+        !queuedLeaveDuringHand
       ) {
         return {
           kind: 'fail',
