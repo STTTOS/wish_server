@@ -83,31 +83,28 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const handLifecycle = texas.controller.status
   const inHand = handLifecycle === 'in_hand'
 
-  const playersInOrder = texas.dealer.getPlayersByActionSequence()
-  const playersOnSeatSource =
-    playersInOrder.length > 0
-      ? playersInOrder
-      : texas.room.getPlayersBySeatStatus('on-set')
-  const playersOnSeat = playersOnSeatSource.map((player, actionIndex) => {
-    const st = player.getStatus()
-    return {
-      userInfo: player.getUserInfo(),
-      role: player.getRole(),
-      actionIndex,
-      isFold: st === 'out',
-      isAllIn: st === 'allIn',
-      balance: player.balance,
-      currentStageTotalAmount: player.currentStageTotalAmount,
-      totalBetAmount: player.totalBetAmount,
-      action: player.getAction(),
-      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
-        roomKey,
-        player.getUserInfo().id
-      ),
-      rankCategory: player.rankCategory,
-      rankStrength: player.rankStrength
-    }
-  })
+  const playersOnSeat = texas.dealer
+    .getPlayersByActionSequence()
+    .map((player, actionIndex) => {
+      const st = player.getStatus()
+      return {
+        userInfo: player.getUserInfo(),
+        role: player.getRole(),
+        actionIndex,
+        isFold: st === 'out',
+        isAllIn: st === 'allIn',
+        balance: player.balance,
+        currentStageTotalAmount: player.currentStageTotalAmount,
+        totalBetAmount: player.totalBetAmount,
+        action: player.getAction(),
+        onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
+          roomKey,
+          player.getUserInfo().id
+        ),
+        rankCategory: player.rankCategory,
+        rankStrength: player.rankStrength
+      }
+    })
 
   const playersOnWatch = texas.room
     .getPlayersBySeatStatus('hang')
