@@ -4,20 +4,23 @@ import { roomMember } from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 
-const MIN_TARGET_BB = 50
-const MAX_TARGET_BB = 200
+export const MIN_TARGET_BB = 50
+export const MAX_TARGET_BB = 200
 
 export type SubmitTopUpPlanInput = {
   userId: number
   roomId: number
-  targetBalance: number | null
+  targetBalance?: number | null
   autoTopUpEnabled?: boolean
 }
 
 export type SubmitTopUpPlanData = {
+  roomDefaultBuyIn: number
   targetBalance: number | null
   autoTopUpEnabled: boolean
   bigBlind: number
+  suggestThresholdMin: number
+  suggestThresholdMax: number
   minTargetBalance: number
   maxTargetBalance: number
   canSubmit: boolean
@@ -51,6 +54,7 @@ export class SubmitTopUpPlanUseCase {
     if (!player) return fail(HTTP_STATUS.FORBIDDEN, '你不在该对局座位上')
 
     const bb = Number(runtime.roomInfo.lowestBetAmount)
+    const roomDefaultBuyIn = Math.max(0, Number(runtime.roomInfo.initialChips))
     if (!Number.isFinite(bb) || bb <= 0) {
       return fail(HTTP_STATUS.CONFLICT, '房间盲注配置异常')
     }
@@ -62,9 +66,6 @@ export class SubmitTopUpPlanUseCase {
       player,
       bb
     )
-    if (!canSubmit) {
-      return fail(HTTP_STATUS.CONFLICT, '当前时机不可提交补码申请')
-    }
 
     if (typeof input.autoTopUpEnabled === 'boolean') {
       gameRuntimeRegistry.setAutoTopUpEnabled(
@@ -72,6 +73,33 @@ export class SubmitTopUpPlanUseCase {
         userId,
         input.autoTopUpEnabled
       )
+    }
+
+    if (input.targetBalance === undefined) {
+      return {
+        ok: true,
+        data: {
+          targetBalance: gameRuntimeRegistry.getPendingTopUpTarget(
+            roomKey,
+            userId
+          ),
+          autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(
+            roomKey,
+            userId
+          ),
+          roomDefaultBuyIn,
+          bigBlind: bb,
+          suggestThresholdMin: roomDefaultBuyIn * 0.2,
+          suggestThresholdMax: roomDefaultBuyIn * 0.4,
+          minTargetBalance,
+          maxTargetBalance,
+          canSubmit
+        }
+      }
+    }
+
+    if (!canSubmit) {
+      return fail(HTTP_STATUS.CONFLICT, '当前时机不可提交补码申请')
     }
 
     if (input.targetBalance == null) {
@@ -83,9 +111,6 @@ export class SubmitTopUpPlanUseCase {
           HTTP_STATUS.BAD_REQUEST,
           `补码目标超出范围：${minTargetBalance}~${maxTargetBalance}`
         )
-      }
-      if ((target - minTargetBalance) % bb !== 0) {
-        return fail(HTTP_STATUS.BAD_REQUEST, `补码步长需为 ${bb}`)
       }
       gameRuntimeRegistry.setPendingTopUpTarget(roomKey, userId, target)
     }
@@ -101,7 +126,10 @@ export class SubmitTopUpPlanUseCase {
           roomKey,
           userId
         ),
+        roomDefaultBuyIn,
         bigBlind: bb,
+        suggestThresholdMin: roomDefaultBuyIn * 0.2,
+        suggestThresholdMax: roomDefaultBuyIn * 0.4,
         minTargetBalance,
         maxTargetBalance,
         canSubmit

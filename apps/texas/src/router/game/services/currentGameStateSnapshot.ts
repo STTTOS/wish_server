@@ -4,6 +4,7 @@ import { type RankCategory } from 'texas-poker-core'
 
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
+import { MAX_TARGET_BB, MIN_TARGET_BB } from './topUpPlanUseCase'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
@@ -66,6 +67,7 @@ export type FetchCurrentGameStatePayload = {
     maxTargetBalance: number
     targetBalance: number | null
     autoTopUpEnabled: boolean
+    canSubmit: boolean
   }
 }
 
@@ -150,9 +152,15 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const bb = Math.max(1, Number(runtime.roomInfo.lowestBetAmount))
   const minTargetBalance = Math.max(
     self ? Math.round(self.balance) : 0,
-    50 * bb
+    MIN_TARGET_BB * bb
   )
-  const maxTargetBalance = 200 * bb
+  const maxTargetBalance = MAX_TARGET_BB * bb
+  const canSubmit =
+    handLifecycle === 'idle' ||
+    handLifecycle === 'between_hands' ||
+    (self != null &&
+      (Math.round(self.balance) < MAX_TARGET_BB * bb ||
+        self.getStatus() === 'out'))
 
   return {
     roomGameStatus,
@@ -180,7 +188,8 @@ export async function buildFetchCurrentGameStatePayload(input: {
       minTargetBalance,
       maxTargetBalance,
       targetBalance: gameRuntimeRegistry.getPendingTopUpTarget(roomKey, userId),
-      autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
+      autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId),
+      canSubmit
     }
   }
 }
