@@ -155,12 +155,18 @@ export async function buildFetchCurrentGameStatePayload(input: {
     MIN_TARGET_BB * bb
   )
   const maxTargetBalance = MAX_TARGET_BB * bb
-  const canSubmit =
-    handLifecycle === 'idle' ||
-    handLifecycle === 'between_hands' ||
-    (self != null &&
-      (Math.round(self.balance) < MAX_TARGET_BB * bb ||
-        self.getStatus() === 'out'))
+  const canSubmit = (() => {
+    if (!self) return false
+    if (Math.round(self.balance) >= MAX_TARGET_BB * bb) return false
+    if (handLifecycle === 'in_hand') {
+      return self.getStatus() === 'out'
+    }
+    if (handLifecycle !== 'between_hands') return false
+    const countdown = getNextHandCountdownSnapshot(roomId)
+    if (countdown.state === 'push_delay_scheduled') return true
+    if (countdown.state === 'active') return Date.now() < countdown.lockAt
+    return false
+  })()
 
   return {
     roomGameStatus,
