@@ -22,6 +22,9 @@
  */
 
 const DEFAULT_MAX = 400
+const GAME_ROOM_REPLAY_EPOCH = `${Date.now().toString(36)}-${Math.random()
+  .toString(36)
+  .slice(2, 8)}`
 
 /** 缓冲中的一条：一条全房广播对应一条记录 */
 type RingEntry = {
@@ -88,6 +91,11 @@ export function recordGameRoomBroadcast(
 /** 当前房间已产生的最大 `seq`；无记录时为 `0`（与「从未广播」区分方式：客户端 sinceSeq=0 表示从头要 replay 时仅能得到缓冲内现存条目） */
 export function getLatestGameRoomSeq(roomKey: string): number {
   return rings.get(roomKey)?.seq ?? 0
+}
+
+/** 当前进程内 replay 世代标识（进程重启会变化）。 */
+export function getGameRoomReplayEpoch(): string {
+  return GAME_ROOM_REPLAY_EPOCH
 }
 
 /**

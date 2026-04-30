@@ -241,6 +241,8 @@ export type WsGameRoomReplayData = {
   afterSeq: number
   throughSeq: number
   latestSeq: number
+  /** 服务端当前 replay 世代；进程重启会变化。 */
+  replayEpoch: string
   events: WsGameRoomReplayItem[]
   truncated?: boolean
 }

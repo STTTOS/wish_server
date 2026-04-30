@@ -79,6 +79,18 @@ export function getWsGameRoomSinceSeqFromHandshake(
   return 0
 }
 
+/** 从 `handshake.auth.gameRoomReplayEpoch` 读取客户端记忆的 replay 世代。 */
+export function getWsGameRoomReplayEpochFromHandshake(
+  handshake: Socket['handshake']
+): string | null {
+  const auth = handshake.auth
+  if (!auth || typeof auth !== 'object') return null
+  const raw = (auth as { gameRoomReplayEpoch?: unknown }).gameRoomReplayEpoch
+  if (typeof raw !== 'string') return null
+  const normalized = raw.trim()
+  return normalized.length > 0 ? normalized : null
+}
+
 /**
  * 校验 JWT 且 session 与 Redis/内存中当前登录态一致（单端登录）。
  */

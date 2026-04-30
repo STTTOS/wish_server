@@ -4,9 +4,12 @@ import { type RankCategory } from 'texas-poker-core'
 
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
-import { getLatestGameRoomSeq } from '../../../SockeServer/gameRoomWsReplayBuffer'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
+import {
+  getLatestGameRoomSeq,
+  getGameRoomReplayEpoch
+} from '../../../SockeServer/gameRoomWsReplayBuffer'
 
 export type FetchCurrentGameStatePayload = {
   roomGameStatus: string
@@ -53,6 +56,7 @@ export type FetchCurrentGameStatePayload = {
   /** 与 WS `next-hand-countdown-*` 对齐 */
   nextHandCountdown: ReturnType<typeof getNextHandCountdownSnapshot>
   latestWsSeq: number
+  latestWsReplayEpoch: string
 }
 
 /**
@@ -148,6 +152,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
     activePlayerInfo,
     myHandPokes: [...myHandPokes],
     nextHandCountdown: getNextHandCountdownSnapshot(roomId),
-    latestWsSeq: getLatestGameRoomSeq(roomKey)
+    latestWsSeq: getLatestGameRoomSeq(roomKey),
+    latestWsReplayEpoch: getGameRoomReplayEpoch()
   }
 }

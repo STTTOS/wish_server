@@ -14,20 +14,22 @@ import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { MAINTENANCE_CODE, MAINTENANCE_MESSAGE } from '../constants/maintenance'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
 import {
+  SOCKET_IO_PING_TIMEOUT_MS,
+  SOCKET_IO_PING_INTERVAL_MS,
+  WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
+} from '../constants/ws'
+import {
   replayGameRoomSince,
   getLatestGameRoomSeq,
+  getGameRoomReplayEpoch,
   recordGameRoomBroadcast
 } from './gameRoomWsReplayBuffer'
 import {
   resolveWsUserFromHandshake,
   getWsRoomIdFromHandshakeAuth,
-  getWsGameRoomSinceSeqFromHandshake
+  getWsGameRoomSinceSeqFromHandshake,
+  getWsGameRoomReplayEpochFromHandshake
 } from '../utils/wsAuth'
-import {
-  SOCKET_IO_PING_TIMEOUT_MS,
-  SOCKET_IO_PING_INTERVAL_MS,
-  WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
-} from '../constants/ws'
 
 class SocketServer {
   #io: Server
@@ -191,10 +193,17 @@ class SocketServer {
        */
       const sinceSeq = getWsGameRoomSinceSeqFromHandshake(socket.handshake)
       if (sinceSeq >= 0) {
+        const replayEpoch = getGameRoomReplayEpoch()
+        const clientReplayEpoch = getWsGameRoomReplayEpochFromHandshake(
+          socket.handshake
+        )
         const latestSeq = getLatestGameRoomSeq(roomKey)
         const entries = replayGameRoomSince(roomKey, sinceSeq)
+        const epochMismatch =
+          clientReplayEpoch != null && clientReplayEpoch !== replayEpoch
         const truncated =
-          sinceSeq > 0 && sinceSeq < latestSeq && entries.length === 0
+          epochMismatch ||
+          (sinceSeq > 0 && sinceSeq < latestSeq && entries.length === 0)
         if (entries.length > 0 || truncated) {
           const throughSeq =
             entries.length > 0 ? entries[entries.length - 1]!.seq : sinceSeq
@@ -205,6 +214,7 @@ class SocketServer {
               afterSeq: sinceSeq,
               throughSeq,
               latestSeq,
+              replayEpoch,
               ...(truncated ? { truncated: true as const } : {}),
               events: entries.map((e) => ({
                 seq: e.seq,
