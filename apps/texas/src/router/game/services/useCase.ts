@@ -418,6 +418,8 @@ export class StartGameUseCase {
       pendingPostBigBlindUserIds: new Set(),
       offlineUserIds: new Set(),
       offlineHandCountByUserId: new Map(),
+      pendingTopUpTargetByUserId: new Map(),
+      autoTopUpEnabledByUserId: new Map(),
       /** 与 `eventBinder` 的 `onLock` 一致：首局从注册起至领域事件 `BlindsPosted` 处理完前禁止 FoldDueToLeave */
       quitBlockedUntilBlindsPosted: true
     })

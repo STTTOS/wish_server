@@ -57,6 +57,16 @@ export type FetchCurrentGameStatePayload = {
   nextHandCountdown: ReturnType<typeof getNextHandCountdownSnapshot>
   latestWsSeq: number
   latestWsReplayEpoch: string
+  myTopUpState: {
+    roomDefaultBuyIn: number
+    bigBlind: number
+    suggestThresholdMin: number
+    suggestThresholdMax: number
+    minTargetBalance: number
+    maxTargetBalance: number
+    targetBalance: number | null
+    autoTopUpEnabled: boolean
+  }
 }
 
 /**
@@ -73,28 +83,31 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const handLifecycle = texas.controller.status
   const inHand = handLifecycle === 'in_hand'
 
-  const playersOnSeat = texas.dealer
-    .getPlayersByActionSequence()
-    .map((player, actionIndex) => {
-      const st = player.getStatus()
-      return {
-        userInfo: player.getUserInfo(),
-        role: player.getRole(),
-        actionIndex,
-        isFold: st === 'out',
-        isAllIn: st === 'allIn',
-        balance: player.balance,
-        currentStageTotalAmount: player.currentStageTotalAmount,
-        totalBetAmount: player.totalBetAmount,
-        action: player.getAction(),
-        onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
-          roomKey,
-          player.getUserInfo().id
-        ),
-        rankCategory: player.rankCategory,
-        rankStrength: player.rankStrength
-      }
-    })
+  const playersInOrder = texas.dealer.getPlayersByActionSequence()
+  const playersOnSeatSource =
+    playersInOrder.length > 0
+      ? playersInOrder
+      : texas.room.getPlayersBySeatStatus('on-set')
+  const playersOnSeat = playersOnSeatSource.map((player, actionIndex) => {
+    const st = player.getStatus()
+    return {
+      userInfo: player.getUserInfo(),
+      role: player.getRole(),
+      actionIndex,
+      isFold: st === 'out',
+      isAllIn: st === 'allIn',
+      balance: player.balance,
+      currentStageTotalAmount: player.currentStageTotalAmount,
+      totalBetAmount: player.totalBetAmount,
+      action: player.getAction(),
+      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
+        roomKey,
+        player.getUserInfo().id
+      ),
+      rankCategory: player.rankCategory,
+      rankStrength: player.rankStrength
+    }
+  })
 
   const playersOnWatch = texas.room
     .getPlayersBySeatStatus('hang')
@@ -135,6 +148,14 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const self = texas.dealer.getById(userId)
   const myHandPokes =
     inHand && self && texas.dealer.has(self) ? self.getHandPokes() : []
+  const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
+  const roomDefaultBuyIn = Math.max(0, Number(runtime.roomInfo.initialChips))
+  const bb = Math.max(1, Number(runtime.roomInfo.lowestBetAmount))
+  const minTargetBalance = Math.max(
+    self ? Math.round(self.balance) : 0,
+    50 * bb
+  )
+  const maxTargetBalance = 200 * bb
 
   return {
     roomGameStatus,
@@ -153,6 +174,16 @@ export async function buildFetchCurrentGameStatePayload(input: {
     myHandPokes: [...myHandPokes],
     nextHandCountdown: getNextHandCountdownSnapshot(roomId),
     latestWsSeq: getLatestGameRoomSeq(roomKey),
-    latestWsReplayEpoch: getGameRoomReplayEpoch()
+    latestWsReplayEpoch: getGameRoomReplayEpoch(),
+    myTopUpState: {
+      roomDefaultBuyIn,
+      bigBlind: bb,
+      suggestThresholdMin: roomDefaultBuyIn * 0.2,
+      suggestThresholdMax: roomDefaultBuyIn * 0.4,
+      minTargetBalance,
+      maxTargetBalance,
+      targetBalance: gameRuntimeRegistry.getPendingTopUpTarget(roomKey, userId),
+      autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
+    }
   }
 }

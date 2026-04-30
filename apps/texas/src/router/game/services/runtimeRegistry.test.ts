@@ -39,6 +39,8 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
     pendingPostBigBlindUserIds: new Set(),
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
+    pendingTopUpTargetByUserId: new Map(),
+    autoTopUpEnabledByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 
@@ -66,6 +68,8 @@ test('GameRuntimeRegistry current match read/write', () => {
     pendingPostBigBlindUserIds: new Set(),
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
+    pendingTopUpTargetByUserId: new Map(),
+    autoTopUpEnabledByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 
@@ -97,6 +101,8 @@ test('flushDeferredTexasSeatRemovals removes queued user ids', () => {
     pendingPostBigBlindUserIds: new Set(),
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
+    pendingTopUpTargetByUserId: new Map(),
+    autoTopUpEnabledByUserId: new Map(),
     quitBlockedUntilBlindsPosted: false
   })
 

@@ -30,6 +30,10 @@ export type GameRuntime = {
   offlineUserIds: Set<number>
   /** 离线连续手数（仅统计在座玩家），用于 2 手宽限后移出。 */
   offlineHandCountByUserId: Map<number, number>
+  /** 用户手动补码目标（补到 targetBalance）。 */
+  pendingTopUpTargetByUserId: Map<number, number>
+  /** 自动补码开关（默认开）。 */
+  autoTopUpEnabledByUserId: Map<number, boolean>
 }
 
 /**
@@ -210,6 +214,41 @@ export class GameRuntimeRegistry {
      */
     if (players.length === 0) return true
     return players.every((p) => runtime.offlineUserIds.has(p.getUserInfo().id))
+  }
+
+  setPendingTopUpTarget(
+    roomKey: string,
+    userId: number,
+    targetBalance: number
+  ) {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingTopUpTargetByUserId.set(userId, targetBalance)
+  }
+
+  clearPendingTopUpTarget(roomKey: string, userId: number) {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingTopUpTargetByUserId.delete(userId)
+  }
+
+  getPendingTopUpTarget(roomKey: string, userId: number): number | null {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return null
+    const v = runtime.pendingTopUpTargetByUserId.get(userId)
+    return Number.isFinite(v) ? (v as number) : null
+  }
+
+  setAutoTopUpEnabled(roomKey: string, userId: number, enabled: boolean) {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.autoTopUpEnabledByUserId.set(userId, enabled)
+  }
+
+  isAutoTopUpEnabled(roomKey: string, userId: number): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return true
+    return runtime.autoTopUpEnabledByUserId.get(userId) ?? true
   }
 
   /** 销毁运行时：reset Texas 后移除上下文。 */

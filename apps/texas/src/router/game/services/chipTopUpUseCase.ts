@@ -175,6 +175,10 @@ export type AutoTopUpAtHandLockParams = {
   handMatchId: number
 }
 
+export type ApplyTopUpPlansAtHandLockResult = {
+  kickedUserIds: number[]
+}
+
 /**
  * 下一手 `lockAt`：在座（on-set）玩家若 `round(balance) <= lowestBetAmount`，
  * 自动补入 `initialChips` 并写 `RoomChipTopUp`。
@@ -232,6 +236,99 @@ export async function autoTopUpOnSeatPlayersAtHandLock(
       })
     }
   }
+}
+
+/**
+ * onLock 统一处理补码申请：
+ * - 优先处理手动申请 targetBalance（补到目标值）
+ * - 无手动申请时，若 auto enabled 且余额 < initialChips，则自动补到 initialChips
+ * - 无申请且余额 <= 0：踢出房间并广播 quit（用于客户端退场）
+ */
+export async function applyTopUpPlansAtHandLock(
+  params: AutoTopUpAtHandLockParams
+): Promise<ApplyTopUpPlansAtHandLockResult> {
+  const { roomId, roomKey, texas, initialChips, wsGateway, handMatchId } =
+    params
+  const afterMatchId = handMatchId
+  const kickedUserIds: number[] = []
+  const seated = texas.room.getPlayersBySeatStatus('on-set')
+
+  for (const player of seated) {
+    const userId = player.getUserInfo().id
+    const balanceBefore = Math.round(player.balance)
+    const pendingTarget = gameRuntimeRegistry.getPendingTopUpTarget(
+      roomKey,
+      userId
+    )
+    const autoEnabled = gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
+    let targetBalance: number | null = null
+    if (pendingTarget != null) {
+      targetBalance = pendingTarget
+    } else if (autoEnabled && balanceBefore < initialChips) {
+      targetBalance = initialChips
+    }
+
+    if (targetBalance != null && targetBalance > balanceBefore) {
+      const topUpAmount = targetBalance - balanceBefore
+      const existing = await roomChipTopUp.findUnique({
+        where: {
+          roomId_userId_afterMatchId: { roomId, userId, afterMatchId }
+        }
+      })
+      if (!existing) {
+        const r = await commitTopUpEngineAndDb({
+          userId,
+          roomId,
+          roomKey,
+          topUpAmount,
+          afterMatchId,
+          roomInitialChipsSnapshot: initialChips,
+          balanceBefore,
+          balanceAfter: targetBalance,
+          player,
+          wsGateway
+        })
+        if (r.tag === 'engine_error' || r.tag === 'db_error') {
+          logger.error('[topUpPlan] commit failed', {
+            roomId,
+            userId,
+            tag: r.tag,
+            message: 'message' in r ? r.message : undefined
+          })
+        }
+      }
+      gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
+      continue
+    }
+
+    if (pendingTarget != null && pendingTarget <= balanceBefore) {
+      gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
+    }
+
+    if (pendingTarget == null && balanceBefore <= 0) {
+      try {
+        await roomMember.deleteMany({ where: { roomId, userId } })
+        if (texas.room.has(userId)) texas.room.removeById(userId)
+        gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
+        gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
+        wsGateway.notifyPlayerQuitGame(roomKey, {
+          roomId,
+          userId,
+          reason: 'zero_balance_no_topup'
+        })
+        wsGateway.disconnectUserRoomSockets(roomId, userId)
+        kickedUserIds.push(userId)
+      } catch (e) {
+        logger.error('[topUpPlan] zero balance kick failed', {
+          roomId,
+          userId,
+          error: e instanceof Error ? e.message : String(e)
+        })
+      }
+    }
+  }
+
+  return { kickedUserIds }
 }
 
 /**

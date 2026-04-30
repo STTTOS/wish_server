@@ -13,6 +13,7 @@ import { gameRuntimeRegistry } from './services/runtimeKit'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
+import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
 import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
@@ -35,6 +36,7 @@ const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
+const submitTopUpPlanUseCase = new SubmitTopUpPlanUseCase()
 const gameWsGateway = new GameWsGateway()
 const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
 const joinGameUseCase = new JoinGameUseCase()
@@ -141,6 +143,44 @@ router.post(gameClientApi('/chipTopUp'), async (ctx) => {
   const result = await chipTopUpUseCase.execute({
     userId,
     roomId
+  })
+  respondFromApiResult(ctx, result, { okMessage: '成功' })
+})
+
+/**
+ * 提交/修改补码申请（onLock 统一处理）与自动补码开关。
+ * body: { roomId: number, targetBalance?: number | null, autoTopUpEnabled?: boolean }
+ */
+router.post(gameClientApi('/topUpPlan'), async (ctx) => {
+  const body = ctx.request.body as {
+    roomId?: unknown
+    targetBalance?: unknown
+    autoTopUpEnabled?: unknown
+  }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+  const targetBalanceRaw = body?.targetBalance
+  const targetBalance =
+    targetBalanceRaw == null ? null : Number(targetBalanceRaw ?? Number.NaN)
+  const autoTopUpEnabled =
+    typeof body?.autoTopUpEnabled === 'boolean'
+      ? body.autoTopUpEnabled
+      : undefined
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+  if (targetBalanceRaw != null && !Number.isFinite(targetBalance)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：targetBalance 非法')
+    return
+  }
+
+  const result = await submitTopUpPlanUseCase.execute({
+    userId,
+    roomId,
+    targetBalance,
+    autoTopUpEnabled
   })
   respondFromApiResult(ctx, result, { okMessage: '成功' })
 })

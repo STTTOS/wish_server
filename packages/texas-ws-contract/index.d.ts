@@ -180,6 +180,7 @@ export type WsOnlineStatus = 'online' | 'offline'
 export type WsPlayerQuitGameData = {
   roomId: number
   userId: number
+  reason?: 'quit' | 'zero_balance_no_topup'
 }
 
 /** 对局内玩家连接状态变化（仅用于展示/倒计时策略，不代表离桌）。 */

@@ -10,7 +10,7 @@ import {
 
 import prisma, { match } from '../../../models'
 import { transitionRoomGameStatus } from './stateMachine'
-import { autoTopUpOnSeatPlayersAtHandLock } from './chipTopUpUseCase'
+import { applyTopUpPlansAtHandLock } from './chipTopUpUseCase'
 import { buildTexasEventContext } from './texasDomain/texasEventContext'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
@@ -90,7 +90,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       })
       await transitionRoomGameStatus(roomId, 'starting_hand')
       runtimeRegistry.setCurrentMatchId(roomKey, next.id)
-      await autoTopUpOnSeatPlayersAtHandLock({
+      await applyTopUpPlansAtHandLock({
         roomId,
         roomKey,
         texas,
