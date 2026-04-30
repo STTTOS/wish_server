@@ -24,6 +24,10 @@ export type RoomEnterResult = ApiResult<RoomEnterSuccessData>
  * 入参与 `room/join` 相同（`roomCode`），无需客户端猜阶段。
  */
 export class RoomEnterFacade {
+  static readonly FAIL_DETAIL = {
+    NOT_MEMBER_IN_ACTIVE_ROOM: 'NOT_MEMBER_IN_ACTIVE_ROOM'
+  } as const
+
   constructor(
     private readonly roomJoin: RoomJoinFacade,
     private readonly joinGame: JoinGameUseCase
@@ -107,7 +111,11 @@ export class RoomEnterFacade {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
-        message: '你已不在该对局中，请返回大厅重新加入'
+        message: '你已不在该对局中，请返回大厅重新加入',
+        details: {
+          type: RoomEnterFacade.FAIL_DETAIL.NOT_MEMBER_IN_ACTIVE_ROOM,
+          roomId: row.id
+        }
       }
     }
 
