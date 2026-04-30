@@ -99,6 +99,18 @@ export class RoomEnterFacade {
       }
     }
 
+    const existingMember = await prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId: row.id, userId: input.userId } }, // eslint-disable-line camelcase
+      select: { userId: true }
+    })
+    if (!existingMember) {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '你已不在该对局中，请返回大厅重新加入'
+      }
+    }
+
     const roomKey = String(row.id)
     const g = await this.joinGame.execute({
       roomId: row.id,
