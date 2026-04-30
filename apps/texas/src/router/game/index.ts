@@ -160,8 +160,14 @@ router.post(gameClientApi('/topUpPlan'), async (ctx) => {
   const roomId = Number(body?.roomId)
   const userId = ctx.state.user!.id
   const targetBalanceRaw = body?.targetBalance
-  const targetBalance =
-    targetBalanceRaw == null ? null : Number(targetBalanceRaw ?? Number.NaN)
+  let targetBalance: number | null | undefined
+  if (targetBalanceRaw === undefined) {
+    targetBalance = undefined
+  } else if (targetBalanceRaw == null) {
+    targetBalance = null
+  } else {
+    targetBalance = Number(targetBalanceRaw ?? Number.NaN)
+  }
   const autoTopUpEnabled =
     typeof body?.autoTopUpEnabled === 'boolean'
       ? body.autoTopUpEnabled
@@ -171,7 +177,11 @@ router.post(gameClientApi('/topUpPlan'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
-  if (targetBalanceRaw != null && !Number.isFinite(targetBalance)) {
+  if (
+    targetBalanceRaw !== undefined &&
+    targetBalanceRaw != null &&
+    !Number.isFinite(targetBalance)
+  ) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：targetBalance 非法')
     return
   }
