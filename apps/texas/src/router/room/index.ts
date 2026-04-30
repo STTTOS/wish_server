@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 
 import router from '../instance'
 import { ws } from '../../server'
-import { room } from '../../models'
+import prisma, { room } from '../../models'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
@@ -126,6 +126,37 @@ router.post(roomApiClient('/resolve'), async (ctx) => {
     return
   }
   response.success(ctx, { roomId: roomInfo.id })
+})
+
+/**
+ * 客户端：杀进程恢复前校验是否仍为 `RoomMember`。
+ * 若已因离线踢出等不再在表中，应跳过 `POST /room/enter`，避免非等待房走 `game/join` 时被重新写回成员。
+ * Body: `{ roomId }`。成功 `data`：`{ isMember: boolean }`。
+ */
+router.post(roomApiClient('/resumeMembership'), async (ctx) => {
+  const raw = (ctx.request.body as { roomId?: unknown })?.roomId
+  const roomId = typeof raw === 'number' ? raw : Number(raw ?? Number.NaN)
+  const userId = ctx.state.user!.id
+
+  if (!Number.isFinite(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
+    return
+  }
+
+  const roomRow = await prisma.room.findUnique({
+    where: { id: roomId },
+    select: { id: true, deletedAt: true }
+  })
+  if (!roomRow || roomRow.deletedAt) {
+    response.success(ctx, { isMember: false })
+    return
+  }
+
+  const member = await prisma.roomMember.findUnique({
+    where: { roomId_userId: { roomId, userId } }, // eslint-disable-line camelcase
+    select: { userId: true }
+  })
+  response.success(ctx, { isMember: Boolean(member) })
 })
 
 /**
