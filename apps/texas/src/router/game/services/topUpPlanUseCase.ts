@@ -3,6 +3,7 @@ import type { ApiResult } from '../../../utils/apiResult'
 import { roomMember } from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 
 export const MIN_TARGET_BB = 50
 export const MAX_TARGET_BB = 200
@@ -62,6 +63,7 @@ export class SubmitTopUpPlanUseCase {
     const minTargetBalance = Math.max(balance, MIN_TARGET_BB * bb)
     const maxTargetBalance = MAX_TARGET_BB * bb
     const canSubmit = this.#canSubmit(
+      roomId,
       runtime.texas.controller.status,
       player,
       bb
@@ -138,13 +140,23 @@ export class SubmitTopUpPlanUseCase {
   }
 
   #canSubmit(
+    roomId: number,
     handLifecycle: unknown,
     player: { getStatus: () => string; balance: number },
     bb: number
   ): boolean {
     const status = String(handLifecycle)
-    if (status === 'idle' || status === 'between_hands') return true
-    if (Math.round(player.balance) < MAX_TARGET_BB * bb) return true
-    return player.getStatus() === 'out'
+    const balance = Math.round(player.balance)
+    if (balance >= MAX_TARGET_BB * bb) return false
+
+    if (status === 'in_hand') {
+      return player.getStatus() === 'out'
+    }
+    if (status !== 'between_hands') return false
+
+    const countdown = getNextHandCountdownSnapshot(roomId)
+    if (countdown.state === 'push_delay_scheduled') return true
+    if (countdown.state === 'active') return Date.now() < countdown.lockAt
+    return false
   }
 }
