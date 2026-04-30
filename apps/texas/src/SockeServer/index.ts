@@ -221,7 +221,7 @@ class SocketServer {
       this.#notifyEnteringProgress(roomKey)
 
       const onLeave = () => {
-        this.#handleGameRoomDisconnect(roomKey, userId)
+        this.#handleGameRoomDisconnect(roomKey, userId, socket.id)
         this.#notifyGameRoomWaiters(roomKey)
         this.#notifyEnteringProgress(roomKey)
       }
@@ -500,13 +500,22 @@ class SocketServer {
       .filter((userId) => !!userId) as number[]
   }
 
+  /** 同一用户在本房是否仍有其它 /game 连接（用于重连重叠时避免误报离线）。 */
+  #countPeerGameSockets(
+    roomId: string,
+    userId: number,
+    excludeSocketId: string
+  ): number {
+    return this.#getSocketsInGameRoom(roomId).filter(
+      (s) => (s.data.userId as number) === userId && s.id !== excludeSocketId
+    ).length
+  }
+
   /**
-   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：标记在线并广播
-   * 设计约束：
-   * - 只处理 `on-set` 玩家，观战的连断不影响当局离线托管逻辑。
-   * - 先写 runtime 状态，再决定是否推送 `player-status-change`（去重）。
+   * 在座且本房仍有该用户的 /game 连接时：写入在线态，并在刚从离线恢复时补发 `online`。
+   * `connection` 与「hang → on-set」后的补同步共用（见 {@link resyncGameRoomSeatPresence}）。
    */
-  #handleGameRoomConnect(channel: string, userId: number) {
+  #applyGameRoomOnSeatPresenceIfConnected(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)
     if (!texas) return
     const player = texas.room.getPlayerById(userId)
@@ -516,6 +525,10 @@ class SocketServer {
       gameRuntimeRegistry.clearConnectionTracking(channel, userId)
       return
     }
+    const hasLiveSocket = this.#getSocketsInGameRoom(channel).some(
+      (s) => (s.data.userId as number) === userId
+    )
+    if (!hasLiveSocket) return
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
     gameRuntimeRegistry.markUserOnline(channel, userId)
     if (!wasOffline) return
@@ -526,19 +539,51 @@ class SocketServer {
   }
 
   /**
+   * 领域已将玩家标为 `on-set` 后调用：补跑与 `/game` `connection` 等价的在线同步。
+   * 解决「先连上时仍为 hang，随后入座未再触发 connection」时误将后续断线当成首断并播报离线。
+   */
+  resyncGameRoomSeatPresence(roomKey: string, userIds: number[]) {
+    const seen = new Set<number>()
+    for (const userId of userIds) {
+      if (!Number.isFinite(userId) || userId <= 0 || seen.has(userId)) continue
+      seen.add(userId)
+      this.#applyGameRoomOnSeatPresenceIfConnected(roomKey, userId)
+    }
+  }
+
+  /**
+   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：标记在线并广播
+   * 设计约束：
+   * - 只处理 `on-set` 玩家，观战的连断不影响当局离线托管逻辑。
+   * - 先写 runtime 状态，再决定是否推送 `player-status-change`（去重）。
+   */
+  #handleGameRoomConnect(channel: string, userId: number) {
+    this.#applyGameRoomOnSeatPresenceIfConnected(channel, userId)
+  }
+
+  /**
    * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：广播玩家离线
    *（排除已中途退出/非在座）。
    * 设计约束：
    * - 中途退出（queued leave）或非在座（含观战）不推送离线事件。
+   * - 多终端 / 重连重叠：仅当该用户在本房已无其它 /game 连接时才标记离线并广播。
    * - 离线事件仅服务于当局 seat 托管和 UI 呈现，避免语义污染。
    */
-  #handleGameRoomDisconnect(channel: string, userId: number) {
+  #handleGameRoomDisconnect(
+    channel: string,
+    userId: number,
+    droppedSocketId: string
+  ) {
     const texas = gameRuntimeRegistry.getTexas(channel)
     if (!texas) return
     const isQueuedLeave = gameRuntimeRegistry.hasQueuedLeave(channel, userId)
     const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
     if (isQueuedLeave || !isOnSeat) {
       gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      return
+    }
+    if (this.#countPeerGameSockets(channel, userId, droppedSocketId) > 0) {
       void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
       return
     }

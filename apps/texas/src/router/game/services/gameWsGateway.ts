@@ -257,6 +257,7 @@ export class GameWsGateway {
       type: 'players-seated',
       data
     })
+    ws.resyncGameRoomSeatPresence(roomKey, data.userIds ?? [])
   }
 
   notifyPlayersPostedBigBlind(
@@ -267,6 +268,9 @@ export class GameWsGateway {
       type: 'players-posted-big-blind',
       data
     })
+    if (data.seatedUserIds?.length) {
+      ws.resyncGameRoomSeatPresence(roomKey, data.seatedUserIds)
+    }
   }
 
   notifyPlayerHandVoluntarilyShown(
