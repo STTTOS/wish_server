@@ -539,6 +539,10 @@ export class StartGameUseCase {
           where: { id: roomId },
           data: { gameStatus: 'waiting' }
         })
+        this.wsGateway.broadcastRoomListPlaySessionChanged({
+          roomId,
+          playSession: 'lobby'
+        })
       }
       logger.error('[entring] start game flow failed', e)
     }
