@@ -5,10 +5,10 @@ export const MIN_THINKING_TIME = 5
 export const MAX_THINKING_TIME = 60
 
 // 初始筹码必须大于大盲注的倍数
-export const INITIAL_CHIPS_MIN_BB_MULTIPLIER = 30
+export const INITIAL_CHIPS_MIN_BB_MULTIPLIER = 50
 
 // 默认初始筹码大盲注倍数
-export const DEFAULT_INITIAL_CHIPS_MIN_BB_MULTIPLIER = 50
+export const DEFAULT_INITIAL_CHIPS_MIN_BB_MULTIPLIER = 100
 
 // 最小大盲注
 export const MIN_BB = 2
