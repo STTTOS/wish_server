@@ -234,7 +234,6 @@ function recomputeOneMatch(params: {
 
   const texas = new Texas({
     user: btnUser,
-    thinkingTime: m.room.thinkingTime,
     lowestBetAmount: m.lowestBetAmount,
     maximumCountOfPlayers: Math.max(pmrs.length, 2),
     initialChips: m.room.initialChips
@@ -297,13 +296,21 @@ function recomputeOneMatch(params: {
     const best5 = getBestFiveCards(hole, common)
     const sig = getFiveCardsRankSignature(best5)
     const strength = getStrengthFromRankSignature(sig)
-    p.rankSignature = sig
-    p.rankStrength = strength
-    p.rankCategory = rankCategoryFromSignature(sig) ?? undefined
-    p.bestFiveCards = best5
+    const rankCategory = rankCategoryFromSignature(sig)
+    if (!rankCategory) {
+      throw new Error(
+        `userId=${row.userId} invalid rank category signature=${sig}`
+      )
+    }
+    p.setShowdownEval({
+      bestFiveCards: best5,
+      rankSignature: sig,
+      rankStrength: strength,
+      rankCategory
+    })
     if (row.isFold) p.setStatus('out')
     else if (row.isAllIn) p.setStatus('allIn')
-    else p.setStatus('active')
+    else p.setStatus('eligible')
   }
 
   texas.pool.reset()
