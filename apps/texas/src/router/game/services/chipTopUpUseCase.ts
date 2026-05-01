@@ -294,7 +294,9 @@ export async function applyTopUpPlansAtHandLock(
     if (balanceAfterTopUp <= 0) {
       try {
         await roomMember.deleteMany({ where: { roomId, userId } })
-        if (texas.room.has(userId)) texas.room.removeById(userId)
+        if (texas.room.has(userId)) {
+          texas.removePlayerByIdAsSystem(userId)
+        }
         gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
         wsGateway.notifyPlayerQuitGame(roomKey, {
           roomId,
