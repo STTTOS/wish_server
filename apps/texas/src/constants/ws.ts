@@ -6,7 +6,7 @@
  * 与座位思考时长无关；略放宽可降低误断连，但会推迟发现真死链。
  */
 /** 最坏发现断链约 `pingInterval + pingTimeout`（Engine.IO）；与客户端断网弹窗策略独立 */
-export const SOCKET_IO_PING_TIMEOUT_MS = 20_000
-export const SOCKET_IO_PING_INTERVAL_MS = 10_000
+export const SOCKET_IO_PING_TIMEOUT_MS = 24_000
+export const SOCKET_IO_PING_INTERVAL_MS = 12_000
 
 export const WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS = 10_000
