@@ -29,7 +29,7 @@ import {
 import {
   BUILT_IN_VOICE_NAME_SET,
   BUILT_IN_VOICE_USER_COOLDOWN_MS
-} from '../../constants/builtInVoice'
+} from './builtInVoiceConstants'
 import {
   MAX_PLAYERS_COUNT,
   ROOM_PRESET_RULES,
