@@ -240,9 +240,8 @@ export async function autoTopUpOnSeatPlayersAtHandLock(
 
 /**
  * onLock 统一处理补码申请：
- * - 优先处理手动申请 targetBalance（补到目标值）
- * - 无手动申请时，若 auto enabled 且余额 < initialChips，则自动补到 initialChips
- * - 无申请且余额 <= 0：踢出房间并广播 quit（用于客户端退场）
+ * - auto enabled 且余额 < initialChips，则自动补到 initialChips
+ * - 余额 <= 0：踢出房间并广播 quit（用于客户端退场）
  */
 export async function applyTopUpPlansAtHandLock(
   params: AutoTopUpAtHandLockParams
@@ -256,17 +255,9 @@ export async function applyTopUpPlansAtHandLock(
   for (const player of seated) {
     const userId = player.getUserInfo().id
     const balanceBefore = Math.round(player.balance)
-    const pendingTarget = gameRuntimeRegistry.getPendingTopUpTarget(
-      roomKey,
-      userId
-    )
     const autoEnabled = gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
-    let targetBalance: number | null = null
-    if (pendingTarget != null) {
-      targetBalance = pendingTarget
-    } else if (autoEnabled && balanceBefore < initialChips) {
-      targetBalance = initialChips
-    }
+    const targetBalance =
+      autoEnabled && balanceBefore < initialChips ? initialChips : null
 
     if (targetBalance != null && targetBalance > balanceBefore) {
       const topUpAmount = targetBalance - balanceBefore
@@ -297,20 +288,14 @@ export async function applyTopUpPlansAtHandLock(
           })
         }
       }
-      gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
       continue
     }
 
-    if (pendingTarget != null && pendingTarget <= balanceBefore) {
-      gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
-    }
-
-    if (pendingTarget == null && balanceBefore <= 0) {
+    if (balanceBefore <= 0) {
       try {
         await roomMember.deleteMany({ where: { roomId, userId } })
         if (texas.room.has(userId)) texas.room.removeById(userId)
         gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
-        gameRuntimeRegistry.clearPendingTopUpTarget(roomKey, userId)
         wsGateway.notifyPlayerQuitGame(roomKey, {
           roomId,
           userId,

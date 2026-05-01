@@ -4,7 +4,6 @@ import { type RankCategory } from 'texas-poker-core'
 
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
-import { MAX_TARGET_BB, MIN_TARGET_BB } from './topUpPlanUseCase'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
@@ -60,14 +59,7 @@ export type FetchCurrentGameStatePayload = {
   latestWsReplayEpoch: string
   myTopUpState: {
     roomDefaultBuyIn: number
-    bigBlind: number
-    suggestThresholdMin: number
-    suggestThresholdMax: number
-    minTargetBalance: number
-    maxTargetBalance: number
-    targetBalance: number | null
     autoTopUpEnabled: boolean
-    canSubmit: boolean
   }
 }
 
@@ -149,24 +141,6 @@ export async function buildFetchCurrentGameStatePayload(input: {
     inHand && self && texas.dealer.has(self) ? self.getHandPokes() : []
   const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
   const roomDefaultBuyIn = Math.max(0, Number(runtime.roomInfo.initialChips))
-  const bb = Math.max(1, Number(runtime.roomInfo.lowestBetAmount))
-  const minTargetBalance = Math.max(
-    self ? Math.round(self.balance) : 0,
-    MIN_TARGET_BB * bb
-  )
-  const maxTargetBalance = MAX_TARGET_BB * bb
-  const canSubmit = (() => {
-    if (!self) return false
-    if (Math.round(self.balance) >= MAX_TARGET_BB * bb) return false
-    if (handLifecycle === 'in_hand') {
-      return self.getStatus() === 'out'
-    }
-    if (handLifecycle !== 'between_hands') return false
-    const countdown = getNextHandCountdownSnapshot(roomId)
-    if (countdown.state === 'push_delay_scheduled') return true
-    if (countdown.state === 'active') return Date.now() < countdown.lockAt
-    return false
-  })()
 
   return {
     roomGameStatus,
@@ -188,14 +162,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
     latestWsReplayEpoch: getGameRoomReplayEpoch(),
     myTopUpState: {
       roomDefaultBuyIn,
-      bigBlind: bb,
-      suggestThresholdMin: roomDefaultBuyIn * 0.2,
-      suggestThresholdMax: roomDefaultBuyIn * 0.4,
-      minTargetBalance,
-      maxTargetBalance,
-      targetBalance: gameRuntimeRegistry.getPendingTopUpTarget(roomKey, userId),
-      autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId),
-      canSubmit
+      autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
     }
   }
 }

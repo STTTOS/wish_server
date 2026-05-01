@@ -162,26 +162,16 @@ router.post(gameClientApi('/chipTopUp'), async (ctx) => {
 })
 
 /**
- * 提交/修改补码申请（onLock 统一处理）与自动补码开关。
- * body: { roomId: number, targetBalance?: number | null, autoTopUpEnabled?: boolean }
+ * 更新自动补码开关。
+ * body: { roomId: number, autoTopUpEnabled?: boolean }
  */
 router.post(gameClientApi('/topUpPlan'), async (ctx) => {
   const body = ctx.request.body as {
     roomId?: unknown
-    targetBalance?: unknown
     autoTopUpEnabled?: unknown
   }
   const roomId = Number(body?.roomId)
   const userId = ctx.state.user!.id
-  const targetBalanceRaw = body?.targetBalance
-  let targetBalance: number | null | undefined
-  if (targetBalanceRaw === undefined) {
-    targetBalance = undefined
-  } else if (targetBalanceRaw == null) {
-    targetBalance = null
-  } else {
-    targetBalance = Number(targetBalanceRaw ?? Number.NaN)
-  }
   const autoTopUpEnabled =
     typeof body?.autoTopUpEnabled === 'boolean'
       ? body.autoTopUpEnabled
@@ -191,19 +181,10 @@ router.post(gameClientApi('/topUpPlan'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
-  if (
-    targetBalanceRaw !== undefined &&
-    targetBalanceRaw != null &&
-    !Number.isFinite(targetBalance)
-  ) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：targetBalance 非法')
-    return
-  }
 
   const result = await submitTopUpPlanUseCase.execute({
     userId,
     roomId,
-    targetBalance,
     autoTopUpEnabled
   })
   respondFromApiResult(ctx, result, { okMessage: '成功' })
