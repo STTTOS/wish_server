@@ -9,7 +9,7 @@ import {
   NEXT_HAND_LOCK_AT_OFFSET_MS,
   NEXT_HAND_START_AFTER_DEAL_MS,
   NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
-} from '../constants/nextHand'
+} from '../gameRuntime/nextHandConstants'
 
 const MIN_MS = 0
 const MAX_MS = 120_000
