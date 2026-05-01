@@ -39,6 +39,7 @@ class SocketServer {
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
+  #waitingRoomPresenceOfflineAnnounced = new Set<string>()
 
   constructor() {
     this.#io = new Server(server, {
@@ -354,13 +355,19 @@ class SocketServer {
 
       const userId = socket.data.userId as number
       if (typeof userId === 'number') {
-        this.#maybeBroadcastWaitingRoomPresence(
-          roomKey,
-          roomId,
-          userId,
-          socket.id,
-          true
-        )
+        const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+        if (this.#waitingRoomPresenceOfflineAnnounced.has(presenceKey)) {
+          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+            roomKey,
+            roomId,
+            userId,
+            socket.id,
+            true
+          )
+          if (didBroadcast) {
+            this.#waitingRoomPresenceOfflineAnnounced.delete(presenceKey)
+          }
+        }
       }
 
       socket.on('disconnect', (reason) => {
@@ -432,6 +439,10 @@ class SocketServer {
       .filter((socket) => !!socket) as Socket[]
   }
 
+  #waitingRoomPresenceKey(roomKey: string, userId: number) {
+    return `${roomKey}:${userId}`
+  }
+
   /**
    * 多终端时：仅当该用户在房间内已无其它 waiting-room 连接时广播，避免误报掉线/上线。
    */
@@ -441,16 +452,17 @@ class SocketServer {
     userId: number,
     socketId: string,
     online: boolean
-  ) {
+  ): boolean {
     const peers = this.#getSocketsInWaitingRoom(roomKey).filter(
       (s) => (s.data.userId as number) === userId && s.id !== socketId
     )
-    if (peers.length > 0) return
+    if (peers.length > 0) return false
     const msg: RoomWsMessage<'waiting-room-member-presence'> = {
       type: 'waiting-room-member-presence',
       data: { userId, online }
     }
     this.broadcastWaitingRoom(roomIdNumber, msg)
+    return true
   }
 
   async #onWaitingRoomSocketDropped(
@@ -472,26 +484,36 @@ class SocketServer {
           select: { userId: true }
         })
         if (member != null) {
-          this.#maybeBroadcastWaitingRoomPresence(
+          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
             roomKey,
             roomIdNumber,
             userId,
             socket.id,
             false
           )
+          if (didBroadcast) {
+            this.#waitingRoomPresenceOfflineAnnounced.add(
+              this.#waitingRoomPresenceKey(roomKey, userId)
+            )
+          }
         }
       } catch (e) {
         logger.error(
           `[waiting-room] member lookup before presence broadcast failed roomId=${roomIdNumber} userId=${userId}`,
           e
         )
-        this.#maybeBroadcastWaitingRoomPresence(
+        const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
           roomKey,
           roomIdNumber,
           userId,
           socket.id,
           false
         )
+        if (didBroadcast) {
+          this.#waitingRoomPresenceOfflineAnnounced.add(
+            this.#waitingRoomPresenceKey(roomKey, userId)
+          )
+        }
       }
     }
     void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
