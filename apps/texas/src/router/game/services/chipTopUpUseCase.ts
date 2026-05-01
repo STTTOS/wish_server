@@ -241,7 +241,7 @@ export async function autoTopUpOnSeatPlayersAtHandLock(
 /**
  * onLock 统一处理补码申请：
  * - auto enabled 且余额 < initialChips，则自动补到 initialChips
- * - 余额 <= 0：踢出房间并广播 quit（用于客户端退场）
+ * - 统一补码处理后若余额 <= 0：踢出房间并广播 quit（用于客户端退场）
  */
 export async function applyTopUpPlansAtHandLock(
   params: AutoTopUpAtHandLockParams
@@ -288,10 +288,10 @@ export async function applyTopUpPlansAtHandLock(
           })
         }
       }
-      continue
     }
 
-    if (balanceBefore <= 0) {
+    const balanceAfterTopUp = Math.round(player.balance)
+    if (balanceAfterTopUp <= 0) {
       try {
         await roomMember.deleteMany({ where: { roomId, userId } })
         if (texas.room.has(userId)) texas.room.removeById(userId)
@@ -303,6 +303,12 @@ export async function applyTopUpPlansAtHandLock(
         })
         wsGateway.disconnectUserRoomSockets(roomId, userId)
         kickedUserIds.push(userId)
+        logger.info('[topUpPlan] kick zero balance player at onLock', {
+          roomId,
+          userId,
+          balanceBefore,
+          balanceAfterTopUp
+        })
       } catch (e) {
         logger.error('[topUpPlan] zero balance kick failed', {
           roomId,
