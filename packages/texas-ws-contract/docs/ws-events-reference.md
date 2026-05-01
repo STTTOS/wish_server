@@ -1,6 +1,6 @@
 # WS 事件参考（给 App）
 
-基于 `apps/texas/src/ws/ws-event-types.ts` 整理。
+基于 `packages/texas-ws-contract/index.d.ts` 整理。
 
 ## 消息包格式
 
@@ -106,11 +106,24 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-start`
 
-用途：本手正式开始（引擎已下盲注等）。不携带 `stage` / `pool`：客户端收到后置阶段为 `pre_flop`，底池可与首条 `player-action-taken` 等中的 `pool` 对齐。
+用途：本手正式开始（引擎已下盲注等）。不携带 `stage` / `pool`：客户端收到后置阶段为 `pre_flop`；底池可与同批稍后下发的 **`game-blinds-posted`** 或后续 `player-action-taken` 中的 `pool` 对齐。
 
 ```ts
 {
   matchId: number
+}
+```
+
+### `game-blinds-posted`
+
+用途：翻前小盲/大盲已从各玩家筹码扣入池（与 Core `BlindsPosted` 一致；短码时 `amount` 可小于规定盲注）。在 `game-start` 之后、`player-action-required` 之前下发。
+
+```ts
+{
+  matchId: number
+  roomId: number
+  posts: Array<{ userId: number; amount: number; kind: 'sb' | 'bb' }>
+  pool: number
 }
 ```
 
@@ -204,6 +217,26 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 }
 ```
 
+### `players-posted-big-blind`
+
+用途：对局中途加入的玩家入座通知 + 翻前补缴大盲结果。`seatedUserIds` 用于客户端刷新 `playerSet`（拉取成员后更新 UI）；`posts` 用于按行动样式渲染“补缴大盲”下注表现。
+
+```ts
+{
+  roomId: number
+  matchId: number | null
+  seatedUserIds: number[]
+  posts: Array<{
+    userId: number
+    amount: number
+    balance: number
+    totalBetAmount: number
+    currentStageBetAmount: number
+  }>
+  pool: number
+}
+```
+
 **配套 HTTP**（需登录，路径以项目 `apiPrefixClient` + `/game/chipTopUp` 为准）：
 
 - 方法：`POST`
@@ -217,19 +250,14 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-invalidated`
 
-用途：本手作废（引擎异常/人数不足），用于客户端回滚 UI。
+用途：**仅**引擎致命错误导致本手作废；服务端已删除该 `matchId` 相关入库数据。客户端应 Toast 提示「对局发生了意料之外的错误，即将返回首页」，约 1.5s 后 `replace` 到首页，**勿**再按本事件恢复桌上状态。人数不足关房见 `game-room-closed`。
 
 ```ts
 {
   roomId: number
   matchId: number
   reason: string
-  source: 'engine_error' | 'insufficient_players'
-  players: Array<{
-    userId: number
-    role: RoleEnum | null
-    balance: number
-  }>
+  source: 'engine_error'
 }
 ```
 
@@ -258,6 +286,50 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ---
 
+## 断线重连与中途观战：`game-room-replay`
+
+### `game-room-replay`
+
+仅发往**当前重连的这一条** `/game` 连接（非全房广播）。`data`：
+
+```ts
+{
+  roomId: number
+  afterSeq: number
+  throughSeq: number
+  latestSeq: number
+  truncated?: boolean
+  events: Array<{ seq: number; payload: Record<string, unknown> }>
+}
+```
+
+- **HTTP 快照**（`POST .../game/fetchCurrentGameState`）仍是权威状态；响应内带 **`latestWsSeq`**，表示当前全房广播游标。
+- **WS 补发**：连接 `/game` 时在 **`auth.gameRoomSinceSeq`** 传入客户端「最后已处理的全房广播序号」（未收到过则 `0`）。连上后除 `initial connect` 外，可能收到一条 **`game-room-replay`**：
+  - `events`：每条为 `{ seq, payload }`，`payload` 与同房间历史 `message` 事件 body 相同（一般为 `{ type, data }`），按 `seq` 顺序重放即可。
+  - **`truncated: true`**：`afterSeq < latestSeq` 但环形缓冲里已无中间消息（断线过久或消息过多被挤出）；须先拉 HTTP 快照对齐，再把本地游标设为返回的 `latestSeq`。
+- **未入缓冲的消息**：`broadcastGameToUser`（如 `player-hand-dealt`）、`broadcastGameEach` 等**不会**进入环形缓冲，仍依赖快照或既有单播逻辑。
+
+### 中途加入/重连恢复时序
+
+```mermaid
+sequenceDiagram
+  participant App
+  participant HTTP as Server /game/fetchCurrentGameState
+  participant WS as Server /game
+
+  App->>HTTP: POST /game/fetchCurrentGameState
+  HTTP-->>App: currentState + latestWsSeq
+  Note over App: 先用 currentState 恢复当前牌局 UI
+
+  App->>WS: connect /game(auth.roomId, auth.gameRoomSinceSeq=latestWsSeq)
+  WS-->>App: game-room-replay(events > latestWsSeq)
+  Note over App: 逐条重放补齐窗口期缺失事件
+
+  WS-->>App: 实时事件流
+```
+
+---
+
 ## 事件枚举总表
 
 ```ts
@@ -272,9 +344,12 @@ type WsEventType =
   | 'player-roles-assigned'
   | 'player-hand-dealt'
   | 'game-start'
+  | 'game-blinds-posted'
   | 'player-action-required'
   | 'player-action-taken'
   | 'game-stage-changed'
   | 'game-end'
   | 'player-chip-top-up'
+  | 'players-posted-big-blind'
+  | 'game-room-replay'
 ```

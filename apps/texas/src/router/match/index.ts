@@ -1,24 +1,27 @@
 import type { WithPaginationReq } from '../interface'
+import type { RoomTableType } from '../../constants/game'
 
 import dayjs from 'dayjs'
+import { Prisma } from '@prisma/texas-client'
 
 import './web'
 import './handPokeAuditWeb'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
+import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import {
   match,
-  roomMember,
   userRoomStat,
+  matchDomainEvent,
   playerMatchRecord
 } from '../../models'
 import {
-  gameRuntimeRegistry,
-  getCurrentMatchIdWithFallback
-} from '../game/services/runtimeKit'
+  loadMatchReplayTapeForViewer,
+  loadMatchCompositeReadModelFromDbTape
+} from '../game/services/matchReplayReadModel'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
@@ -52,6 +55,25 @@ function settleRecordVisibleFields<
   }
 }
 
+function sortSettleRecordsByOutcome<
+  T extends { isFold: boolean; rankStrength: number; wager: number | null }
+>(records: readonly T[]): T[] {
+  const wagerDesc = (
+    a: { wager: number | null },
+    b: { wager: number | null }
+  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
+  return [...records].sort((a, b) => {
+    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+    if (!a.isFold && !b.isFold) {
+      if (a.rankStrength !== b.rankStrength) {
+        return b.rankStrength - a.rankStrength
+      }
+      return wagerDesc(a, b)
+    }
+    return wagerDesc(a, b)
+  })
+}
+
 /**
  * 查询当前用户的对局记录（分页）
  */
@@ -60,19 +82,36 @@ router.post(matchApi('/list'), async (ctx) => {
   const {
     current = 1,
     pageSize = 10,
-    roomId
-  }: WithPaginationReq & { roomId?: number } = ctx.request.body ?? {}
+    roomId,
+    type
+  }: WithPaginationReq & { roomId?: number; type?: string } = ctx.request
+    .body ?? {}
 
   const skip = (current - 1) * pageSize
   const take = pageSize
 
-  const where = {
+  if (
+    type &&
+    type !== 'all' &&
+    !(ROOM_TABLE_TYPES as readonly string[]).includes(type)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 参数异常')
+    return
+  }
+
+  const tableTypeFilter: RoomTableType | null =
+    type && type !== 'all' ? (type as RoomTableType) : null
+
+  const matchWhere: Prisma.MatchWhereInput = {
+    endedAt: { not: null },
+    ...(roomId ? { roomId } : null),
+    ...(tableTypeFilter
+      ? { room: { is: { tableType: tableTypeFilter } } }
+      : null)
+  }
+  const where: Prisma.PlayerMatchRecordWhereInput = {
     userId,
-    match: {
-      // 过滤掉未结束的对局
-      endedAt: { not: null }
-    },
-    ...(roomId ? { match: { roomId } } : {})
+    match: matchWhere
   }
 
   const [total, records] = await Promise.all([
@@ -84,7 +123,10 @@ router.post(matchApi('/list'), async (ctx) => {
       select: {
         match: {
           include: {
-            room: true
+            room: true,
+            _count: {
+              select: { domainEvents: true }
+            }
           }
         },
         id: true,
@@ -108,7 +150,8 @@ router.post(matchApi('/list'), async (ctx) => {
   const listForResponse = records.map(({ match, ...restRecord }) => {
     const {
       id: matchId,
-      room: { code: roomCode, initialChips },
+      room: { activeCode, initialChips },
+      _count,
       startedAt,
       endedAt,
       ...restMatch
@@ -117,8 +160,11 @@ router.post(matchApi('/list'), async (ctx) => {
       ...restRecord,
       ...restMatch,
       matchId,
-      roomCode,
+      roomCode: activeCode ?? '',
       initialChips,
+      tableType: match.room.tableType,
+      sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
+      replaySupported: _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
     }
@@ -145,10 +191,12 @@ router.post(matchApi('/rooms'), async (ctx) => {
     .sort((a, b) => b.lastMatchAt.getTime() - a.lastMatchAt.getTime())
     .map((stat) => ({
       roomId: stat.roomId,
-      roomCode: stat.room.code,
+      roomCode: stat.room.activeCode ?? '',
       lowestBetAmount: stat.room.lowestBetAmount,
       thinkingTime: stat.room.thinkingTime,
       isPrivate: stat.room.isPrivate,
+      tableType: stat.room.tableType,
+      sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
       lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
       matchCount: stat.matchCount,
       totalWager: stat.totalWager,
@@ -255,7 +303,9 @@ router.post(matchApi('/detail'), async (ctx) => {
           handPokes: true,
           rankStrength: true,
           rankCategory: true,
-          totalBetAmount: true
+          totalBetAmount: true,
+          sevenTwoBonusPaid: true,
+          sevenTwoBonusReceived: true
         }
       },
       records: {
@@ -298,7 +348,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   }
 
   const {
-    room: { code: roomCode, id: roomId, initialChips },
+    room: { activeCode, id: roomId, initialChips },
     endedAt,
     records,
     startedAt,
@@ -313,61 +363,45 @@ router.post(matchApi('/detail'), async (ctx) => {
     totalPlayers >= 1 && foldedCount === totalPlayers - 1
   const viewerId = userId
 
-  const wagerDesc = (
-    a: { wager: number | null },
-    b: { wager: number | null }
-  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
-
   // 玩家结算记录：未弃牌在前（先比 rankStrength，再比 wager）；弃牌在后（按 wager）
-  const settleRecords = [...playerMatchRecords]
-    .sort((a, b) => {
-      if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      if (!a.isFold && !b.isFold) {
-        if (a.rankStrength !== b.rankStrength) {
-          return b.rankStrength - a.rankStrength
-        }
-        return wagerDesc(a, b)
-      }
-      return wagerDesc(a, b)
-    })
-    .map(
-      ({
-        handPokes,
+  const settleRecords = sortSettleRecordsByOutcome(playerMatchRecords).map(
+    ({
+      handPokes,
+      isFold,
+      user: { id: recordUserId, ...user },
+      rankCategory,
+      rankStrength,
+      ...rest
+    }) => {
+      const isSelf = recordUserId === viewerId
+      /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
+      const hideHoleCardsFromViewer =
+        !isSelf && (isFold || isNoShowdownSingleWinner)
+
+      const {
+        handPokes: outHandPokes,
+        rankCategory: outRankCategory,
+        rankStrength: outRankStrength
+      } = settleRecordVisibleFields({
+        isSelf,
         isFold,
-        user: { id: recordUserId, ...user },
+        hideHoleCardsFromViewer,
+        handPokes,
         rankCategory,
-        rankStrength,
-        ...rest
-      }) => {
-        const isSelf = recordUserId === viewerId
-        /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
-        const hideHoleCardsFromViewer =
-          !isSelf && (isFold || isNoShowdownSingleWinner)
+        rankStrength
+      })
 
-        const {
-          handPokes: outHandPokes,
-          rankCategory: outRankCategory,
-          rankStrength: outRankStrength
-        } = settleRecordVisibleFields({
-          isSelf,
-          isFold,
-          hideHoleCardsFromViewer,
-          handPokes,
-          rankCategory,
-          rankStrength
-        })
-
-        return {
-          ...user,
-          ...rest,
-          userId: recordUserId,
-          isFold,
-          handPokes: outHandPokes,
-          rankCategory: outRankCategory,
-          rankStrength: outRankStrength
-        }
+      return {
+        ...user,
+        ...rest,
+        userId: recordUserId,
+        isFold,
+        handPokes: outHandPokes,
+        rankCategory: outRankCategory,
+        rankStrength: outRankStrength
       }
-    )
+    }
+  )
 
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
@@ -380,8 +414,10 @@ router.post(matchApi('/detail'), async (ctx) => {
   response.success(ctx, {
     ...restMatchInfo,
     roomId,
-    roomCode,
+    roomCode: activeCode ?? '',
     initialChips,
+    tableType: matchInfo.room.tableType,
+    sevenTwoBonusEnabled: matchInfo.room.sevenTwoBonusEnabled,
     memberCount: playerMatchRecords.length,
     startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
     endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null,
@@ -391,59 +427,132 @@ router.post(matchApi('/detail'), async (ctx) => {
 })
 
 /**
- * 获取当前对局状态（用于重连恢复）
+ * 回放磁带（参与者可见）：返回按 DB 追加顺序的领域事件磁带。
+ * 仅保留本人私牌，其他玩家 `HoleCardsDealt` 会脱敏为空数组；
+ * 同时返回按 viewer 掩码后的终局 `settleList`（排序与线上 game-end 一致）。
+ * `meta.replaySupported`：本局是否在 `MatchDomainEvent` 有落盘；无磁带时 `tape` 为空且不会查库加载磁带。
  */
-router.post(matchApi('/currentState'), async (ctx) => {
+router.post(matchApi('/replayTape'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const membership = await roomMember.findFirst({
-    where: { userId, room: { deletedAt: null } },
-    select: { roomId: true }
-  })
-  const roomId = membership?.roomId
-  if (!roomId) {
-    response.error(ctx, HTTP_STATUS.CONFLICT, '当前不在对局房间中')
+  const { matchId }: { matchId?: number } = ctx.request.body ?? {}
+  if (!matchId) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 matchId')
     return
   }
 
-  const texas = gameRuntimeRegistry.getTexas(String(roomId))
-  if (!texas) {
+  const [matchInfo, domainEventCount] = await Promise.all([
+    match.findUnique({
+      where: { id: matchId, endedAt: { not: null } },
+      include: {
+        room: true,
+        playerMatchRecords: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                avatarUrl: true,
+                avatarKey: true,
+                pokerBackgroundKey: true
+              }
+            }
+          }
+        }
+      }
+    }),
+    matchDomainEvent.count({ where: { matchId } })
+  ])
+  const replaySupported = domainEventCount > 0
+  if (!matchInfo) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
 
-  const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
-
-  const playersOnSeat = texas.room
-    .getPlayersBySeatStatus('on-set')
-    .map((player) => ({
-      role: player.getRole(),
-      action: player.getAction(),
-      userInfo: player.getUserInfo(),
-      currentStageTotalAmount: player.currentStageTotalAmount,
-      totalBetAmount: player.totalBetAmount,
-      rankCategory: player.rankSignature?.[0]
-    }))
-  const playersOnWatch = texas.room
-    .getPlayersBySeatStatus('hang')
-    .map((player) => ({
-      userInfo: player.getUserInfo()
-    }))
-
-  const activePlayer = texas.controller.activePlayer
-  const activePlayerInfo = {
-    userInfo: activePlayer?.getUserInfo(),
-    remainThinkTime: activePlayer?.getRemainThinkTime()
+  const participated = matchInfo.playerMatchRecords.some(
+    (record) => record.userId === userId
+  )
+  if (!participated) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权查看该对局')
+    return
+  }
+  if (!replaySupported) {
+    response.error(ctx, HTTP_STATUS.CONFLICT, '该对局暂无可回放磁带')
+    return
   }
 
+  const [replay, replayComposite] = await Promise.all([
+    loadMatchReplayTapeForViewer(matchId, userId),
+    loadMatchCompositeReadModelFromDbTape(matchId)
+  ])
+  const isNoShowdownSingleWinner =
+    replayComposite.compositeReadModel.lastHandEnded?.showHandPokes === false
+  const unfoldedOnSetCount = matchInfo.playerMatchRecords.filter(
+    (record) => !record.isFold
+  ).length
+  const settleList = sortSettleRecordsByOutcome(
+    matchInfo.playerMatchRecords
+  ).map((record) => {
+    const isSelf = record.userId === userId
+    const hideHoleCardsFromViewer =
+      !isSelf && (record.isFold || isNoShowdownSingleWinner)
+    const visible = settleRecordVisibleFields({
+      isSelf,
+      isFold: record.isFold,
+      hideHoleCardsFromViewer,
+      handPokes: record.handPokes,
+      rankCategory: record.rankCategory,
+      rankStrength: record.rankStrength
+    })
+    return {
+      userId: record.userId,
+      name: record.user.name,
+      avatarUrl: record.user.avatarUrl,
+      avatarKey: record.user.avatarKey,
+      pokerBackgroundKey: record.user.pokerBackgroundKey,
+      balance: Number(record.balanceAfterHand ?? 0),
+      wager: record.wager,
+      sevenTwoBonusPaid: record.sevenTwoBonusPaid,
+      sevenTwoBonusReceived: record.sevenTwoBonusReceived,
+      isAllIn: record.isAllIn,
+      isFold: record.isFold,
+      canVoluntaryShowHand: record.isFold || unfoldedOnSetCount === 1,
+      handPokes: visible.handPokes,
+      rankCategory: visible.rankCategory,
+      rankStrength: visible.rankStrength
+    }
+  })
+
   response.success(ctx, {
-    matchId: currentMatchId,
-    roomId: Number(roomId),
-    status: texas.controller.status,
-    stage: texas.controller.stage,
-    pool: texas.pool.totalAmount,
-    commonPokes: texas.dealer.deck.getPokes().commonPokes,
-    activePlayerInfo,
-    playersOnSeat,
-    playersOnWatch
+    meta: {
+      matchId: matchInfo.id,
+      /** 本局是否在 `MatchDomainEvent` 落过领域事件磁带；历史对局可能为 false，仅可展示结算等、无 tape 回放 */
+      replaySupported,
+      roomId: matchInfo.roomId,
+      roomCode: matchInfo.room.activeCode ?? '',
+      initialChips: matchInfo.room.initialChips,
+      lowestBetAmount: matchInfo.room.lowestBetAmount,
+      thinkingTime: matchInfo.room.thinkingTime,
+      tableType: matchInfo.room.tableType,
+      sevenTwoBonusEnabled: matchInfo.room.sevenTwoBonusEnabled,
+      selfUserId: userId,
+      startedAt: matchInfo.startedAt
+        ? dayjs(matchInfo.startedAt).format(timeFormat)
+        : null,
+      endedAt: matchInfo.endedAt
+        ? dayjs(matchInfo.endedAt).format(timeFormat)
+        : null,
+      members: matchInfo.playerMatchRecords.map((record) => ({
+        userId: record.userId,
+        name: record.user.name,
+        avatarUrl: record.user.avatarUrl,
+        balanceAtHandStart: record.balanceAtHandStart,
+        avatarKey: record.user.avatarKey,
+        pokerBackgroundKey: record.user.pokerBackgroundKey,
+        gameSeatStatus: 'on_set' as const
+      }))
+    },
+    tape: replay.tape,
+    tapeIssues: replay.tapeIssues,
+    settleList
   })
 })

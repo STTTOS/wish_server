@@ -1,5 +1,7 @@
 import type { StartGameValidatedContext } from './types'
 
+import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
+
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
@@ -8,10 +10,12 @@ import { bindTexasLifecycleEvents } from './eventBinder'
 import { transitionRoomGameStatus } from './stateMachine'
 import prisma, { room as roomModel } from '../../../models'
 import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
+import { dealCardsWithOptionalDevForce27o } from './devForceSevenTwoOffsuit'
 import {
   validateStartGameRequest,
   markRoomEnteringAndNotify
 } from './validator'
+import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 import {
   createTexasAndSeatPlayers,
   createInitialMatchAndNotifyEntered
@@ -20,7 +24,8 @@ import {
 /** HTTP 已校验通过后，后台开局流程的入参（含房间快照与预期成员）。 */
 type StartFlowInput = {
   roomId: number
-  ownerId: number
+  /** waiting-room 房主（仅用于 entering 阶段治理） */
+  lobbyOwnerId: number
   roomInfo: StartGameValidatedContext['roomInfo']
   members: StartGameValidatedContext['members']
   roomKey: string
@@ -30,14 +35,16 @@ type StartFlowInput = {
 /** 等待 /game 连接后的只读快照，供决策与开局分支使用。 */
 type EnteringSnapshot = {
   roomId: number
-  ownerId: number
+  /** waiting-room 房主（仅用于 entering 阶段治理） */
+  lobbyOwnerId: number
   roomInfo: StartGameValidatedContext['roomInfo']
   roomKey: string
   userIds: number[]
   connectedUserIds: number[]
   connectedMembers: StartGameValidatedContext['members']
   unconnectedUserIds: number[]
-  runtimeOwnerId: number | null
+  /** 进入 in-game 前的引擎引导用户（不等价于 waiting-room owner） */
+  runtimeStarterUserId: number | null
 }
 
 /** 纯决策结果：销毁房间 / 回退等待房 / 继续开局，载荷与 WS 推送语义对齐。 */
@@ -50,14 +57,14 @@ type EnteringPlan =
   | {
       kind: 'back_waiting_room'
       /** 唯一在线玩家，兼任新房主 */
-      newOwnerId: number
+      newLobbyOwnerId: number
       connectedUserIds: number[]
       kickedUserIds: number[]
     }
   | {
       kind: 'start_game'
-      /** 开局使用的房主（原房主未连时已切换） */
-      runtimeOwnerId: number
+      /** 开局使用的引擎引导用户（原房主未连时可切换） */
+      runtimeStarterUserId: number
       connectedUserIds: number[]
       unconnectedUserIds: number[]
     }
@@ -74,43 +81,43 @@ export class StartGameUseCase {
   }
 
   /**
-   * 根据「已连上 /game 的 userId」推导未连列表、在房成员子集与运行时房主。
-   * 无副作用；房主未连时取已连成员第一位。
+   * 根据「已连上 /game 的 userId」推导未连列表、在房成员子集与运行时引擎引导用户。
+   * 无副作用；waiting-room 房主未连时取已连成员第一位。
    *
-   * 不变量：`members` 与 `userIds` 同源时，`runtimeOwnerId` 为假仅当 `connectedUserIds` 为空
+   * 不变量：`members` 与 `userIds` 同源时，`runtimeStarterUserId` 为假仅当 `connectedUserIds` 为空
    *（此时 `connectedMembers` 为空，与「无人连上」一致）。若 socket 侧出现不在 members 里的 id，则属数据异常。
    */
   #buildConnectionSnapshot(input: {
-    ownerId: number
+    lobbyOwnerId: number
     members: StartGameValidatedContext['members']
     userIds: number[]
     connectedUserIds: number[]
   }) {
-    const { ownerId, members, userIds, connectedUserIds } = input
+    const { lobbyOwnerId, members, userIds, connectedUserIds } = input
     const connectedSet = new Set(connectedUserIds)
     const unconnectedUserIds = userIds.filter((id) => !connectedSet.has(id))
     const connectedMembers = members.filter((m) => connectedSet.has(m.userId))
-    const runtimeOwnerId = connectedSet.has(ownerId)
-      ? ownerId
+    const runtimeStarterUserId = connectedSet.has(lobbyOwnerId)
+      ? lobbyOwnerId
       : connectedMembers[0]?.userId
 
     return {
       unconnectedUserIds,
       connectedMembers,
-      runtimeOwnerId
+      runtimeStarterUserId
     }
   }
 
-  /** 房主变更时广播 waiting-room-owner-changed，相同 id 则跳过。 */
-  #broadcastOwnerChangedIfNeeded(
+  /** waiting-room 房主变更时广播 waiting-room-owner-changed，相同 id 则跳过。 */
+  #broadcastLobbyOwnerChangedIfNeeded(
     roomId: number,
-    oldOwnerId: number,
-    newOwnerId: number
+    oldLobbyOwnerId: number,
+    newLobbyOwnerId: number
   ) {
-    if (oldOwnerId === newOwnerId) return
+    if (oldLobbyOwnerId === newLobbyOwnerId) return
     this.wsGateway.broadcastWaitingRoomOwnerChanged(roomId, {
-      oldOwnerId,
-      newOwnerId
+      oldOwnerId: oldLobbyOwnerId,
+      newOwnerId: newLobbyOwnerId
     })
   }
 
@@ -135,7 +142,8 @@ export class StartGameUseCase {
         data: {
           gameStatus: 'waiting',
           deletedAt: new Date(),
-          activeOwnerId: null
+          activeOwnerId: null,
+          activeCode: null
         }
       })
       await tx.roomMember.deleteMany({ where: { roomId } })
@@ -158,21 +166,28 @@ export class StartGameUseCase {
    */
   async #handleBackWaitingRoom(input: {
     roomId: number
-    ownerId: number
-    newOwnerId: number
+    lobbyOwnerId: number
+    isPrivate: boolean
+    newLobbyOwnerId: number
     connectedUserIds: number[]
     kickedUserIds: number[]
   }) {
-    const { roomId, ownerId, newOwnerId, connectedUserIds, kickedUserIds } =
-      input
+    const {
+      roomId,
+      lobbyOwnerId,
+      isPrivate,
+      newLobbyOwnerId,
+      connectedUserIds,
+      kickedUserIds
+    } = input
 
     await prisma.$transaction(async (tx) => {
       await tx.room.update({
         where: { id: roomId },
         data: {
           gameStatus: 'waiting',
-          ownerId: newOwnerId,
-          activeOwnerId: newOwnerId
+          ownerId: newLobbyOwnerId,
+          activeOwnerId: newLobbyOwnerId
         }
       })
       if (kickedUserIds.length > 0) {
@@ -182,8 +197,18 @@ export class StartGameUseCase {
       }
     })
 
-    this.#broadcastOwnerChangedIfNeeded(roomId, ownerId, newOwnerId)
+    this.#broadcastLobbyOwnerChangedIfNeeded(
+      roomId,
+      lobbyOwnerId,
+      newLobbyOwnerId
+    )
     this.#disconnectUsers(roomId, kickedUserIds)
+    if (!isPrivate) {
+      this.wsGateway.broadcastRoomListPlaySessionChanged({
+        roomId,
+        playSession: 'lobby'
+      })
+    }
     this.wsGateway.broadcastRoomListMemberCountChanged({
       roomId,
       memberCount: 1
@@ -193,35 +218,38 @@ export class StartGameUseCase {
       outcome: 'back_waiting_room',
       connectedUserIds,
       kickedUserIds,
-      ownerId: newOwnerId
+      ownerId: newLobbyOwnerId
     })
     this.wsGateway.untrackEntering(roomId)
   }
 
   /**
-   * 多人已连但有人未连：必要时把房主切到 runtimeOwner、删未连成员、断连并更新列表人数。
+   * 多人已连但有人未连：必要时把 waiting-room 房主切到 runtimeStarter、删未连成员、断连并更新列表人数。
    */
   async #syncConnectedMembersBeforeStart(input: {
     roomId: number
-    ownerId: number
+    lobbyOwnerId: number
     connectedUserIds: number[]
     unconnectedUserIds: number[]
-    runtimeOwnerId: number
+    runtimeStarterUserId: number
   }) {
     const {
       roomId,
-      ownerId,
+      lobbyOwnerId,
       connectedUserIds,
       unconnectedUserIds,
-      runtimeOwnerId
+      runtimeStarterUserId
     } = input
     if (unconnectedUserIds.length === 0) return
 
     await prisma.$transaction(async (tx) => {
-      if (ownerId !== runtimeOwnerId) {
+      if (lobbyOwnerId !== runtimeStarterUserId) {
         await tx.room.update({
           where: { id: roomId },
-          data: { ownerId: runtimeOwnerId, activeOwnerId: runtimeOwnerId }
+          data: {
+            ownerId: runtimeStarterUserId,
+            activeOwnerId: runtimeStarterUserId
+          }
         })
       }
       await tx.roomMember.deleteMany({
@@ -229,7 +257,11 @@ export class StartGameUseCase {
       })
     })
 
-    this.#broadcastOwnerChangedIfNeeded(roomId, ownerId, runtimeOwnerId)
+    this.#broadcastLobbyOwnerChangedIfNeeded(
+      roomId,
+      lobbyOwnerId,
+      runtimeStarterUserId
+    )
     this.#disconnectUsers(roomId, unconnectedUserIds)
     this.wsGateway.broadcastRoomListMemberCountChanged({
       roomId,
@@ -243,7 +275,7 @@ export class StartGameUseCase {
   async #collectConnectionSnapshot(
     input: StartFlowInput
   ): Promise<EnteringSnapshot> {
-    const { roomId, ownerId, roomInfo, members, roomKey, userIds } = input
+    const { roomId, lobbyOwnerId, roomInfo, members, roomKey, userIds } = input
     try {
       await this.wsGateway.waitForAllGameConnections(roomKey, userIds)
     } catch (e) {
@@ -253,9 +285,9 @@ export class StartGameUseCase {
     const connectedUserIds = this.wsGateway
       .getConnectedGameRoomUserIds(roomKey)
       .filter((id) => userIds.includes(id))
-    const { unconnectedUserIds, connectedMembers, runtimeOwnerId } =
+    const { unconnectedUserIds, connectedMembers, runtimeStarterUserId } =
       this.#buildConnectionSnapshot({
-        ownerId,
+        lobbyOwnerId,
         members,
         userIds,
         connectedUserIds
@@ -263,19 +295,19 @@ export class StartGameUseCase {
 
     return {
       roomId,
-      ownerId,
+      lobbyOwnerId,
       roomInfo,
       roomKey,
       userIds,
       connectedUserIds,
       connectedMembers,
       unconnectedUserIds,
-      runtimeOwnerId: runtimeOwnerId ?? null
+      runtimeStarterUserId: runtimeStarterUserId ?? null
     }
   }
 
   /**
-   * 根据连接人数与运行时房主生成 EnteringPlan；纯函数，不写库不发 WS。
+   * 根据连接人数与运行时引擎引导用户生成 EnteringPlan；纯函数，不写库不发 WS。
    * 若连接集合与 members 快照不一致（例如 socket userId 不在 members 中），按异常收敛为 destroy_room。
    */
   #decideEnteringOutcome(snapshot: EnteringSnapshot): EnteringPlan {
@@ -283,7 +315,7 @@ export class StartGameUseCase {
       roomId,
       connectedUserIds,
       userIds,
-      runtimeOwnerId,
+      runtimeStarterUserId,
       connectedMembers
     } = snapshot
 
@@ -292,7 +324,7 @@ export class StartGameUseCase {
     }
 
     if (
-      runtimeOwnerId == null ||
+      runtimeStarterUserId == null ||
       connectedMembers.length !== connectedUserIds.length
     ) {
       logger.warn(
@@ -301,7 +333,7 @@ export class StartGameUseCase {
           roomId,
           connectedUserIds,
           connectedMembersCount: connectedMembers.length,
-          runtimeOwnerId
+          runtimeStarterUserId
         }
       )
       return { kind: 'destroy_room', expectedUserIds: userIds }
@@ -311,7 +343,7 @@ export class StartGameUseCase {
       const [newOwnerId] = connectedUserIds
       return {
         kind: 'back_waiting_room',
-        newOwnerId,
+        newLobbyOwnerId: newOwnerId,
         connectedUserIds,
         kickedUserIds: userIds.filter((id) => id !== newOwnerId)
       }
@@ -319,7 +351,7 @@ export class StartGameUseCase {
 
     return {
       kind: 'start_game',
-      runtimeOwnerId,
+      runtimeStarterUserId,
       connectedUserIds,
       unconnectedUserIds: snapshot.unconnectedUserIds
     }
@@ -332,23 +364,24 @@ export class StartGameUseCase {
     plan: Extract<EnteringPlan, { kind: 'start_game' }>,
     snapshot: EnteringSnapshot
   ) {
-    const { roomId, ownerId, roomInfo, roomKey, connectedMembers } = snapshot
-    const { runtimeOwnerId, connectedUserIds, unconnectedUserIds } = plan
+    const { roomId, lobbyOwnerId, roomInfo, roomKey, connectedMembers } =
+      snapshot
+    const { runtimeStarterUserId, connectedUserIds, unconnectedUserIds } = plan
 
     await this.#syncConnectedMembersBeforeStart({
       roomId,
-      ownerId,
+      lobbyOwnerId,
       connectedUserIds,
       unconnectedUserIds,
-      runtimeOwnerId
+      runtimeStarterUserId
     })
 
-    const runtimeOwner = connectedMembers.find(
-      (m) => m.userId === runtimeOwnerId
+    const runtimeStarterMember = connectedMembers.find(
+      (m) => m.userId === runtimeStarterUserId
     )!
     const runtimeRoomInfo = {
       ...roomInfo,
-      owner: runtimeOwner.user
+      owner: runtimeStarterMember.user
     }
 
     this.wsGateway.untrackEntering(roomId)
@@ -356,10 +389,10 @@ export class StartGameUseCase {
     const texas = createTexasAndSeatPlayers({
       roomInfo: runtimeRoomInfo,
       members: connectedMembers,
-      ownerId: runtimeOwnerId
+      starterUserId: runtimeStarterUserId
     })
-    /** 所有玩家加载完后, 等待3s再通知玩家进入游戏 */
-    await this.#delay(3000)
+    /** 所有玩家加载完后, 等待2s再通知玩家进入游戏 */
+    await this.#delay(2000)
     const matchInfo = await createInitialMatchAndNotifyEntered({
       roomId,
       userIds: connectedUserIds,
@@ -369,24 +402,29 @@ export class StartGameUseCase {
     const currentMatchId = matchInfo.id
 
     const rollbackManager = createMatchRollbackManager({
-      texas,
       roomId,
       roomKey,
       runtimeRegistry: gameRuntimeRegistry,
       wsGateway: this.wsGateway
     })
-    rollbackManager.snapshotPlayersAtHandStart(currentMatchId)
     gameRuntimeRegistry.register({
       roomId,
       roomKey,
+      roomInfo: runtimeRoomInfo,
       texas,
       currentMatchId,
       matchStartedAt: Date.now(),
       rollbackManager,
-      rolesAssignedPersistence: Promise.resolve()
+      pendingLeaveByUserId: new Set(),
+      pendingPostBigBlindUserIds: new Set(),
+      offlineUserIds: new Set(),
+      offlineHandCountByUserId: new Map(),
+      autoTopUpEnabledByUserId: new Map(),
+      /** 与 `eventBinder` 的 `onLock` 一致：首局从注册起至领域事件 `BlindsPosted` 处理完前禁止 FoldDueToLeave */
+      quitBlockedUntilBlindsPosted: true
     })
 
-    bindTexasLifecycleEvents({
+    const { drainTexasDomainEvents } = bindTexasLifecycleEvents({
       texas,
       roomId,
       roomKey,
@@ -395,39 +433,52 @@ export class StartGameUseCase {
       wsGateway: this.wsGateway
     })
 
-    const rtForSnapshot = gameRuntimeRegistry.getOrThrow(roomKey)
-    if (rtForSnapshot.currentMatchId == null) {
-      throw new Error(
-        `[start game] snapshotPlayersAtHandStart: missing currentMatchId roomKey=${roomKey}`
-      )
+    const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
+    if (runtime.currentMatchId == null) {
+      throw new Error(`[start game] missing currentMatchId roomKey=${roomKey}`)
     }
 
-    // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
-    // 进入游戏2秒后开始分配角色
-    await this.#delay(gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs())
-    texas.setPlayerRoles()
-    // 进入in_hand状态, 新加入的玩家直接到观战席
-    await roomModel.update({
-      where: { id: roomId },
-      data: { gameStatus: 'in_hand' }
-    })
+    try {
+      // TODO: 进入游戏时或许需要一个过渡, 避免页面空白, 先暂时留2秒
+      // 进入游戏2秒后开始分配角色
+      await this.#delay(
+        gameRuntimeConfig.getStartGameBeforeAssignRolesDelayMs()
+      )
+      const roleEvents = texas.setPlayerRoles()
+      await transitionRoomGameStatus(roomId, 'starting_hand')
 
-    await gameRuntimeRegistry.getOrThrow(roomKey).rolesAssignedPersistence
-    // 角色分配完成后, 等待2秒再发牌
-    await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
-    texas.dealCards()
-    rtForSnapshot.rollbackManager.snapshotPlayersAtHandStart(
-      rtForSnapshot.currentMatchId
-    )
+      await drainTexasDomainEvents(roleEvents)
+      // 角色分配完成后, 等待2秒再发牌
+      await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
+      const dealEvents = dealCardsWithOptionalDevForce27o({
+        texas,
+        roomId,
+        phase: 'start_game'
+      })
+      await drainTexasDomainEvents(dealEvents)
 
-    // 发牌3秒后再开始游戏
-    await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
-    await texas.controller.start()
+      // 发牌3秒后再开始游戏
+      await this.#delay(gameRuntimeConfig.getNextHandStartAfterDealMs())
+      const startEvents = texas.start()
+      await drainTexasDomainEvents(startEvents)
+      await transitionRoomGameStatus(roomId, 'in_hand')
+    } catch (e: unknown) {
+      if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+        await handleFatalTexasEngineError({
+          error: e,
+          roomId,
+          roomKey,
+          getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
+        })
+        return
+      }
+      throw e
+    }
   }
 
   /** 校验 + 切 entering + 推送 game-entering，返回供后台 #runStartFlow 使用的数据。 */
-  async requestStart(roomId: number, ownerId: number) {
-    const validated = await validateStartGameRequest(roomId, ownerId)
+  async requestStart(roomId: number, lobbyOwnerId: number) {
+    const validated = await validateStartGameRequest(roomId, lobbyOwnerId)
     if (!validated.ok) return validated
 
     const { members } = validated.data
@@ -439,7 +490,7 @@ export class StartGameUseCase {
       ok: true as const,
       data: {
         roomId,
-        ownerId,
+        lobbyOwnerId,
         roomInfo: validated.data.roomInfo,
         members,
         roomKey: String(roomId),
@@ -473,8 +524,9 @@ export class StartGameUseCase {
         case 'back_waiting_room':
           await this.#handleBackWaitingRoom({
             roomId: snapshot.roomId,
-            ownerId: snapshot.ownerId,
-            newOwnerId: plan.newOwnerId,
+            lobbyOwnerId: snapshot.lobbyOwnerId,
+            isPrivate: snapshot.roomInfo.isPrivate,
+            newLobbyOwnerId: plan.newLobbyOwnerId,
             connectedUserIds: plan.connectedUserIds,
             kickedUserIds: plan.kickedUserIds
           })
@@ -486,10 +538,18 @@ export class StartGameUseCase {
     } catch (e: unknown) {
       gameRuntimeRegistry.destroyRuntime(roomKey)
       this.wsGateway.untrackEntering(roomId)
-      await roomModel.update({
-        where: { id: roomId },
-        data: { gameStatus: 'waiting' }
-      })
+      try {
+        await transitionRoomGameStatus(roomId, 'waiting')
+      } catch {
+        await roomModel.update({
+          where: { id: roomId },
+          data: { gameStatus: 'waiting' }
+        })
+        this.wsGateway.broadcastRoomListPlaySessionChanged({
+          roomId,
+          playSession: 'lobby'
+        })
+      }
       logger.error('[entring] start game flow failed', e)
     }
   }

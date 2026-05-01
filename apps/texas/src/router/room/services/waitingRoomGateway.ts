@@ -6,8 +6,9 @@ import type {
   WsWaitingRoomMemberLeftData,
   WsWaitingRoomMemberJoinedData,
   WsWaitingRoomOwnerChangedData,
-  WsRoomListMemberCountChangedData
-} from '../ws-event-types'
+  WsRoomListMemberCountChangedData,
+  WsRoomListPlaySessionChangedData
+} from '@wishufree/texas-ws-contract'
 
 /**
  * 等待房 / 游戏房 WS 在线态查询入口（Facade 与路由不直接依赖 SocketServer 细节）。
@@ -42,6 +43,18 @@ export class WaitingRoomGateway {
     const data: WsRoomListMemberCountChangedData = { roomId, memberCount }
     const msg: RoomWsMessage<'room-list-member-count-changed'> = {
       type: 'room-list-member-count-changed',
+      data
+    }
+    this.socket.broadcastRoomList(msg)
+  }
+
+  broadcastRoomListPlaySessionChanged(
+    roomId: number,
+    playSession: WsRoomListPlaySessionChangedData['playSession']
+  ) {
+    const data: WsRoomListPlaySessionChangedData = { roomId, playSession }
+    const msg: RoomWsMessage<'room-list-play-session-changed'> = {
+      type: 'room-list-play-session-changed',
       data
     }
     this.socket.broadcastRoomList(msg)

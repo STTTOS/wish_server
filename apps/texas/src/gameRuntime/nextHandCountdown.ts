@@ -1,4 +1,4 @@
-import type { WsMessage } from '../ws/ws-event-types'
+import type { WsMessage } from '@wishufree/texas-ws-contract'
 
 import { logger } from '../logger'
 import { gameRuntimeConfig } from '../utils/gameRuntimeConfig'
@@ -46,6 +46,11 @@ type NextHandCountdownBroadcaster = (
 
 let nextHandCountdownBroadcaster: NextHandCountdownBroadcaster | null = null
 
+function canStartFromControllerStatus(status: unknown): boolean {
+  const normalized = String(status)
+  return normalized === 'idle' || normalized === 'between_hands'
+}
+
 /**
  * 注入 next-hand 倒计时广播实现（通常由 SocketServer 在启动时注册）。
  */
@@ -76,6 +81,27 @@ function broadcastCancelled(roomId: number) {
   broadcastNextHandCountdown(roomId, msg)
 }
 
+function stopActiveCountdown(
+  roomId: number,
+  options?: { broadcastCancelled?: boolean }
+) {
+  const state = countdowns.get(roomId)
+  if (!state) return
+
+  clearTimeout(state.lockTimer)
+  clearTimeout(state.assignRolesTimer)
+  clearTimeout(state.dealTimer)
+  clearTimeout(state.startTimer)
+  countdowns.delete(roomId)
+
+  if (options?.broadcastCancelled) {
+    broadcastCancelled(roomId)
+    logger.info(`[next-hand-countdown] cancelled, roomId=${roomId}`)
+    return
+  }
+  logger.info(`[next-hand-countdown] stopped silently, roomId=${roomId}`)
+}
+
 export function cancelNextHandCountdown(roomId: number) {
   const pendingPush = pendingPushByRoomId.get(roomId)
   if (pendingPush) {
@@ -86,18 +112,7 @@ export function cancelNextHandCountdown(roomId: number) {
     )
     return
   }
-
-  const state = countdowns.get(roomId)
-  if (!state) return
-
-  clearTimeout(state.lockTimer)
-  clearTimeout(state.assignRolesTimer)
-  clearTimeout(state.dealTimer)
-  clearTimeout(state.startTimer)
-  countdowns.delete(roomId)
-
-  broadcastCancelled(roomId)
-  logger.info(`[next-hand-countdown] cancelled, roomId=${roomId}`)
+  stopActiveCountdown(roomId, { broadcastCancelled: true })
 }
 
 export function registerNextHandHooks(roomId: number, hooks: NextHandHooks) {
@@ -117,20 +132,11 @@ function startCountdownAfterPushDelay(roomId: number) {
     return
   }
 
-  if ((texas.controller.status as unknown as string) !== 'idle') {
+  if (!canStartFromControllerStatus(texas.controller.status)) {
     logger.info(
       `[next-hand-countdown] skip after delay, status=${String(
         texas.controller.status
       )}, roomId=${roomId}`
-    )
-    return
-  }
-
-  const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-  if (seatedCount < 2) {
-    broadcastCancelled(roomId)
-    logger.info(
-      `[next-hand-countdown] skip after delay, seatedCount=${seatedCount}, roomId=${roomId}`
     )
     return
   }
@@ -166,7 +172,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   // lockAt 到达, 坐席锁定, 不可再退出游戏
   const lockTimer = setTimeout(async () => {
     try {
-      if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+      if (!hooks.canStart()) return stopActiveCountdown(roomId)
       await hooks.onLock()
       logger.info(`[next-hand-countdown] lock done, roomId=${roomId}`)
     } catch (e) {
@@ -178,7 +184,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   // endsAt 到达, 分配角色
   const assignRolesTimer = setTimeout(async () => {
     try {
-      if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+      if (!hooks.canStart()) return stopActiveCountdown(roomId)
       await hooks.onAssignRoles()
       logger.info(`[next-hand-countdown] assign roles done, roomId=${roomId}`)
     } catch (e) {
@@ -194,7 +200,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   const dealAfter = gameRuntimeConfig.getNextHandDealAfterEndMs()
   const dealDelay = endsOffset + dealAfter
   const dealTimer = setTimeout(async () => {
-    if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+    if (!hooks.canStart()) return stopActiveCountdown(roomId)
     try {
       await hooks.onDeal()
       logger.info(`[next-hand-countdown] deal done, roomId=${roomId}`)
@@ -207,7 +213,7 @@ function startCountdownAfterPushDelay(roomId: number) {
   const startAfter = gameRuntimeConfig.getNextHandStartAfterDealMs()
   const startDelay = dealDelay + startAfter
   const startTimer = setTimeout(async () => {
-    if (!hooks.canStart()) return cancelNextHandCountdown(roomId)
+    if (!hooks.canStart()) return stopActiveCountdown(roomId)
     try {
       await hooks.onStart()
       logger.info(`[next-hand-countdown] start done, roomId=${roomId}`)
@@ -230,6 +236,28 @@ function startCountdownAfterPushDelay(roomId: number) {
   })
 }
 
+export type NextHandCountdownSnapshot =
+  | { state: 'none' }
+  /** 已排期推送 `next-hand-countdown-started`，尚未带 endsAt/lockAt */
+  | { state: 'push_delay_scheduled' }
+  | { state: 'active'; endsAt: number; lockAt: number }
+
+/**
+ * 供 HTTP 快照等与 WS `next-hand-countdown-*` 对齐的局间倒计时状态。
+ */
+export function getNextHandCountdownSnapshot(
+  roomId: number
+): NextHandCountdownSnapshot {
+  if (countdowns.has(roomId)) {
+    const c = countdowns.get(roomId)!
+    return { state: 'active', endsAt: c.endsAt, lockAt: c.lockAt }
+  }
+  if (pendingPushByRoomId.has(roomId)) {
+    return { state: 'push_delay_scheduled' }
+  }
+  return { state: 'none' }
+}
+
 export function maybeStartNextHandCountdown(roomId: number) {
   if (countdowns.has(roomId) || pendingPushByRoomId.has(roomId)) {
     logger.info(
@@ -246,20 +274,11 @@ export function maybeStartNextHandCountdown(roomId: number) {
     return
   }
 
-  if ((texas.controller.status as unknown as string) !== 'idle') {
+  if (!canStartFromControllerStatus(texas.controller.status)) {
     logger.info(
       `[next-hand-countdown] skip start, status=${String(
         texas.controller.status
       )}, roomId=${roomId}`
-    )
-    return
-  }
-
-  const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
-  if (seatedCount < 2) {
-    broadcastCancelled(roomId)
-    logger.info(
-      `[next-hand-countdown] skip start, seatedCount=${seatedCount}, roomId=${roomId}`
     )
     return
   }

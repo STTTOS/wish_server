@@ -1,14 +1,16 @@
-import type { ApiVoidResult } from '../../../utils/apiResult'
+import type { ApiResult } from '../../../utils/apiResult'
+
+import { TexasError, isFatalTexasErrorCode } from 'texas-poker-core'
 
 import prisma from '../../../models'
 import { logger } from '../../../logger'
 import { GameWsGateway } from './gameWsGateway'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
-import {
-  cancelNextHandCountdown,
-  unregisterNextHandHooks
-} from '../../../gameRuntime/nextHandCountdown'
+import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
+import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
+import { unregisterNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
+import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 
 type QuitTxResult =
   | { kind: 'noop' }
@@ -21,20 +23,145 @@ type QuitTxResult =
       kind: 'done'
       restCount: number
       deletedRoom: boolean
-      newOwnerId: number | null
+      /**
+       * true：`RoomMember` 已删，但该玩家本手在座离场，环上 `removeById`
+       *       延至本手 `Texas.reset()` 之后（见 `pendingLeaveByUserId`）。
+       * false：局间退出，本流程已同步 `removeById`。
+       */
+      deferTexasSeatRemoval: boolean
     }
 
 /**
- * 局间退出对局：删成员、可选房主转移/软删房；同步 Texas 座位；广播 + 断开 /game。
+ * 退出对局：
+ * - **局间**（`between_hands`）：删 `RoomMember`、立刻 `room.removeById`、广播、断 /game。
+ * - **`isQuitBlockedUntilBlindsPosted`**：`onLock`/首局注册起至领域事件 `BlindsPosted` 处理完前禁止退出（与 Core 非 `in_hand` 时 `canFoldDueToLeave` 恒为假无关）。
+ * - **`in_hand` 在座离场**：先删 `RoomMember`，环上保留到本手结束；
+ *   若正好轮到其行动则立即 `FoldDueToLeave`，否则等到其行动回合自动弃牌。
+ * - **`starting_hand`**：不可退出（与上条重叠时仍保留，防状态机与运行时标志短暂不一致）。
  */
 export class QuitGameUseCase {
   constructor(private readonly wsGateway: GameWsGateway) {}
 
+  static readonly CONTEXT = {
+    IN_HAND: 'in_hand',
+    AFTER_GAME_END: 'after_game_end'
+  } as const
+
+  static readonly DEFAULT_SUCCESS_PAYLOAD = {
+    quitContext: QuitGameUseCase.CONTEXT.AFTER_GAME_END
+  } as const
+
   async execute(input: {
     userId: number
     roomId: number
-  }): Promise<ApiVoidResult> {
+  }): Promise<ApiResult<{ quitContext: 'in_hand' | 'after_game_end' }>> {
     const { userId, roomId } = input
+    const roomKey = String(roomId)
+
+    const pre = await prisma.room.findUnique({
+      where: { id: roomId },
+      select: { id: true, gameStatus: true, deletedAt: true }
+    })
+    if (!pre || pre.deletedAt) {
+      this.wsGateway.disconnectUserGameSockets(roomId, userId)
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
+    }
+
+    const memberPre = await prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId, userId } },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            name: true,
+            avatarKey: true
+          }
+        }
+      }
+    })
+    if (!memberPre) {
+      this.wsGateway.disconnectUserGameSockets(roomId, userId)
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
+    }
+
+    const texasPre = gameRuntimeRegistry.getTexas(roomKey)
+    const runtimeMissingPlayer = Boolean(texasPre && !texasPre.room.has(userId))
+    if (runtimeMissingPlayer) {
+      logger.warn(
+        `[quitGame] runtime drift detected: user not found in texas room, roomId=${roomId}, userId=${userId}`
+      )
+    }
+
+    if (pre.gameStatus === 'starting_hand') {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '本手正在准备开局, 请在盲注公布后再退出对局'
+      }
+    }
+
+    if (
+      texasPre &&
+      gameRuntimeRegistry.isQuitBlockedUntilBlindsPosted(roomKey)
+    ) {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '本手已从锁定至盲注完成前，请在盲注公布后再退出对局'
+      }
+    }
+
+    const seatStatusPre = texasPre?.room.getPlayerSeatStatusById(userId) ?? null
+    const leftWasOnSeat = seatStatusPre === 'on-set'
+    const isInHandWatcherQuit =
+      pre.gameStatus === 'in_hand' && seatStatusPre === 'hang'
+    const isInHandOnSeatQuit =
+      pre.gameStatus === 'in_hand' && seatStatusPre === 'on-set'
+    const canBypassInHandFold = isInHandWatcherQuit || runtimeMissingPlayer
+
+    let didFoldDueToLeave = false
+    let queuedLeaveDuringHand = false
+    if (isInHandOnSeatQuit && !runtimeMissingPlayer) {
+      gameRuntimeRegistry.queueLeaveDuringHand(roomKey, userId)
+      queuedLeaveDuringHand = true
+    }
+
+    if (queuedLeaveDuringHand && texasPre?.canFoldDueToLeave(userId)) {
+      try {
+        const preEvents = texasPre.dispatchCommand({
+          type: 'FoldDueToLeave',
+          playerId: userId
+        })
+        await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey), {
+          preEvents
+        })
+        didFoldDueToLeave = true
+      } catch (e: unknown) {
+        if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
+          await handleFatalTexasEngineError({
+            error: e,
+            roomId,
+            roomKey,
+            getRuntime: () => gameRuntimeRegistry.getOrThrow(roomKey)
+          })
+        }
+        if (queuedLeaveDuringHand) {
+          gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+        }
+        const message = e instanceof Error ? e.message : '退出失败'
+        return { ok: false, status: HTTP_STATUS.CONFLICT, message }
+      }
+    } else if (
+      pre.gameStatus === 'in_hand' &&
+      !canBypassInHandFold &&
+      !queuedLeaveDuringHand
+    ) {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '房间状态与对局引擎不一致，请稍后重试或联系管理员'
+      }
+    }
 
     const txRes: QuitTxResult = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM \`Room\` WHERE id = ${roomId} FOR UPDATE`
@@ -43,7 +170,6 @@ export class QuitGameUseCase {
         where: { id: roomId },
         select: {
           id: true,
-          ownerId: true,
           gameStatus: true,
           deletedAt: true
         }
@@ -53,11 +179,32 @@ export class QuitGameUseCase {
         return { kind: 'noop' }
       }
 
-      if (latestRoom.gameStatus !== 'between_hands') {
+      if (
+        latestRoom.gameStatus !== 'between_hands' &&
+        latestRoom.gameStatus !== 'in_hand'
+      ) {
         return {
           kind: 'fail',
           status: HTTP_STATUS.CONFLICT,
-          message: '仅局间（between_hands）可退出对局'
+          message: '当前阶段不可退出对局'
+        }
+      }
+
+      /**
+       * `in_hand` 在座离场：要么已当场 `FoldDueToLeave`，要么已 `queueLeaveDuringHand`
+       *（`canFoldDueToLeave` 为假时仅排队，由 `TurnOffered` 里自动弃牌，见 `drainTexasDomainEvents`）。
+       * 二者皆无时才视为异常。
+       */
+      if (
+        latestRoom.gameStatus === 'in_hand' &&
+        !didFoldDueToLeave &&
+        !canBypassInHandFold &&
+        !queuedLeaveDuringHand
+      ) {
+        return {
+          kind: 'fail',
+          status: HTTP_STATUS.CONFLICT,
+          message: '对局状态异常：无法完成离场弃牌'
         }
       }
 
@@ -71,24 +218,6 @@ export class QuitGameUseCase {
 
       const memberCount = await tx.roomMember.count({ where: { roomId } })
 
-      let newOwnerId: number | null = null
-      if (latestRoom.ownerId === userId && memberCount > 1) {
-        const nextOwnerMember = await tx.roomMember.findFirst({
-          where: { roomId, userId: { not: userId } },
-          orderBy: { joinedAt: 'asc' }
-        })
-        if (nextOwnerMember) {
-          await tx.room.update({
-            where: { id: roomId },
-            data: {
-              ownerId: nextOwnerMember.userId,
-              activeOwnerId: nextOwnerMember.userId
-            }
-          })
-          newOwnerId = nextOwnerMember.userId
-        }
-      }
-
       await tx.roomMember.delete({
         where: { roomId_userId: compoundKey } // eslint-disable-line camelcase
       })
@@ -98,15 +227,21 @@ export class QuitGameUseCase {
       if (restCount === 0) {
         await tx.room.update({
           where: { id: roomId },
-          data: { deletedAt: new Date(), activeOwnerId: null }
+          data: { deletedAt: new Date(), activeOwnerId: null, activeCode: null }
         })
         deletedRoom = true
       }
 
-      return { kind: 'done', restCount, deletedRoom, newOwnerId }
+      return {
+        kind: 'done',
+        restCount,
+        deletedRoom,
+        deferTexasSeatRemoval: queuedLeaveDuringHand
+      }
     })
 
     if (txRes.kind === 'fail') {
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
       return {
         ok: false,
         status: txRes.status,
@@ -115,19 +250,24 @@ export class QuitGameUseCase {
     }
 
     if (txRes.kind === 'noop') {
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
       this.wsGateway.disconnectUserGameSockets(roomId, userId)
-      return { ok: true, data: null }
+      return { ok: true, data: QuitGameUseCase.DEFAULT_SUCCESS_PAYLOAD }
     }
 
-    const roomKey = String(roomId)
+    if (!txRes.deferTexasSeatRemoval) {
+      gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
+    }
     const texas = gameRuntimeRegistry.getTexas(roomKey)
 
     if (texas) {
       try {
-        if (txRes.newOwnerId != null) {
-          texas.room.setOwnerById(txRes.newOwnerId)
+        gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
+        if (!txRes.deferTexasSeatRemoval) {
+          if (texas.room.has(userId)) {
+            texas.room.removeById(userId)
+          }
         }
-        texas.room.removeById(userId)
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
       }
@@ -139,8 +279,6 @@ export class QuitGameUseCase {
           logger.error('[quitGame] unregisterNextHandHooks failed', e)
         }
         gameRuntimeRegistry.destroyRuntime(roomKey)
-      } else if (texas.room.getPlayersBySeatStatus('on-set').length < 2) {
-        cancelNextHandCountdown(roomId)
       }
     } else if (txRes.deletedRoom) {
       try {
@@ -150,7 +288,26 @@ export class QuitGameUseCase {
       }
     }
 
-    this.wsGateway.notifyPlayerQuitGame(roomKey, { roomId, userId })
+    if (leftWasOnSeat || didFoldDueToLeave) {
+      this.wsGateway.notifyPlayerLeftGame(
+        roomKey,
+        {
+          roomId,
+          userId,
+          name: memberPre.user.name || `玩家${userId}`,
+          avatarKey: memberPre.user.avatarKey || 'cartoon/default'
+        },
+        { excludeUserId: userId }
+      )
+    }
+
+    if (!txRes.deferTexasSeatRemoval) {
+      this.wsGateway.notifyPlayerQuitGame(
+        roomKey,
+        { roomId, userId },
+        { excludeUserId: userId }
+      )
+    }
 
     if (txRes.deletedRoom) {
       this.wsGateway.broadcastRoomListRoomDeleted(roomId)
@@ -163,6 +320,14 @@ export class QuitGameUseCase {
 
     this.wsGateway.disconnectUserGameSockets(roomId, userId)
 
-    return { ok: true, data: null }
+    return {
+      ok: true,
+      data: {
+        quitContext:
+          txRes.deferTexasSeatRemoval || canBypassInHandFold
+            ? QuitGameUseCase.CONTEXT.IN_HAND
+            : QuitGameUseCase.CONTEXT.AFTER_GAME_END
+      }
+    }
   }
 }

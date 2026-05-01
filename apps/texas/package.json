@@ -35,6 +35,7 @@
     "**/*.{js,jsx,ts,tsx}": "pnpm run lint:fix"
   },
   "dependencies": {
+    "@wishufree/texas-ws-contract": "workspace:*",
     "redis": "^5.11.0"
   }
 }

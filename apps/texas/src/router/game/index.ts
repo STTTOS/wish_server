@@ -9,17 +9,19 @@ import combinePath from '../../utils/combinePath'
 import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { GameWsGateway } from './services/gameWsGateway'
+import { gameRuntimeRegistry } from './services/runtimeKit'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
-import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
-import { StartGameUseCase, TakeActionUseCase } from './services/flow'
+import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
-  gameRuntimeRegistry,
-  getCurrentMatchIdWithFallback
-} from './services/runtimeKit'
+  JoinGameUseCase,
+  StartGameUseCase,
+  TakeActionUseCase
+} from './services/flow'
 import {
   gameRuntimeConfig,
   type GameRuntimeConfigPatch
@@ -27,28 +29,45 @@ import {
 import {
   BUILT_IN_VOICE_NAME_SET,
   BUILT_IN_VOICE_USER_COOLDOWN_MS
-} from './builtInVoiceConstants'
+} from '../../constants/builtInVoice'
+import {
+  MAX_PLAYERS_COUNT,
+  ROOM_PRESET_RULES,
+  CUSTOM_27O_REWARD_TIERS,
+  ROOM_LOWEST_BET_OPTIONS,
+  ROOM_THINKING_TIME_OPTIONS,
+  ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX,
+  ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MIN
+} from '../../constants/game'
 
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
+const submitTopUpPlanUseCase = new SubmitTopUpPlanUseCase()
 const gameWsGateway = new GameWsGateway()
 const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
+const joinGameUseCase = new JoinGameUseCase()
 const showMyHandPokesUseCase = new ShowMyHandPokesUseCase(gameWsGateway)
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
   response.success(ctx, {
-    ...gameRuntimeConfig.getClientRulesSnapshot(),
     maxPlayersCount: MAX_PLAYERS_COUNT,
-    minBB: MIN_BB
+    roomLowestBetOptions: ROOM_LOWEST_BET_OPTIONS,
+    roomThinkingTimeOptions: ROOM_THINKING_TIME_OPTIONS,
+    customInitialChipsBbMultiplierMin:
+      ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MIN,
+    customInitialChipsBbMultiplierMax:
+      ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX,
+    roomPresetRules: ROOM_PRESET_RULES,
+    custom27oRewardTiers: CUSTOM_27O_REWARD_TIERS
   })
 })
 
 /**
- * 管理员：运行时调整规则与各类延时（毫秒），无需重启；GET /game/config 仅返回规则三项（实时）。
- * 各类延时不在 config 中下发，改后返回完整快照供核对。
+ * 管理员：运行时调整各类延时（毫秒），无需重启。
+ * `GET /game/config` 返回的是静态规则配置；改后返回完整快照供核对。
  * body 至少含一个字段，毫秒项范围 0～120000。
  */
 router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {
@@ -69,19 +88,19 @@ router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {
 // 以下开始新增接口
 
 /**
- * 客户端：房主点击开始游戏（进入对局）
+ * 客户端：waiting-room 房主点击开始游戏（进入对局）
  * url: client/game/entring
  * body: { roomId: number }
  */
 router.post(gameClientApi('/entring'), async (ctx) => {
   const { roomId }: { roomId?: number } = ctx.request.body ?? {}
-  const ownerId = ctx.state.user!.id
+  const lobbyOwnerId = ctx.state.user!.id
   if (!roomId || !Number.isInteger(roomId)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
     return
   }
 
-  const requested = await startGameUseCase.requestStart(roomId, ownerId)
+  const requested = await startGameUseCase.requestStart(roomId, lobbyOwnerId)
   if (!requested.ok) {
     respondFromApiResult(ctx, requested)
     return
@@ -94,73 +113,36 @@ router.post(gameClientApi('/entring'), async (ctx) => {
   return
 })
 
-// 用户重连后获取当前对局的状态
+/**
+ * 用户重连后拉取牌桌快照（与全房 WS 对齐：`player-roles-assigned` / `player-action-required` /
+ * `player-action-taken` / `game-stage-changed` / `game-end` / `next-hand-countdown-*` 等）。
+ * 不再仅在 `in_hand` 返回：局间 `idle` / `between_hands` 等一并下发，便于客户端对齐 UI。
+ */
 router.post(gameClientApi('/fetchCurrentGameState'), async (ctx) => {
   const userId = ctx.state.user!.id
   const membership = await roomMember.findFirst({
     where: { userId, room: { deletedAt: null } },
-    select: { roomId: true }
+    select: {
+      roomId: true,
+      room: { select: { gameStatus: true } }
+    }
   })
   const roomId = membership?.roomId
   const texas = roomId
     ? gameRuntimeRegistry.getTexas(String(roomId))
     : undefined
-  if (!roomId || !texas) {
+  if (!roomId || !texas || !membership) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
     return
   }
 
-  const gameStatus = texas.controller.status
-  if ((gameStatus as unknown as string) !== 'in_hand') {
-    response.success(ctx, 2100, '游戏已经结束')
-    return
-  }
-  // 需要获取当前对局的信息
-  // 包括所有玩家的信息
-  // 当前行动的用户的相关信息
-  // 当前的阶段, 总奖池
-
-  // 所有玩家的信息
-  const playersOnSeat = texas.room
-    .getPlayersBySeatStatus('on-set')
-    .map((player) => {
-      return {
-        role: player.getRole(),
-        action: player.getAction(),
-        userInfo: player.getUserInfo(),
-        currentStageTotalAmount: player.currentStageTotalAmount
-      }
-    })
-  const playersOnWatch = texas.room
-    .getPlayersBySeatStatus('hang')
-    .map((player) => {
-      return {
-        userInfo: player.getUserInfo()
-      }
-    })
-
-  const activePlayer = texas.controller.activePlayer
-  // 当前行动玩家的信息
-  const activePlayerInfo = {
-    userInfo: activePlayer?.getUserInfo(),
-    remainThinkTime: activePlayer?.getRemainThinkTime()
-  }
-
-  // 对局信息
-  const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
-  const matchInfo = {
-    matchId: currentMatchId,
-    roomId: Number(roomId),
-    status: gameStatus,
-    stage: texas.controller.stage,
-    pool: texas.pool.totalAmount
-  }
-  response.success(ctx, {
-    playersOnSeat,
-    playersOnWatch,
-    matchInfo,
-    activePlayerInfo
+  const payload = await buildFetchCurrentGameStatePayload({
+    texas,
+    roomId,
+    userId,
+    roomGameStatus: membership.room.gameStatus
   })
+  response.success(ctx, payload)
 })
 
 /**
@@ -180,8 +162,39 @@ router.post(gameClientApi('/chipTopUp'), async (ctx) => {
 })
 
 /**
- * 局间退出对局：删成员、广播 `player-quit-game`、断开该用户 /game。
- * body: { roomId: number } — 仅 `between_hands`；非成员或房间已删幂等成功
+ * 更新自动补码开关。
+ * body: { roomId: number, autoTopUpEnabled?: boolean }
+ */
+router.post(gameClientApi('/topUpPlan'), async (ctx) => {
+  const body = ctx.request.body as {
+    roomId?: unknown
+    autoTopUpEnabled?: unknown
+  }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+  const autoTopUpEnabled =
+    typeof body?.autoTopUpEnabled === 'boolean'
+      ? body.autoTopUpEnabled
+      : undefined
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const result = await submitTopUpPlanUseCase.execute({
+    userId,
+    roomId,
+    autoTopUpEnabled
+  })
+  respondFromApiResult(ctx, result, { okMessage: '成功' })
+})
+
+/**
+ * 退出对局：删 `RoomMember`、广播 `player-quit-game`、断开该用户 /game。
+ * - `between_hands`：同步 `room.removeById`。
+ * - Core 已为 `in_hand`：先 `FoldDueToLeave` 并 drain；环上摘座延至本手 `reset` 后（可立刻加入其它房间）。
+ * - `starting_hand`：不可退出（与引擎尚未 `start` 一致）。
  */
 router.post(gameClientApi('/quit'), async (ctx) => {
   const body = ctx.request.body as { roomId?: unknown }
@@ -195,6 +208,25 @@ router.post(gameClientApi('/quit'), async (ctx) => {
 
   const result = await quitGameUseCase.execute({ userId, roomId })
   respondFromApiResult(ctx, result, { okMessage: '已退出对局' })
+})
+
+/**
+ * **非 waiting** 时加入对局：必要时写入 `RoomMember`，再同步 Core（`join`/`seat`）。
+ * `waiting` 阶段请使用 `POST /room/join`（`roomCode`）。
+ * body: { roomId: number }
+ */
+router.post(gameClientApi('/join'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const result = await joinGameUseCase.execute({ userId, roomId })
+  respondFromApiResult(ctx, result, { okMessage: '已加入对局' })
 })
 
 /**
@@ -252,7 +284,7 @@ function builtInVoiceUserKey(roomId: number, userId: number): string {
 }
 
 /**
- * 牌桌内置语音：校验房间、成员、白名单；每人每房 5s 内仅可请求一次；
+ * 牌桌内置语音：校验房间、成员、在坐（on-set）、白名单；每人每房 5s 内仅可请求一次；
  * 同一房间内 WS 广播排队，相邻两次实际发出至少间隔 3s。
  * body: { roomId: number, voiceName: string }
  */
@@ -291,6 +323,16 @@ router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
   })
   if (!membership) {
     response.error(ctx, HTTP_STATUS.FORBIDDEN, '不在该房间中')
+    return
+  }
+
+  const texas = gameRuntimeRegistry.getTexas(String(roomId))
+  if (!texas) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '对局不存在')
+    return
+  }
+  if (texas.room.getPlayerSeatStatusById(userId) !== 'on-set') {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '仅在座玩家可发送内置语音')
     return
   }
 

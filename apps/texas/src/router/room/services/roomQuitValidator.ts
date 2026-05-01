@@ -13,21 +13,19 @@ export type RoomQuitAuthResult = ApiResult<RoomQuitAuthData>
  * - 房间处于 waiting 才允许进行数据库删除（幂等与“成员不存在”走事务内 quitNoop）
  */
 export async function validateRoomQuitAuth(input: {
-  roomCode: unknown
+  roomId: unknown
 }): Promise<RoomQuitAuthResult> {
-  const { roomCode } = input
-
-  if (typeof roomCode !== 'string' || !roomCode.trim()) {
+  const roomId = Number(input.roomId)
+  if (!Number.isFinite(roomId) || roomId <= 0) {
     return {
       ok: false,
       status: HTTP_STATUS.BAD_REQUEST,
-      message: '参数异常：需要 roomCode'
+      message: '参数异常：需要 roomId'
     }
   }
 
-  const code = roomCode.trim().toUpperCase()
   const roomInfo = await room.findUnique({
-    where: { code },
+    where: { id: roomId },
     select: { id: true, deletedAt: true, gameStatus: true }
   })
 

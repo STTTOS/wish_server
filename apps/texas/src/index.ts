@@ -14,6 +14,7 @@ import historyApiFallback from 'koa2-connect-history-api-fallback'
 import router from './router'
 import { logger } from './logger'
 import { app, server } from './server'
+import { room as roomModel } from './models'
 import rateLimit from './middleware/rateLimit'
 import { HTTP_STATUS } from './constants/httpStatus'
 import { port, cacheTime as maxAge } from './config'
@@ -23,6 +24,27 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 import maintenanceGuard from './middleware/maintenanceGuard'
 import { respondFromApiResult } from './utils/respondFromApiResult'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
+
+async function recoverRoomsWithoutRuntimeOnBoot() {
+  /**
+   * 进程重启后，in-memory runtime 丢失；将仍处于进行态的房间拉回 waiting，
+   * 避免 `/game/fetchCurrentGameState`、`/room/enter` 等路径卡死在“进行态但无 runtime”。
+   */
+  const result = await roomModel.updateMany({
+    where: {
+      deletedAt: null,
+      gameStatus: {
+        in: ['entering', 'starting_hand', 'in_hand', 'between_hands']
+      }
+    },
+    data: { gameStatus: 'waiting' }
+  })
+  if (result.count > 0) {
+    logger.warn(
+      `[boot-recovery] reset ${result.count} room(s) to waiting due to missing runtime`
+    )
+  }
+}
 
 // import { ActionWithPayload, initialGame } from 'texas-poker-core'
 // import { match, matchStageTimeRecord, playerHand, record, win } from './models'
@@ -151,6 +173,7 @@ app.use(router.routes())
 
 server.listen(port, async () => {
   logger.info('server startup', `http://localhost:${port}`)
+  await recoverRoomsWithoutRuntimeOnBoot()
 
   // const texas = initialGame({
   //   maximumCountOfPlayers: 3,

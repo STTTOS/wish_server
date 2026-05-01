@@ -8,25 +8,26 @@ export type RoomMembersAuthResult = ApiResult<RoomMembersAuthData>
 
 /**
  * 成员列表查询的校验器（validator）：
- * - 入参：roomCode / userId
+ * - 入参：roomId / userId
  * - 房间存在且未软删
  * - 当前用户在该房间中（roomMember 存在）
  */
 export async function validateRoomMembersAuth(input: {
-  roomCode: string
+  roomId: number
   userId: number
 }): Promise<RoomMembersAuthResult> {
-  const { roomCode, userId } = input
-  if (!roomCode || !roomCode.trim()) {
+  const roomId = Number(input.roomId)
+  const { userId } = input
+  if (!Number.isFinite(roomId) || roomId <= 0) {
     return {
       ok: false,
       status: HTTP_STATUS.BAD_REQUEST,
-      message: '参数异常：需要 roomCode'
+      message: '参数异常：需要 roomId'
     }
   }
 
   const roomInfo = await room.findUnique({
-    where: { code: roomCode.trim().toUpperCase() },
+    where: { id: roomId },
     select: { id: true, ownerId: true, deletedAt: true }
   })
   if (!roomInfo || roomInfo.deletedAt) {

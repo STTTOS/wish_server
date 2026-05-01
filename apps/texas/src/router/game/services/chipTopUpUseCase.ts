@@ -171,29 +171,35 @@ export type AutoTopUpAtHandLockParams = {
   lowestBetAmount: number
   initialChips: number
   wsGateway: GameWsGateway
+  /** 本手 `Match.id`（须已落库且为 runtime `currentMatchId`） */
+  handMatchId: number
+}
+
+export type ApplyTopUpPlansAtHandLockResult = {
+  kickedUserIds: number[]
 }
 
 /**
  * 下一手 `lockAt`：在座（on-set）玩家若 `round(balance) <= lowestBetAmount`，
- * 自动补入 `initialChips` 并写 `RoomChipTopUp`（`afterMatchId` = 本房最近已结束的一手，与 API 补码一致）。
+ * 自动补入 `initialChips` 并写 `RoomChipTopUp`。
+ * `handMatchId` 须为 `onLock` 内**已创建并已 `setCurrentMatchId` 的本手 `Match.id`**，
+ * 用作 `afterMatchId` 锚点，便于本手作废时 `deleteMany({ afterMatchId })`（与 HTTP 补码用「最近已结束手」区分）。
  */
 export async function autoTopUpOnSeatPlayersAtHandLock(
   params: AutoTopUpAtHandLockParams
 ): Promise<void> {
-  const { roomId, roomKey, texas, lowestBetAmount, initialChips, wsGateway } =
-    params
+  const {
+    roomId,
+    roomKey,
+    texas,
+    lowestBetAmount,
+    initialChips,
+    wsGateway,
+    handMatchId
+  } = params
   if (initialChips <= 0) return
 
-  const lastEndedMatch = await match.findFirst({
-    where: { roomId, endedAt: { not: null } },
-    orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
-    select: { id: true }
-  })
-  if (!lastEndedMatch) {
-    logger.warn('[autoChipTopUp] no ended match, skip', { roomId })
-    return
-  }
-  const afterMatchId = lastEndedMatch.id
+  const afterMatchId = handMatchId
   const seated = texas.room.getPlayersBySeatStatus('on-set')
 
   for (const player of seated) {
@@ -230,6 +236,84 @@ export async function autoTopUpOnSeatPlayersAtHandLock(
       })
     }
   }
+}
+
+/**
+ * onLock 统一处理补码申请：
+ * - auto enabled 且余额 < initialChips，则自动补到 initialChips
+ * - 余额 <= 0：踢出房间并广播 quit（用于客户端退场）
+ */
+export async function applyTopUpPlansAtHandLock(
+  params: AutoTopUpAtHandLockParams
+): Promise<ApplyTopUpPlansAtHandLockResult> {
+  const { roomId, roomKey, texas, initialChips, wsGateway, handMatchId } =
+    params
+  const afterMatchId = handMatchId
+  const kickedUserIds: number[] = []
+  const seated = texas.room.getPlayersBySeatStatus('on-set')
+
+  for (const player of seated) {
+    const userId = player.getUserInfo().id
+    const balanceBefore = Math.round(player.balance)
+    const autoEnabled = gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
+    const targetBalance =
+      autoEnabled && balanceBefore < initialChips ? initialChips : null
+
+    if (targetBalance != null && targetBalance > balanceBefore) {
+      const topUpAmount = targetBalance - balanceBefore
+      const existing = await roomChipTopUp.findUnique({
+        where: {
+          roomId_userId_afterMatchId: { roomId, userId, afterMatchId }
+        }
+      })
+      if (!existing) {
+        const r = await commitTopUpEngineAndDb({
+          userId,
+          roomId,
+          roomKey,
+          topUpAmount,
+          afterMatchId,
+          roomInitialChipsSnapshot: initialChips,
+          balanceBefore,
+          balanceAfter: targetBalance,
+          player,
+          wsGateway
+        })
+        if (r.tag === 'engine_error' || r.tag === 'db_error') {
+          logger.error('[topUpPlan] commit failed', {
+            roomId,
+            userId,
+            tag: r.tag,
+            message: 'message' in r ? r.message : undefined
+          })
+        }
+      }
+      continue
+    }
+
+    if (balanceBefore <= 0) {
+      try {
+        await roomMember.deleteMany({ where: { roomId, userId } })
+        if (texas.room.has(userId)) texas.room.removeById(userId)
+        gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
+        wsGateway.notifyPlayerQuitGame(roomKey, {
+          roomId,
+          userId,
+          reason: 'zero_balance_no_topup'
+        })
+        wsGateway.disconnectUserRoomSockets(roomId, userId)
+        kickedUserIds.push(userId)
+      } catch (e) {
+        logger.error('[topUpPlan] zero balance kick failed', {
+          roomId,
+          userId,
+          error: e instanceof Error ? e.message : String(e)
+        })
+      }
+    }
+  }
+
+  return { kickedUserIds }
 }
 
 /**

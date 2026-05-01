@@ -11,7 +11,7 @@ export class RoomKickFacade {
   constructor(private readonly waitingRoomGateway: WaitingRoomGateway) {}
 
   async execute(input: {
-    roomCode: unknown
+    roomId: unknown
     targetUserId: unknown
     operatorId: number
   }): Promise<RoomKickResult> {

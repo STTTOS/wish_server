@@ -9,13 +9,14 @@ export const {
   announcement,
   announcementRead,
   match,
+  matchDomainEvent,
   matchStageTimeRecord,
   playerMatchRecord,
   room,
   roomMember,
   roomChipTopUp,
   userRoomStat,
-  matchError
+  engineFatalIncident
 } = prisma
 
 export default prisma

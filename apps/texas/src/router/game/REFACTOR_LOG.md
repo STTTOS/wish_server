@@ -47,7 +47,7 @@
 
 ## 3. 关键能力增强
 
-- 实现 `game-invalidated` 事件，向客户端推送作废恢复所需快照。
+- 实现 `game-invalidated` 事件：仅 `engine_error`，无 `players`；客户端 Toast 后回首页（人数不足关房走 `game-room-closed`）。
 - 支持“回滚到开局前”：删除本手 DB 明细 + 回滚 Texas 玩家余额。
 - 引入下一手倒计时运行时管理并补充关键日志（开始/取消/失败原因）。
 
@@ -82,3 +82,4 @@
 - 新业务逻辑优先放在 `flow` / `runtimeKit` 对应层，不要回流到路由大函数。
 - 运行时清理统一调用 `destroyRuntime`，避免仅 delete 导致状态残留。
 - 需要当前手 `matchId` 时，优先使用 `getCurrentMatchIdWithFallback`。
+- owner 仅属于 waiting-room 治理语义；in-game 流程使用 `runtimeStarterUserId`，避免把治理语义带入牌局引擎。

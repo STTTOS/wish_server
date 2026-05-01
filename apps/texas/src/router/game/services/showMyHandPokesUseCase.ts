@@ -84,7 +84,7 @@ export class ShowMyHandPokesUseCase {
     const controllerIdle =
       texas != null &&
       (texas.controller.status === 'idle' ||
-        texas?.controller.status === 'hand_complete')
+        texas?.controller.status === 'between_hands')
     if (texas == null || runtimeMatchId !== matchId || !controllerIdle) {
       return {
         ok: false,

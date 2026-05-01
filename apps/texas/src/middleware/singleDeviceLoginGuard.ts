@@ -2,7 +2,7 @@ import type { ParameterizedContext } from 'koa'
 import type { DefaultState } from '../router/instance'
 
 import response from '../utils/response'
-import { isPublic401Path } from './customHandle401'
+import { is401BypassPath } from '../constants/paths'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import { getLoginSession, type LoginScope } from '../utils/loginSession'
 
@@ -15,7 +15,7 @@ export default async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
 ) => {
-  if (isPublic401Path(ctx.request.url)) {
+  if (is401BypassPath(ctx.request.url)) {
     await next()
     return
   }
@@ -42,7 +42,6 @@ export default async (
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '登录已失效，请重新登录')
     return
   }
-
   if (latestSession.sessionId !== parsedUser.sessionId) {
     response.error(
       ctx,

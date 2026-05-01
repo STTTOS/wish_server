@@ -1,23 +1,17 @@
-import type { WsMessage } from '../ws/ws-event-types'
-import type { RoomWsMessage } from '../router/room/ws-event-types'
+import type { WsMessage, RoomWsMessage } from '@wishufree/texas-ws-contract'
 
-import { OnlineStatus } from 'texas-poker-core'
 import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
-import { room as roomModel } from '../models'
 import { isAdminUser } from '../utils/isAdminUser'
+import prisma, { room as roomModel } from '../models'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
 import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
-import {
-  resolveWsUserFromHandshake,
-  getWsRoomIdFromHandshakeAuth
-} from '../utils/wsAuth'
 import {
   MAINTENANCE_CODE,
   MAINTENANCE_MESSAGE
@@ -27,6 +21,18 @@ import {
   SOCKET_IO_PING_INTERVAL_MS,
   WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
 } from '../constants/ws'
+import {
+  replayGameRoomSince,
+  getLatestGameRoomSeq,
+  getGameRoomReplayEpoch,
+  recordGameRoomBroadcast
+} from './gameRoomWsReplayBuffer'
+import {
+  resolveWsUserFromHandshake,
+  getWsRoomIdFromHandshakeAuth,
+  getWsGameRoomSinceSeqFromHandshake,
+  getWsGameRoomReplayEpochFromHandshake
+} from '../utils/wsAuth'
 
 class SocketServer {
   #io: Server
@@ -36,6 +42,7 @@ class SocketServer {
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
+  #waitingRoomPresenceOfflineAnnounced = new Set<string>()
 
   constructor() {
     this.#io = new Server(server, {
@@ -175,12 +182,60 @@ class SocketServer {
       socket.join(userRoomKey)
       socket.send({ type: 'initial connect', data: null })
 
+      /**
+       * 全房广播补发（`game-room-replay`），与 {@link gameRoomWsReplayBuffer} 对齐：
+       *
+       * - **`sinceSeq`**（握手 `auth.gameRoomSinceSeq`）：客户端声称「**序号 ≤ sinceSeq 的全房广播我已处理过**」；
+       *   服务端只回放 **`seq > sinceSeq`**。`0` 表示未带游标 / 从头跟实时流。
+       * - **`latestSeq`**（`getLatestGameRoomSeq`）：本房缓冲已分配到的**最大序号**（全房广播条数的水位线）；
+       *   未必等于 `ring` 内最老条的 `seq`（旧条目可能被环形挤出）。
+       * - **`entries`**：`replayGameRoomSince` 返回的、仍留在环形缓冲里的 **`seq > sinceSeq`** 的记录。
+       * - **`truncated`**：客户端自认落后（`sinceSeq < latestSeq`）但 **`entries` 为空**——说明
+       *   `(sinceSeq, latestSeq]` 区间内的消息**已不在缓冲**（断线过久或进程重启等），**不能只靠 WS 补**，须 HTTP 快照对齐。
+       * - **`afterSeq`**：与 `sinceSeq` 同值写入 payload，语义为「本包补发下界（不含）」。
+       * - **`throughSeq`**：本包 `events` 中**最大 `seq`**；若 `events` 为空（仅 `truncated` 场景）则退化为 `sinceSeq`，表示本包未通过缓冲补到任何一条。
+       */
+      const sinceSeq = getWsGameRoomSinceSeqFromHandshake(socket.handshake)
+      if (sinceSeq >= 0) {
+        const replayEpoch = getGameRoomReplayEpoch()
+        const clientReplayEpoch = getWsGameRoomReplayEpochFromHandshake(
+          socket.handshake
+        )
+        const latestSeq = getLatestGameRoomSeq(roomKey)
+        const entries = replayGameRoomSince(roomKey, sinceSeq)
+        const epochMismatch =
+          clientReplayEpoch != null && clientReplayEpoch !== replayEpoch
+        const truncated =
+          epochMismatch ||
+          (sinceSeq > 0 && sinceSeq < latestSeq && entries.length === 0)
+        if (entries.length > 0 || truncated) {
+          const throughSeq =
+            entries.length > 0 ? entries[entries.length - 1]!.seq : sinceSeq
+          const replay: WsMessage<'game-room-replay'> = {
+            type: 'game-room-replay',
+            data: {
+              roomId,
+              afterSeq: sinceSeq,
+              throughSeq,
+              latestSeq,
+              replayEpoch,
+              ...(truncated ? { truncated: true as const } : {}),
+              events: entries.map((e) => ({
+                seq: e.seq,
+                payload: e.payload as Record<string, unknown>
+              }))
+            }
+          }
+          socket.emit('message', replay)
+        }
+      }
+
       this.#handleGameRoomConnect(roomKey, userId)
       this.#notifyGameRoomWaiters(roomKey)
       this.#notifyEnteringProgress(roomKey)
 
       const onLeave = () => {
-        this.#handleGameRoomDisconnect(roomKey, userId)
+        this.#handleGameRoomDisconnect(roomKey, userId, socket.id)
         this.#notifyGameRoomWaiters(roomKey)
         this.#notifyEnteringProgress(roomKey)
       }
@@ -303,13 +358,19 @@ class SocketServer {
 
       const userId = socket.data.userId as number
       if (typeof userId === 'number') {
-        this.#maybeBroadcastWaitingRoomPresence(
-          roomKey,
-          roomId,
-          userId,
-          socket.id,
-          true
-        )
+        const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+        if (this.#waitingRoomPresenceOfflineAnnounced.has(presenceKey)) {
+          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+            roomKey,
+            roomId,
+            userId,
+            socket.id,
+            true
+          )
+          if (didBroadcast) {
+            this.#waitingRoomPresenceOfflineAnnounced.delete(presenceKey)
+          }
+        }
       }
 
       socket.on('disconnect', (reason) => {
@@ -319,12 +380,12 @@ class SocketServer {
           'reason',
           reason
         )
-        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
+        void this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
 
       socket.on('error', (error) => {
         logger.error('[/waiting-room] WebSocket connect error:', error)
-        this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
+        void this.#onWaitingRoomSocketDropped(socket, roomKey, roomId)
       })
     })
   }
@@ -381,6 +442,10 @@ class SocketServer {
       .filter((socket) => !!socket) as Socket[]
   }
 
+  #waitingRoomPresenceKey(roomKey: string, userId: number) {
+    return `${roomKey}:${userId}`
+  }
+
   /**
    * 多终端时：仅当该用户在房间内已无其它 waiting-room 连接时广播，避免误报掉线/上线。
    */
@@ -390,32 +455,69 @@ class SocketServer {
     userId: number,
     socketId: string,
     online: boolean
-  ) {
+  ): boolean {
     const peers = this.#getSocketsInWaitingRoom(roomKey).filter(
       (s) => (s.data.userId as number) === userId && s.id !== socketId
     )
-    if (peers.length > 0) return
+    if (peers.length > 0) return false
     const msg: RoomWsMessage<'waiting-room-member-presence'> = {
       type: 'waiting-room-member-presence',
       data: { userId, online }
     }
     this.broadcastWaitingRoom(roomIdNumber, msg)
+    return true
   }
 
-  #onWaitingRoomSocketDropped(
+  async #onWaitingRoomSocketDropped(
     socket: Socket,
     roomKey: string,
     roomIdNumber: number
   ) {
     const userId = socket.data.userId as number
     if (typeof userId === 'number') {
-      this.#maybeBroadcastWaitingRoomPresence(
-        roomKey,
-        roomIdNumber,
-        userId,
-        socket.id,
-        false
-      )
+      /**
+       * HTTP 退出/踢人已广播 `waiting-room-member-left` 并删 `RoomMember`；
+       * 随后客户端断开 waiting-room 仍会走本路径，不应再发 `waiting-room-member-presence` offline（语义重复）。
+       */
+      try {
+        const member = await prisma.roomMember.findUnique({
+          where: {
+            roomId_userId: { roomId: roomIdNumber, userId }
+          },
+          select: { userId: true }
+        })
+        if (member != null) {
+          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+            roomKey,
+            roomIdNumber,
+            userId,
+            socket.id,
+            false
+          )
+          if (didBroadcast) {
+            this.#waitingRoomPresenceOfflineAnnounced.add(
+              this.#waitingRoomPresenceKey(roomKey, userId)
+            )
+          }
+        }
+      } catch (e) {
+        logger.error(
+          `[waiting-room] member lookup before presence broadcast failed roomId=${roomIdNumber} userId=${userId}`,
+          e
+        )
+        const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+          roomKey,
+          roomIdNumber,
+          userId,
+          socket.id,
+          false
+        )
+        if (didBroadcast) {
+          this.#waitingRoomPresenceOfflineAnnounced.add(
+            this.#waitingRoomPresenceKey(roomKey, userId)
+          )
+        }
+      }
     }
     void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
   }
@@ -433,33 +535,101 @@ class SocketServer {
       .filter((userId) => !!userId) as number[]
   }
 
+  /** 同一用户在本房是否仍有其它 /game 连接（用于重连重叠时避免误报离线）。 */
+  #countPeerGameSockets(
+    roomId: string,
+    userId: number,
+    excludeSocketId: string
+  ): number {
+    return this.#getSocketsInGameRoom(roomId).filter(
+      (s) => (s.data.userId as number) === userId && s.id !== excludeSocketId
+    ).length
+  }
+
   /**
-   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）时：标记玩家在线并广播
+   * 在座且本房仍有该用户的 /game 连接时：写入在线态，并在刚从离线恢复时补发 `online`。
+   * `connection` 与「hang → on-set」后的补同步共用（见 {@link resyncGameRoomSeatPresence}）。
    */
-  #handleGameRoomConnect(channel: string, userId: number) {
+  #applyGameRoomOnSeatPresenceIfConnected(channel: string, userId: number) {
     const texas = gameRuntimeRegistry.getTexas(channel)
-    const player = texas?.room.getPlayerById(userId)
-    if (player && player.onlineStatus !== 'online') {
-      player.onlineStatus = 'online'
-      this.broadcastGameRoom(channel, {
-        type: 'player-status-change',
-        data: { user: { id: userId }, status: 'online' as OnlineStatus }
-      })
+    if (!texas) return
+    const player = texas.room.getPlayerById(userId)
+    if (!player) return
+    const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
+    if (!isOnSeat) {
+      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+      return
+    }
+    const hasLiveSocket = this.#getSocketsInGameRoom(channel).some(
+      (s) => (s.data.userId as number) === userId
+    )
+    if (!hasLiveSocket) return
+    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
+    gameRuntimeRegistry.markUserOnline(channel, userId)
+    if (!wasOffline) return
+    this.broadcastGameRoom(channel, {
+      type: 'player-status-change',
+      data: { roomId: Number(channel), userId, status: 'online' as const }
+    })
+  }
+
+  /**
+   * 领域已将玩家标为 `on-set` 后调用：补跑与 `/game` `connection` 等价的在线同步。
+   * 解决「先连上时仍为 hang，随后入座未再触发 connection」时误将后续断线当成首断并播报离线。
+   */
+  resyncGameRoomSeatPresence(roomKey: string, userIds: number[]) {
+    const seen = new Set<number>()
+    for (const userId of userIds) {
+      if (!Number.isFinite(userId) || userId <= 0 || seen.has(userId)) continue
+      seen.add(userId)
+      this.#applyGameRoomOnSeatPresenceIfConnected(roomKey, userId)
     }
   }
 
   /**
-   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）时：广播玩家离线并更新 Texas 内状态
+   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：标记在线并广播
+   * 设计约束：
+   * - 只处理 `on-set` 玩家，观战的连断不影响当局离线托管逻辑。
+   * - 先写 runtime 状态，再决定是否推送 `player-status-change`（去重）。
    */
-  #handleGameRoomDisconnect(channel: string, userId: number) {
-    if (!gameRuntimeRegistry.hasTexas(channel)) return
-    this.broadcastGameRoom(channel, {
-      type: 'player-status-change',
-      data: { user: { id: userId }, status: 'offline' as OnlineStatus }
-    })
+  #handleGameRoomConnect(channel: string, userId: number) {
+    this.#applyGameRoomOnSeatPresenceIfConnected(channel, userId)
+  }
+
+  /**
+   * 仅当 channel 为游戏房间（runtimeRegistry 中存在）且为在座玩家时：广播玩家离线
+   *（排除已中途退出/非在座）。
+   * 设计约束：
+   * - 中途退出（queued leave）或非在座（含观战）不推送离线事件。
+   * - 多终端 / 重连重叠：仅当该用户在本房已无其它 /game 连接时才标记离线并广播。
+   * - 离线事件仅服务于当局 seat 托管和 UI 呈现，避免语义污染。
+   */
+  #handleGameRoomDisconnect(
+    channel: string,
+    userId: number,
+    droppedSocketId: string
+  ) {
     const texas = gameRuntimeRegistry.getTexas(channel)
-    const player = texas?.room.getPlayerById(userId)
-    if (player) player.onlineStatus = 'offline'
+    if (!texas) return
+    const isQueuedLeave = gameRuntimeRegistry.hasQueuedLeave(channel, userId)
+    const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
+    if (isQueuedLeave || !isOnSeat) {
+      gameRuntimeRegistry.clearConnectionTracking(channel, userId)
+      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      return
+    }
+    if (this.#countPeerGameSockets(channel, userId, droppedSocketId) > 0) {
+      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      return
+    }
+    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
+    gameRuntimeRegistry.markUserOffline(channel, userId)
+    if (!wasOffline) {
+      this.broadcastGameRoom(channel, {
+        type: 'player-status-change',
+        data: { roomId: Number(channel), userId, status: 'offline' as const }
+      })
+    }
 
     void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
   }
@@ -474,7 +644,32 @@ class SocketServer {
         roomId
       )}, data: ${JSON.stringify(data)}`
     )
+    recordGameRoomBroadcast(roomId, data)
     this.#gameNs.to(roomId).emit('message', data)
+  }
+
+  /**
+   * @description 向 /game 房间广播，但排除指定 userId（用于离场类事件避免推给已退出本人）。
+   */
+  broadcastGameRoomExcept(
+    roomId: string,
+    excludedUserId: number,
+    data: Parameters<Socket['send']>[0]
+  ) {
+    const visibleUserIds = this.#getUserIdsInGameRoom(roomId).filter(
+      (uid) => uid !== excludedUserId
+    )
+    logger.info(
+      `broadcastGameRoomExcept, ${visibleUserIds}, excluded=${excludedUserId}, data: ${JSON.stringify(
+        data
+      )}`
+    )
+    recordGameRoomBroadcast(roomId, data)
+    for (const socket of this.#getSocketsInGameRoom(roomId)) {
+      const uid = socket.data.userId as number | undefined
+      if (uid === excludedUserId) continue
+      this.#gameNs.to(socket.id).emit('message', data)
+    }
   }
 
   /**

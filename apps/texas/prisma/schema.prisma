@@ -109,26 +109,36 @@ model AnnouncementRead {
   @@index([userId, readAt])
 }
 
-model MatchError {
-  id Int @id @default(autoincrement())
-
-  info      String   @db.LongText
+/// 引擎致命错误审计：`Match` 可能被物理删除，故 `matchId` 不与 `Match` 建外键。
+model EngineFatalIncident {
+  id     Int @id @default(autoincrement())
+  roomId Int
+  /// 作废前快照的 Match.id（非外键）：对齐日志/客户端对局号、查 `/match/error/:id`、与磁带排障；不表示库中仍有该 Match 行。
+  matchId Int
+  message String   @db.VarChar(512)
+  payload Json
   createdAt DateTime @default(now())
 
-  matchId Int
-  match   Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+  @@index([matchId])
 }
 
 model Room {
   id              Int             @id @default(autoincrement())
-  // 房间代码
-  code            String          @unique
-  // 房间在业务侧的对局状态（用于“房主点击开始游戏”）
+  // 当前可用于邀请加入的 code（软删时置空以释放码空间）
+  activeCode      String?         @unique
+  // 房间在业务侧的对局状态；语义见 schema 中 RoomGameStatus 各枚举注释
   gameStatus      RoomGameStatus  @default(waiting)
   // 大盲注
   lowestBetAmount Int
   // 初始筹码
   initialChips    Int             @default(0)
+  // 房间桌型（快速/标准/深筹/自定义）
+  tableType       RoomTableType   @default(standard)
+  // 是否开启 27o 奖励（仅自定义有效）
+  sevenTwoBonusEnabled Boolean    @default(false)
   createdAt       DateTime        @default(now())
   deletedAt       DateTime?
   thinkingTime    Int
@@ -140,14 +150,28 @@ model Room {
   owner           User            @relation(fields: [ownerId], references: [id])
   Match           Match[]
   members         RoomMember[]
-  roomChipTopUps  RoomChipTopUp[]
-  userRoomStats   UserRoomStat[]
+  roomChipTopUps         RoomChipTopUp[]
+  engineFatalIncidents  EngineFatalIncident[]
+  userRoomStats          UserRoomStat[]
+}
+
+enum RoomTableType {
+  quick
+  standard
+  deep
+  custom
 }
 
 enum RoomGameStatus {
+  /// 等人，未开始游戏
   waiting
+  /// 已点开局，等成员连 /game
   entering
+  /// 已锁座并完成角色分配等，`Texas.start()` 前；Core 本手仍为 idle
+  starting_hand
+  /// 已 Texas.start()，本手进行中
   in_hand
+  /// 本手 reset 后局间
   between_hands
 }
 
@@ -164,12 +188,12 @@ model RoomMember {
   @@unique([roomId, userId])
 }
 
-// 局间补码：紧跟在 afterMatchId 这一手结束之后、下一手开始前；游戏中不可补
+// 局间补码：同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次；游戏中不可补
 model RoomChipTopUp {
   id           Int @id @default(autoincrement())
   roomId       Int
   userId       Int
-  /// 已结束的这一手 match；同一 (roomId, userId, afterMatchId) 仅允许一条 → 每局间最多补一次
+  /// 幂等锚点：HTTP 补码为「最近已结束」的 `Match.id`；`lockAt` 自动补码为「本手新建」的 `Match.id`（与 `eventBinder.onLock` 顺序一致，便于作废本手时级联清理）
   afterMatchId Int
 
   /// 本次补入的筹码（通常 = 房间 initialChips）
@@ -285,8 +309,14 @@ model PlayerMatchRecord {
   totalBetAmount   Int           @default(0)
   isFold           Boolean       @default(false)
   isAllIn          Boolean       @default(false)
+  /// 本手开局（`RolesAssigned` / 贴盲前）桌上可下注余额；含局间补码后与引擎一致，用于回放起始栈；勿与 balanceAfterHand 混用
+  balanceAtHandStart Int?
   /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
   balanceAfterHand Int?
+  /// 27o 杂色奖励：该玩家本手支付的奖励筹码
+  sevenTwoBonusPaid Int @default(0)
+  /// 27o 杂色奖励：该玩家本手获得的奖励筹码
+  sevenTwoBonusReceived Int @default(0)
   /// 局间主动亮牌（HTTP）成功时间；用于幂等，避免重复 WS 推送
   voluntaryShowHandAt DateTime?
 
@@ -307,8 +337,6 @@ model Match {
   endedAt           DateTime?
   // 总的下注额度
   totalBetAmount    Float?
-  // 最后一轮可操作下注结束时控制器所处阶段（与引擎 onGameEnd.currentStage 一致）
-  lastActionStage   Stage?
   // 本手公共牌实际发到哪一街（与引擎 onGameEnd.endStage 一致；可能与 lastActionStage 不同，如 turn 全下后发到 river）
   boardThroughStage Stage?
   // 公共牌
@@ -328,8 +356,27 @@ model Match {
   // 记录这场对局各个阶段开始, 结束的时间
   matchStageTimeRecord MatchStageTimeRecord[]
 
-  matchError               MatchError[]
   roomChipTopUpsAfterMatch RoomChipTopUp[]
+  /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
+  domainEvents             MatchDomainEvent[]
+}
+
+/// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）
+model MatchDomainEvent {
+  id        Int      @id @default(autoincrement())
+  matchId   Int
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  roomId    Int
+  /// 会话级事件为 null；本手事件同 Core `handId`
+  handId    String?  @db.VarChar(16)
+  seq       Int
+  eventType String   @db.VarChar(48)
+  payload   Json
+
+  createdAt DateTime @default(now())
+
+  @@index([matchId, id])
+  @@index([matchId, handId, seq])
 }
 
 model MatchStageTimeRecord {
@@ -360,6 +407,12 @@ model BetRecord {
 
   match   Match? @relation(fields: [matchId], references: [id], onDelete: Cascade)
   matchId Int?
+
+  // 与 texas-poker-core 领域事件对齐，业务层按 (matchId, domainHandId, domainEventSeq, userId) 去重写入
+  domainHandId   String
+  domainEventSeq Int
+
+  @@unique([matchId, domainHandId, domainEventSeq, userId])
 }
 
 // 记录游戏胜利的玩家

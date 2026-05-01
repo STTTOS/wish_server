@@ -1,10 +1,11 @@
-import type { RoomWsMessage } from '../../room/ws-event-types'
 import type {
   WsMessage,
+  RoomWsMessage,
+  WsPlayerLeftGameData,
   WsPlayerQuitGameData,
   WsPlayerRolesAssignedData,
   WsPlayerHandVoluntarilyShownData
-} from '../../../ws/ws-event-types'
+} from '@wishufree/texas-ws-contract'
 
 import { ws } from '../../../server'
 
@@ -70,6 +71,13 @@ export class GameWsGateway {
 
   notifyGameStart(roomKey: string, data: WsMessage<'game-start'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
+  }
+
+  notifyGameBlindsPosted(
+    roomKey: string,
+    data: WsMessage<'game-blinds-posted'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'game-blinds-posted', data })
   }
 
   notifyPlayerChipTopUp(
@@ -169,6 +177,16 @@ export class GameWsGateway {
     ws.broadcastRoomList(msg)
   }
 
+  broadcastRoomListPlaySessionChanged(
+    data: RoomWsMessage<'room-list-play-session-changed'>['data']
+  ) {
+    const msg: RoomWsMessage<'room-list-play-session-changed'> = {
+      type: 'room-list-play-session-changed',
+      data
+    }
+    ws.broadcastRoomList(msg)
+  }
+
   broadcastRoomListRoomDeleted(roomId: number) {
     const msg: RoomWsMessage<'room-list-room-deleted'> = {
       type: 'room-list-room-deleted',
@@ -189,11 +207,70 @@ export class GameWsGateway {
     ws.disconnectUserGameSockets(roomId, userId)
   }
 
-  notifyPlayerQuitGame(roomKey: string, data: WsPlayerQuitGameData) {
-    ws.broadcastGameRoom(roomKey, {
+  notifyPlayerQuitGame(
+    roomKey: string,
+    data: WsPlayerQuitGameData,
+    options?: { excludeUserId?: number }
+  ) {
+    const msg: WsMessage<'player-quit-game'> = {
       type: 'player-quit-game',
       data
+    }
+    if (options?.excludeUserId != null) {
+      ws.broadcastGameRoomExcept(roomKey, options.excludeUserId, msg)
+      return
+    }
+    ws.broadcastGameRoom(roomKey, msg)
+  }
+
+  notifyPlayerLeftGame(
+    roomKey: string,
+    data: WsPlayerLeftGameData,
+    options?: { excludeUserId?: number }
+  ) {
+    const msg: WsMessage<'player-left-game'> = {
+      type: 'player-left-game',
+      data
+    }
+    if (options?.excludeUserId != null) {
+      ws.broadcastGameRoomExcept(roomKey, options.excludeUserId, msg)
+      return
+    }
+    ws.broadcastGameRoom(roomKey, msg)
+  }
+
+  notifyGameRoomClosed(
+    roomKey: string,
+    data: WsMessage<'game-room-closed'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'game-room-closed',
+      data
     })
+  }
+
+  notifyPlayersSeated(
+    roomKey: string,
+    data: WsMessage<'players-seated'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'players-seated',
+      data
+    })
+    ws.resyncGameRoomSeatPresence(roomKey, data.userIds ?? [])
+  }
+
+  notifyPlayersPostedBigBlind(
+    roomKey: string,
+    data: WsMessage<'players-posted-big-blind'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, {
+      type: 'players-posted-big-blind',
+      data
+    })
+    if (data.seatedUserIds?.length) {
+      ws.resyncGameRoomSeatPresence(roomKey, data.seatedUserIds)
+    }
   }
 
   notifyPlayerHandVoluntarilyShown(

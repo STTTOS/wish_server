@@ -45,7 +45,7 @@ export class RoomCleanupManager {
       await prisma.$transaction(async (tx) => {
         await tx.room.update({
           where: { id: roomIdNumber },
-          data: { deletedAt: new Date(), activeOwnerId: null }
+          data: { deletedAt: new Date(), activeOwnerId: null, activeCode: null }
         })
         await tx.roomMember.deleteMany({ where: { roomId: roomIdNumber } })
       })
@@ -85,7 +85,7 @@ export class RoomCleanupManager {
       return
     }
 
-    const allOffline = players.every((p) => p.onlineStatus === 'offline')
+    const allOffline = gameRuntimeRegistry.areAllTrackedPlayersOffline(roomId)
     if (!allOffline) return
 
     safeClearCountdown()
@@ -97,7 +97,7 @@ export class RoomCleanupManager {
 
   /**
    * 运行时已销毁后把 DB 拉回 waiting，与 join/quit 等路由约定一致。
-   * 不走 transitionRoomGameStatus：清理路径允许从 in_hand/between_hands/entering 等直接落回 waiting。
+   * 不走 transitionRoomGameStatus：清理路径允许从 in_hand / starting_hand / between_hands / entering 等直接落回 waiting。
    */
   async #resetRoomGameStatusToWaiting(roomIdNumber: number) {
     if (!roomIdNumber) return
