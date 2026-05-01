@@ -313,6 +313,10 @@ model PlayerMatchRecord {
   balanceAtHandStart Int?
   /// 本手结算后该玩家在桌上的剩余筹码（引擎 balance）；局间补码前恢复可参考上一手该字段
   balanceAfterHand Int?
+  /// 27o 杂色奖励：该玩家本手支付的奖励筹码
+  sevenTwoBonusPaid Int @default(0)
+  /// 27o 杂色奖励：该玩家本手获得的奖励筹码
+  sevenTwoBonusReceived Int @default(0)
   /// 局间主动亮牌（HTTP）成功时间；用于幂等，避免重复 WS 推送
   voluntaryShowHandAt DateTime?
 

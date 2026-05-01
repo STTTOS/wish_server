@@ -13,6 +13,7 @@ import {
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { appendMatchDomainEventTape } from './matchDomainEventTape'
+import { CUSTOM_27O_REWARD_TIERS } from '../../../../constants/game'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
@@ -38,6 +39,90 @@ function sleep(ms: number): Promise<void> {
 
 const OFFLINE_TURN_THINKING_TIME_MS = 5000
 const OFFLINE_RECONNECT_GRACE_HANDS = 2
+
+function isSevenTwoOffsuit(handPokes: string[]): boolean {
+  if (handPokes.length !== 2) return false
+  const [a, b] = handPokes
+  if (a.length < 2 || b.length < 2) return false
+  const suitA = a[0]
+  const rankA = a.slice(1)
+  const suitB = b[0]
+  const rankB = b.slice(1)
+  if (suitA === suitB) return false
+  return (rankA === '2' && rankB === '7') || (rankA === '7' && rankB === '2')
+}
+
+function resolve27oRewardChips(initialChips: number, bb: number): number {
+  if (bb <= 0) return 0
+  const bbDepth = initialChips / bb
+  for (const tier of CUSTOM_27O_REWARD_TIERS) {
+    if (bbDepth >= tier.minBbDepth) return tier.rewardBb * bb
+  }
+  return (
+    CUSTOM_27O_REWARD_TIERS[CUSTOM_27O_REWARD_TIERS.length - 1]!.rewardBb * bb
+  )
+}
+
+function applySevenTwoOffsuitBonusAtGameEnd(params: {
+  seatedPlayers: Player[]
+  rewardChipsPerPayer: number
+}): {
+  paidByUserId: Map<number, number>
+  receivedByUserId: Map<number, number>
+} {
+  const paidByUserId = new Map<number, number>()
+  const receivedByUserId = new Map<number, number>()
+  const rewardChips = Math.max(0, Math.floor(params.rewardChipsPerPayer))
+  if (rewardChips <= 0) return { paidByUserId, receivedByUserId }
+
+  const winners = params.seatedPlayers.filter(
+    (player) =>
+      player.getStatus() !== 'out' && isSevenTwoOffsuit(player.getHandPokes())
+  )
+  if (winners.length === 0) return { paidByUserId, receivedByUserId }
+
+  const winnerIdSet = new Set(winners.map((x) => x.getUserInfo().id))
+  const payers = params.seatedPlayers.filter(
+    (player) => !winnerIdSet.has(player.getUserInfo().id)
+  )
+  if (payers.length === 0) return { paidByUserId, receivedByUserId }
+
+  let collected = 0
+  for (const payer of payers) {
+    const userId = payer.getUserInfo().id
+    const paid = Math.min(rewardChips, Math.max(0, Math.floor(payer.balance)))
+    if (paid <= 0) continue
+    payer.balance -= paid
+    payer.wager -= paid
+    collected += paid
+    paidByUserId.set(userId, (paidByUserId.get(userId) ?? 0) + paid)
+  }
+  if (collected <= 0) return { paidByUserId, receivedByUserId }
+
+  const baseShare = Math.floor(collected / winners.length)
+  const remainder = collected % winners.length
+  for (const winner of winners) {
+    const userId = winner.getUserInfo().id
+    winner.balance += baseShare
+    winner.wager += baseShare
+    receivedByUserId.set(
+      userId,
+      (receivedByUserId.get(userId) ?? 0) + baseShare
+    )
+  }
+  if (remainder > 0) {
+    const luckyIdx = Math.floor(Math.random() * winners.length)
+    const lucky = winners[luckyIdx]!
+    const luckyUserId = lucky.getUserInfo().id
+    lucky.balance += remainder
+    lucky.wager += remainder
+    receivedByUserId.set(
+      luckyUserId,
+      (receivedByUserId.get(luckyUserId) ?? 0) + remainder
+    )
+  }
+  return { paidByUserId, receivedByUserId }
+}
 
 /**
  * 结算「离线在座玩家宽限策略」。
@@ -213,6 +298,31 @@ async function handleHandEnded(
     await flushEventsAfterSettle(ctx)
 
     const seated = texas.room.getPlayersBySeatStatus('on-set')
+    const roomRule = await roomModel.findUnique({
+      where: { id: roomId },
+      select: {
+        sevenTwoBonusEnabled: true,
+        initialChips: true,
+        lowestBetAmount: true
+      }
+    })
+    let sevenTwoBonusByUserId: {
+      paidByUserId: Map<number, number>
+      receivedByUserId: Map<number, number>
+    } = {
+      paidByUserId: new Map<number, number>(),
+      receivedByUserId: new Map<number, number>()
+    }
+    if (roomRule?.sevenTwoBonusEnabled) {
+      const rewardChips = resolve27oRewardChips(
+        roomRule.initialChips,
+        roomRule.lowestBetAmount
+      )
+      sevenTwoBonusByUserId = applySevenTwoOffsuitBonusAtGameEnd({
+        seatedPlayers: seated,
+        rewardChipsPerPayer: rewardChips
+      })
+    }
     const sortedSeated = [...seated].sort((a, b) => {
       const aFold = a.getStatus() === 'out'
       const bFold = b.getStatus() === 'out'
@@ -273,6 +383,10 @@ async function handleHandEnded(
           pokerBackgroundKey: profile?.pokerBackgroundKey ?? null,
           balance: pl.balance,
           wager: pl.wager,
+          sevenTwoBonusPaid:
+            sevenTwoBonusByUserId.paidByUserId.get(userId) ?? 0,
+          sevenTwoBonusReceived:
+            sevenTwoBonusByUserId.receivedByUserId.get(userId) ?? 0,
           isAllIn: pl.getStatus() === 'allIn',
           isFold,
           canVoluntaryShowHand: isFold || unfoldedOnSetCount === 1,
@@ -315,7 +429,11 @@ async function handleHandEnded(
           totalBetAmount: Math.round(pl.totalBetAmount ?? 0),
           isFold,
           isAllIn,
-          balanceAfterHand: Math.round(pl.balance)
+          balanceAfterHand: Math.round(pl.balance),
+          sevenTwoBonusPaid:
+            sevenTwoBonusByUserId.paidByUserId.get(userId) ?? 0,
+          sevenTwoBonusReceived:
+            sevenTwoBonusByUserId.receivedByUserId.get(userId) ?? 0
         }
         try {
           await tx.playerMatchRecord.update({

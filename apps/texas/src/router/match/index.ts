@@ -54,6 +54,25 @@ function settleRecordVisibleFields<
   }
 }
 
+function sortSettleRecordsByOutcome<
+  T extends { isFold: boolean; rankStrength: number; wager: number | null }
+>(records: readonly T[]): T[] {
+  const wagerDesc = (
+    a: { wager: number | null },
+    b: { wager: number | null }
+  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
+  return [...records].sort((a, b) => {
+    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
+    if (!a.isFold && !b.isFold) {
+      if (a.rankStrength !== b.rankStrength) {
+        return b.rankStrength - a.rankStrength
+      }
+      return wagerDesc(a, b)
+    }
+    return wagerDesc(a, b)
+  })
+}
+
 /**
  * 查询当前用户的对局记录（分页）
  */
@@ -283,7 +302,9 @@ router.post(matchApi('/detail'), async (ctx) => {
           handPokes: true,
           rankStrength: true,
           rankCategory: true,
-          totalBetAmount: true
+          totalBetAmount: true,
+          sevenTwoBonusPaid: true,
+          sevenTwoBonusReceived: true
         }
       },
       records: {
@@ -341,61 +362,45 @@ router.post(matchApi('/detail'), async (ctx) => {
     totalPlayers >= 1 && foldedCount === totalPlayers - 1
   const viewerId = userId
 
-  const wagerDesc = (
-    a: { wager: number | null },
-    b: { wager: number | null }
-  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
-
   // 玩家结算记录：未弃牌在前（先比 rankStrength，再比 wager）；弃牌在后（按 wager）
-  const settleRecords = [...playerMatchRecords]
-    .sort((a, b) => {
-      if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      if (!a.isFold && !b.isFold) {
-        if (a.rankStrength !== b.rankStrength) {
-          return b.rankStrength - a.rankStrength
-        }
-        return wagerDesc(a, b)
-      }
-      return wagerDesc(a, b)
-    })
-    .map(
-      ({
-        handPokes,
+  const settleRecords = sortSettleRecordsByOutcome(playerMatchRecords).map(
+    ({
+      handPokes,
+      isFold,
+      user: { id: recordUserId, ...user },
+      rankCategory,
+      rankStrength,
+      ...rest
+    }) => {
+      const isSelf = recordUserId === viewerId
+      /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
+      const hideHoleCardsFromViewer =
+        !isSelf && (isFold || isNoShowdownSingleWinner)
+
+      const {
+        handPokes: outHandPokes,
+        rankCategory: outRankCategory,
+        rankStrength: outRankStrength
+      } = settleRecordVisibleFields({
+        isSelf,
         isFold,
-        user: { id: recordUserId, ...user },
+        hideHoleCardsFromViewer,
+        handPokes,
         rankCategory,
-        rankStrength,
-        ...rest
-      }) => {
-        const isSelf = recordUserId === viewerId
-        /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
-        const hideHoleCardsFromViewer =
-          !isSelf && (isFold || isNoShowdownSingleWinner)
+        rankStrength
+      })
 
-        const {
-          handPokes: outHandPokes,
-          rankCategory: outRankCategory,
-          rankStrength: outRankStrength
-        } = settleRecordVisibleFields({
-          isSelf,
-          isFold,
-          hideHoleCardsFromViewer,
-          handPokes,
-          rankCategory,
-          rankStrength
-        })
-
-        return {
-          ...user,
-          ...rest,
-          userId: recordUserId,
-          isFold,
-          handPokes: outHandPokes,
-          rankCategory: outRankCategory,
-          rankStrength: outRankStrength
-        }
+      return {
+        ...user,
+        ...rest,
+        userId: recordUserId,
+        isFold,
+        handPokes: outHandPokes,
+        rankCategory: outRankCategory,
+        rankStrength: outRankStrength
       }
-    )
+    }
+  )
 
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
@@ -483,45 +488,38 @@ router.post(matchApi('/replayTape'), async (ctx) => {
   const unfoldedOnSetCount = matchInfo.playerMatchRecords.filter(
     (record) => !record.isFold
   ).length
-  const settleList = [...matchInfo.playerMatchRecords]
-    .sort((a, b) => {
-      if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-      if (!a.isFold && !b.isFold) {
-        if (a.rankStrength !== b.rankStrength) {
-          return b.rankStrength - a.rankStrength
-        }
-        return (Number(b.wager) || 0) - (Number(a.wager) || 0)
-      }
-      return (Number(b.wager) || 0) - (Number(a.wager) || 0)
+  const settleList = sortSettleRecordsByOutcome(
+    matchInfo.playerMatchRecords
+  ).map((record) => {
+    const isSelf = record.userId === userId
+    const hideHoleCardsFromViewer =
+      !isSelf && (record.isFold || isNoShowdownSingleWinner)
+    const visible = settleRecordVisibleFields({
+      isSelf,
+      isFold: record.isFold,
+      hideHoleCardsFromViewer,
+      handPokes: record.handPokes,
+      rankCategory: record.rankCategory,
+      rankStrength: record.rankStrength
     })
-    .map((record) => {
-      const isSelf = record.userId === userId
-      const hideHoleCardsFromViewer =
-        !isSelf && (record.isFold || isNoShowdownSingleWinner)
-      const visible = settleRecordVisibleFields({
-        isSelf,
-        isFold: record.isFold,
-        hideHoleCardsFromViewer,
-        handPokes: record.handPokes,
-        rankCategory: record.rankCategory,
-        rankStrength: record.rankStrength
-      })
-      return {
-        userId: record.userId,
-        name: record.user.name,
-        avatarUrl: record.user.avatarUrl,
-        avatarKey: record.user.avatarKey,
-        pokerBackgroundKey: record.user.pokerBackgroundKey,
-        balance: Number(record.balanceAfterHand ?? 0),
-        wager: record.wager,
-        isAllIn: record.isAllIn,
-        isFold: record.isFold,
-        canVoluntaryShowHand: record.isFold || unfoldedOnSetCount === 1,
-        handPokes: visible.handPokes,
-        rankCategory: visible.rankCategory,
-        rankStrength: visible.rankStrength
-      }
-    })
+    return {
+      userId: record.userId,
+      name: record.user.name,
+      avatarUrl: record.user.avatarUrl,
+      avatarKey: record.user.avatarKey,
+      pokerBackgroundKey: record.user.pokerBackgroundKey,
+      balance: Number(record.balanceAfterHand ?? 0),
+      wager: record.wager,
+      sevenTwoBonusPaid: record.sevenTwoBonusPaid,
+      sevenTwoBonusReceived: record.sevenTwoBonusReceived,
+      isAllIn: record.isAllIn,
+      isFold: record.isFold,
+      canVoluntaryShowHand: record.isFold || unfoldedOnSetCount === 1,
+      handPokes: visible.handPokes,
+      rankCategory: visible.rankCategory,
+      rankStrength: visible.rankStrength
+    }
+  })
 
   response.success(ctx, {
     meta: {

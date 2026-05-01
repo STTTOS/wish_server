@@ -100,6 +100,8 @@ export type WsGameEndSettleItem = {
   pokerBackgroundKey: string | null
   balance: number
   wager: number
+  sevenTwoBonusPaid: number
+  sevenTwoBonusReceived: number
   isAllIn: boolean
   isFold: boolean
   canVoluntaryShowHand: boolean
