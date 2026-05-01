@@ -4,7 +4,7 @@
   "description": "德州后台服务",
   "name": "@wishufree/texas-server",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "test": "node --test -r ts-node/register \"src/**/*.test.ts\"",
     "dev": "npm run db:sync && nodemon  -w ./src --ext .ts --exec \"ts-node ./src/index.ts\"",
