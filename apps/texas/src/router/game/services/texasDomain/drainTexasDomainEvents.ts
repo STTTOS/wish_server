@@ -345,6 +345,9 @@ async function handleHandEnded(
         outcome: p.outcome
       })
     }
+    const sevenTwoAutoShownUserIds = new Set<number>(
+      Array.from(sevenTwoBonusByUserId.receivedByUserId.keys())
+    )
     const sortedSeated = [...seated].sort((a, b) => {
       const aFold = a.getStatus() === 'out'
       const bFold = b.getStatus() === 'out'
@@ -411,7 +414,9 @@ async function handleHandEnded(
             sevenTwoBonusByUserId.receivedByUserId.get(userId) ?? 0,
           isAllIn: pl.getStatus() === 'allIn',
           isFold,
-          canVoluntaryShowHand: isFold || unfoldedOnSetCount === 1,
+          canVoluntaryShowHand:
+            !sevenTwoAutoShownUserIds.has(userId) &&
+            (isFold || unfoldedOnSetCount === 1),
           handPokes,
           ...(hideHoleFromViewer
             ? {
@@ -455,7 +460,10 @@ async function handleHandEnded(
           sevenTwoBonusPaid:
             sevenTwoBonusByUserId.paidByUserId.get(userId) ?? 0,
           sevenTwoBonusReceived:
-            sevenTwoBonusByUserId.receivedByUserId.get(userId) ?? 0
+            sevenTwoBonusByUserId.receivedByUserId.get(userId) ?? 0,
+          voluntaryShowHandAt: sevenTwoAutoShownUserIds.has(userId)
+            ? gameEndAt
+            : null
         }
         try {
           await tx.playerMatchRecord.update({
@@ -509,6 +517,19 @@ async function handleHandEnded(
       bestPokes: p.bestPokes ?? [],
       totalBetAmount
     }))
+    if (sevenTwoAutoShownUserIds.size > 0) {
+      for (const userId of sevenTwoAutoShownUserIds) {
+        const player = seated.find((x) => x.getUserInfo().id === userId)
+        if (!player) continue
+        wsGateway.notifyPlayerHandVoluntarilyShown(roomKey, {
+          roomId,
+          matchId: currentMatchId,
+          userId,
+          handPokes: player.getHandPokes(),
+          rankCategory: player.rankCategory ?? null
+        })
+      }
+    }
     texas.unlockSeats()
     // 游戏结束后, 轮换庄家位置
     // 在其他玩家加入时, 有新的BB anchor
