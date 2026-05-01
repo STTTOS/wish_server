@@ -17,6 +17,7 @@ import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 import {
   registerNextHandHooks,
+  cancelNextHandCountdown,
   unregisterNextHandHooks
 } from '../../../gameRuntime/nextHandCountdown'
 
@@ -52,6 +53,29 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     return normalized === 'idle' || normalized === 'between_hands'
   }
 
+  const closeRoomForInsufficientPlayers = async () => {
+    // 若倒计时已启动，先广播 cancelled，避免客户端看到“继续开下一手”
+    cancelNextHandCountdown(roomId)
+    await prisma.$transaction(async (tx) => {
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          deletedAt: new Date(),
+          activeOwnerId: null,
+          activeCode: null
+        }
+      })
+      await tx.roomMember.deleteMany({ where: { roomId } })
+    })
+    wsGateway.notifyGameRoomClosed(roomKey, {
+      roomId,
+      reason: 'insufficient_players'
+    })
+    wsGateway.broadcastRoomListRoomDeleted(roomId)
+    unregisterNextHandHooks(roomId)
+    runtimeRegistry.destroyRuntime(roomKey)
+  }
+
   registerNextHandHooks(roomId, {
     canStart: () =>
       runtimeRegistry.hasTexas(roomKey) &&
@@ -63,24 +87,7 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
       texas.lockSeats()
       const seatedCount = texas.room.getPlayersBySeatStatus('on-set').length
       if (seatedCount < 2) {
-        await prisma.$transaction(async (tx) => {
-          await tx.room.update({
-            where: { id: roomId },
-            data: {
-              deletedAt: new Date(),
-              activeOwnerId: null,
-              activeCode: null
-            }
-          })
-          await tx.roomMember.deleteMany({ where: { roomId } })
-        })
-        wsGateway.notifyGameRoomClosed(roomKey, {
-          roomId,
-          reason: 'insufficient_players'
-        })
-        wsGateway.broadcastRoomListRoomDeleted(roomId)
-        unregisterNextHandHooks(roomId)
-        runtimeRegistry.destroyRuntime(roomKey)
+        await closeRoomForInsufficientPlayers()
         return
       }
       const next = await match.create({
@@ -100,6 +107,12 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
         wsGateway,
         handMatchId: next.id
       })
+      const seatedAfterTopUpKick =
+        texas.room.getPlayersBySeatStatus('on-set').length
+      if (seatedAfterTopUpKick < 2) {
+        await closeRoomForInsufficientPlayers()
+        return
+      }
     },
     onAssignRoles: async () => {
       try {
