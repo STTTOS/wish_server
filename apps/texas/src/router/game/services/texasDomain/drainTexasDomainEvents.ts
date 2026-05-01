@@ -66,6 +66,7 @@ function resolve27oRewardChips(initialChips: number, bb: number): number {
 function applySevenTwoOffsuitBonusAtGameEnd(params: {
   seatedPlayers: Player[]
   rewardChipsPerPayer: number
+  outcome: 'showdown' | 'fold_win'
 }): {
   paidByUserId: Map<number, number>
   receivedByUserId: Map<number, number>
@@ -75,10 +76,30 @@ function applySevenTwoOffsuitBonusAtGameEnd(params: {
   const rewardChips = Math.max(0, Math.floor(params.rewardChipsPerPayer))
   if (rewardChips <= 0) return { paidByUserId, receivedByUserId }
 
-  const winners = params.seatedPlayers.filter(
-    (player) =>
-      player.getStatus() !== 'out' && isSevenTwoOffsuit(player.getHandPokes())
+  const activePlayers = params.seatedPlayers.filter(
+    (player) => player.getStatus() !== 'out'
   )
+  let winners: Player[] = []
+  if (params.outcome === 'fold_win') {
+    const [soleWinner] = activePlayers
+    if (
+      activePlayers.length === 1 &&
+      soleWinner &&
+      isSevenTwoOffsuit(soleWinner.getHandPokes())
+    ) {
+      winners = [soleWinner]
+    }
+  } else {
+    const maxRankStrength = activePlayers.reduce(
+      (max, player) => Math.max(max, player.rankStrength),
+      Number.NEGATIVE_INFINITY
+    )
+    winners = activePlayers.filter(
+      (player) =>
+        player.rankStrength === maxRankStrength &&
+        isSevenTwoOffsuit(player.getHandPokes())
+    )
+  }
   if (winners.length === 0) return { paidByUserId, receivedByUserId }
 
   const winnerIdSet = new Set(winners.map((x) => x.getUserInfo().id))
@@ -320,7 +341,8 @@ async function handleHandEnded(
       )
       sevenTwoBonusByUserId = applySevenTwoOffsuitBonusAtGameEnd({
         seatedPlayers: seated,
-        rewardChipsPerPayer: rewardChips
+        rewardChipsPerPayer: rewardChips,
+        outcome: p.outcome
       })
     }
     const sortedSeated = [...seated].sort((a, b) => {

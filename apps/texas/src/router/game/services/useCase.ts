@@ -10,6 +10,7 @@ import { bindTexasLifecycleEvents } from './eventBinder'
 import { transitionRoomGameStatus } from './stateMachine'
 import prisma, { room as roomModel } from '../../../models'
 import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
+import { dealCardsWithOptionalDevForce27o } from './devForceSevenTwoOffsuit'
 import {
   validateStartGameRequest,
   markRoomEnteringAndNotify
@@ -450,7 +451,11 @@ export class StartGameUseCase {
       await drainTexasDomainEvents(roleEvents)
       // 角色分配完成后, 等待2秒再发牌
       await this.#delay(gameRuntimeConfig.getNextHandDealAfterEndMs())
-      const dealEvents = texas.dealCards()
+      const dealEvents = dealCardsWithOptionalDevForce27o({
+        texas,
+        roomId,
+        phase: 'start_game'
+      })
       await drainTexasDomainEvents(dealEvents)
 
       // 发牌3秒后再开始游戏

@@ -12,6 +12,7 @@ import prisma, { match } from '../../../models'
 import { transitionRoomGameStatus } from './stateMachine'
 import { applyTopUpPlansAtHandLock } from './chipTopUpUseCase'
 import { buildTexasEventContext } from './texasDomain/texasEventContext'
+import { dealCardsWithOptionalDevForce27o } from './devForceSevenTwoOffsuit'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
 import {
@@ -119,7 +120,11 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     },
     onDeal: async () => {
       try {
-        const dealEvents = texas.dealCards()
+        const dealEvents = dealCardsWithOptionalDevForce27o({
+          texas,
+          roomId,
+          phase: 'next_hand'
+        })
         await drainTexasDomainEvents(dealEvents)
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {
