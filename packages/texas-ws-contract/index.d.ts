@@ -341,6 +341,8 @@ export type WsRoomListRoomCreatedData = {
   initialChips: number
   thinkingTime: number
   lowestBetAmount: number
+  tableType: 'quick' | 'standard' | 'deep' | 'custom'
+  sevenTwoBonusEnabled: boolean
   createdAt: string
   memberCount: number
   playSession: WsRoomListPlaySession

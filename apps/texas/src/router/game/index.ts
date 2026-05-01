@@ -12,7 +12,6 @@ import { GameWsGateway } from './services/gameWsGateway'
 import { gameRuntimeRegistry } from './services/runtimeKit'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
-import { MIN_BB, MAX_PLAYERS_COUNT } from '../../constants/game'
 import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
@@ -31,6 +30,15 @@ import {
   BUILT_IN_VOICE_NAME_SET,
   BUILT_IN_VOICE_USER_COOLDOWN_MS
 } from '../../constants/builtInVoice'
+import {
+  MAX_PLAYERS_COUNT,
+  ROOM_PRESET_RULES,
+  CUSTOM_27O_REWARD_TIERS,
+  ROOM_LOWEST_BET_OPTIONS,
+  ROOM_THINKING_TIME_OPTIONS,
+  ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX,
+  ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MIN
+} from '../../constants/game'
 
 const gameClientApi = combinePath(apiPrefixClient)('/game')
 const startGameUseCase = new StartGameUseCase()
@@ -45,15 +53,21 @@ const showMyHandPokesUseCase = new ShowMyHandPokesUseCase(gameWsGateway)
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
   response.success(ctx, {
-    ...gameRuntimeConfig.getClientRulesSnapshot(),
     maxPlayersCount: MAX_PLAYERS_COUNT,
-    minBB: MIN_BB
+    roomLowestBetOptions: ROOM_LOWEST_BET_OPTIONS,
+    roomThinkingTimeOptions: ROOM_THINKING_TIME_OPTIONS,
+    customInitialChipsBbMultiplierMin:
+      ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MIN,
+    customInitialChipsBbMultiplierMax:
+      ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX,
+    roomPresetRules: ROOM_PRESET_RULES,
+    custom27oRewardTiers: CUSTOM_27O_REWARD_TIERS
   })
 })
 
 /**
- * 管理员：运行时调整规则与各类延时（毫秒），无需重启；GET /game/config 仅返回规则三项（实时）。
- * 各类延时不在 config 中下发，改后返回完整快照供核对。
+ * 管理员：运行时调整各类延时（毫秒），无需重启。
+ * `GET /game/config` 返回的是静态规则配置；改后返回完整快照供核对。
  * body 至少含一个字段，毫秒项范围 0～120000。
  */
 router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {

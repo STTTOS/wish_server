@@ -32,8 +32,15 @@ export class RoomCreateFacade {
   async execute(input: RoomCreateInput): Promise<RoomCreateResult> {
     const validated = validateRoomCreateAuth(input)
     if (!validated.ok) return validated
-    const { userId, isPrivate, thinkingTime, lowestBetAmount, initialChips } =
-      validated.data
+    const {
+      userId,
+      isPrivate,
+      thinkingTime,
+      lowestBetAmount,
+      initialChips,
+      tableType,
+      sevenTwoBonusEnabled
+    } = validated.data
 
     type TxRes =
       | { ok: false; status: number; message: string }
@@ -124,6 +131,8 @@ export class RoomCreateFacade {
                 thinkingTime,
                 lowestBetAmount,
                 initialChips,
+                tableType,
+                sevenTwoBonusEnabled,
                 ownerId: userInfo.id,
                 activeOwnerId: userInfo.id
               }
@@ -213,6 +222,8 @@ export class RoomCreateFacade {
         initialChips,
         thinkingTime,
         lowestBetAmount,
+        tableType,
+        sevenTwoBonusEnabled,
         createdAt: dayjs(createdAt).format(timeFormat),
         memberCount: 1,
         playSession: roomPlaySessionFromGameStatus('waiting')

@@ -1,10 +1,13 @@
 import type { WithPaginationReq } from '../interface'
+import type { RoomTableType } from '../../constants/game'
 
 import dayjs from 'dayjs'
+import { Prisma } from '@prisma/texas-client'
 
 import './web'
 import router from '../instance'
 import combinePath from '../../utils/combinePath'
+import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
@@ -59,19 +62,36 @@ router.post(matchApi('/list'), async (ctx) => {
   const {
     current = 1,
     pageSize = 10,
-    roomId
-  }: WithPaginationReq & { roomId?: number } = ctx.request.body ?? {}
+    roomId,
+    type
+  }: WithPaginationReq & { roomId?: number; type?: string } = ctx.request
+    .body ?? {}
 
   const skip = (current - 1) * pageSize
   const take = pageSize
 
-  const where = {
+  if (
+    type &&
+    type !== 'all' &&
+    !(ROOM_TABLE_TYPES as readonly string[]).includes(type)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 参数异常')
+    return
+  }
+
+  const tableTypeFilter: RoomTableType | null =
+    type && type !== 'all' ? (type as RoomTableType) : null
+
+  const matchWhere: Prisma.MatchWhereInput = {
+    endedAt: { not: null },
+    ...(roomId ? { roomId } : null),
+    ...(tableTypeFilter
+      ? { room: { is: { tableType: tableTypeFilter } } }
+      : null)
+  }
+  const where: Prisma.PlayerMatchRecordWhereInput = {
     userId,
-    match: {
-      // 过滤掉未结束的对局
-      endedAt: { not: null }
-    },
-    ...(roomId ? { match: { roomId } } : {})
+    match: matchWhere
   }
 
   const [total, records] = await Promise.all([
@@ -122,6 +142,8 @@ router.post(matchApi('/list'), async (ctx) => {
       matchId,
       roomCode: activeCode ?? '',
       initialChips,
+      tableType: match.room.tableType,
+      sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
       replaySupported: _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
@@ -153,6 +175,8 @@ router.post(matchApi('/rooms'), async (ctx) => {
       lowestBetAmount: stat.room.lowestBetAmount,
       thinkingTime: stat.room.thinkingTime,
       isPrivate: stat.room.isPrivate,
+      tableType: stat.room.tableType,
+      sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
       lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
       matchCount: stat.matchCount,
       totalWager: stat.totalWager,
@@ -386,6 +410,8 @@ router.post(matchApi('/detail'), async (ctx) => {
     roomId,
     roomCode: activeCode ?? '',
     initialChips,
+    tableType: matchInfo.room.tableType,
+    sevenTwoBonusEnabled: matchInfo.room.sevenTwoBonusEnabled,
     memberCount: playerMatchRecords.length,
     startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
     endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null,
@@ -507,6 +533,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       initialChips: matchInfo.room.initialChips,
       lowestBetAmount: matchInfo.room.lowestBetAmount,
       thinkingTime: matchInfo.room.thinkingTime,
+      tableType: matchInfo.room.tableType,
+      sevenTwoBonusEnabled: matchInfo.room.sevenTwoBonusEnabled,
       selfUserId: userId,
       startedAt: matchInfo.startedAt
         ? dayjs(matchInfo.startedAt).format(timeFormat)

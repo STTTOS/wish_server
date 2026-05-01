@@ -135,6 +135,10 @@ model Room {
   lowestBetAmount Int
   // 初始筹码
   initialChips    Int             @default(0)
+  // 房间桌型（快速/标准/深筹/自定义）
+  tableType       RoomTableType   @default(standard)
+  // 是否开启 27o 奖励（仅自定义有效）
+  sevenTwoBonusEnabled Boolean    @default(false)
   createdAt       DateTime        @default(now())
   deletedAt       DateTime?
   thinkingTime    Int
@@ -149,6 +153,13 @@ model Room {
   roomChipTopUps         RoomChipTopUp[]
   engineFatalIncidents  EngineFatalIncident[]
   userRoomStats          UserRoomStat[]
+}
+
+enum RoomTableType {
+  quick
+  standard
+  deep
+  custom
 }
 
 enum RoomGameStatus {

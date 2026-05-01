@@ -38,14 +38,22 @@ const roomKickFacade = new RoomKickFacade(new WaitingRoomGateway(ws))
  */
 router.post(roomApiClient('/create'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const { lowestBetAmount, thinkingTime, isPrivate, initialChips } = (ctx
-    .request.body ?? {}) as Record<string, unknown>
-  const result = await roomCreateFacade.execute({
-    userId,
+  const {
+    type,
     lowestBetAmount,
     thinkingTime,
     isPrivate,
-    initialChips
+    initialChips,
+    sevenTwoBonusEnabled
+  } = (ctx.request.body ?? {}) as Record<string, unknown>
+  const result = await roomCreateFacade.execute({
+    userId,
+    type,
+    lowestBetAmount,
+    thinkingTime,
+    isPrivate,
+    initialChips,
+    sevenTwoBonusEnabled
   })
   respondFromApiResult(ctx, result, { okMessage: '房间创建成功' })
 })
@@ -84,7 +92,9 @@ router.post(roomApiClient('/list'), async (ctx) => {
       owner,
       initialChips,
       members,
-      gameStatus
+      gameStatus,
+      tableType,
+      sevenTwoBonusEnabled
     }) => {
       return {
         id,
@@ -98,6 +108,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
         // gameStatus,
         playSession: roomPlaySessionFromGameStatus(gameStatus),
         lowestBetAmount,
+        tableType,
+        sevenTwoBonusEnabled,
         createdAt: dayjs(createdAt).format(timeFormat),
         memberCount: members.length
       }
@@ -261,7 +273,9 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     lowestBetAmount,
     owner,
     gameStatus,
-    initialChips
+    initialChips,
+    tableType,
+    sevenTwoBonusEnabled
   } = roomInfo
 
   response.success(ctx, {
@@ -276,7 +290,9 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     isPrivate,
     thinkingTime,
     initialChips,
-    lowestBetAmount
+    lowestBetAmount,
+    tableType,
+    sevenTwoBonusEnabled
   })
 })
 

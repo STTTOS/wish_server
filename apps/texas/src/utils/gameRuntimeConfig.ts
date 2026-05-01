@@ -1,26 +1,18 @@
 import { logger } from '../logger'
 import {
+  GAME_WS_STAGE_CHANGED_DELAY_MS,
+  GAME_WS_ACTION_REQUIRED_DELAY_MS
+} from '../constants/game'
+import {
   NEXT_HAND_DEAL_AFTER_END_MS,
   NEXT_HAND_ENDS_AT_OFFSET_MS,
   NEXT_HAND_LOCK_AT_OFFSET_MS,
   NEXT_HAND_START_AFTER_DEAL_MS,
   NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
 } from '../constants/nextHand'
-import {
-  MIN_THINKING_TIME,
-  GAME_WS_STAGE_CHANGED_DELAY_MS,
-  INITIAL_CHIPS_MIN_BB_MULTIPLIER,
-  GAME_WS_ACTION_REQUIRED_DELAY_MS,
-  DEFAULT_INITIAL_CHIPS_MIN_BB_MULTIPLIER
-} from '../constants/game'
 
 const MIN_MS = 0
 const MAX_MS = 120_000
-
-const MIN_THINKING_SEC = 1
-const MAX_THINKING_SEC = 120
-const MIN_CHIPS_MULT = 2
-const MAX_CHIPS_MULT = 500
 
 /** 首局：进入游戏 UI 过渡后再分配角色（原硬编码 500） */
 const DEFAULT_START_GAME_BEFORE_ASSIGN_ROLES_MS = 500
@@ -29,22 +21,12 @@ function clampMs(n: number): number {
   return Math.min(MAX_MS, Math.max(MIN_MS, Math.trunc(n)))
 }
 
-function clampInt(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, Math.trunc(n)))
-}
-
 function isFiniteInt(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n)
 }
 
 /** `POST /game/setRuntimeConfig` 可选字段；均为运行时覆盖，单位除注明外为毫秒 */
 export type GameRuntimeConfigPatch = {
-  /** 思考时间下限（秒），建房校验 */
-  minThinkingTime?: unknown
-  /** 初始筹码相对大盲的最低倍数 */
-  initialChipsMinBigBlindMultiplier?: unknown
-  /** 客户端默认展示的初始筹码倍数（须 ≥ 上一项） */
-  defaultInitialChipsMinBigBlindMultiplier?: unknown
   /** 行动结束后、`pendingFlowOps` 开始消费前的间隔（下一位 `player-action-required` 等） */
   actionRequiredWsDelayMs?: unknown
   /** `pendingFlowOps` 连续进街间隔；摊牌后 `game-end` 推送前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
@@ -64,12 +46,6 @@ export type GameRuntimeConfigPatch = {
 }
 
 export type GameRuntimeConfigSnapshot = {
-  /** 思考时间下限（秒） */
-  minThinkingTime: number
-  /** 初始筹码相对大盲的最低倍数 */
-  initialChipsMinBigBlindMultiplier: number
-  /** 默认初始筹码倍数 */
-  defaultInitialChipsMinBigBlindMultiplier: number
   /** `pendingFlowOps` 消费前间隔（毫秒） */
   actionRequiredWsDelayMs: number
   /** 连续进街间隔与摊牌后 `game-end` 前停顿（毫秒） */
@@ -92,11 +68,6 @@ export type GameRuntimeConfigSnapshot = {
  * 德州运行时可调参数（进程内单例）。新建房间校验、引擎 WS 延迟、局间倒计时等均读此实例。
  */
 export class GameRuntimeConfigStore {
-  #minThinkingTimeSec = MIN_THINKING_TIME
-  #initialChipsMinBigBlindMultiplier = INITIAL_CHIPS_MIN_BB_MULTIPLIER
-  #defaultInitialChipsMinBigBlindMultiplier =
-    DEFAULT_INITIAL_CHIPS_MIN_BB_MULTIPLIER
-
   #actionRequiredDelayMs = GAME_WS_ACTION_REQUIRED_DELAY_MS
   #stageChangedDelayMs = GAME_WS_STAGE_CHANGED_DELAY_MS
   #startGameBeforeAssignRolesDelayMs = DEFAULT_START_GAME_BEFORE_ASSIGN_ROLES_MS
@@ -106,18 +77,6 @@ export class GameRuntimeConfigStore {
   #nextHandEndsAtOffsetMs = NEXT_HAND_ENDS_AT_OFFSET_MS
   #nextHandDealAfterEndMs = NEXT_HAND_DEAL_AFTER_END_MS
   #nextHandStartAfterDealMs = NEXT_HAND_START_AFTER_DEAL_MS
-
-  getMinThinkingTime(): number {
-    return this.#minThinkingTimeSec
-  }
-
-  getInitialChipsMinBigBlindMultiplier(): number {
-    return this.#initialChipsMinBigBlindMultiplier
-  }
-
-  getDefaultInitialChipsMinBigBlindMultiplier(): number {
-    return this.#defaultInitialChipsMinBigBlindMultiplier
-  }
 
   getGameWsActionRequiredDelayMs(): number {
     return this.#actionRequiredDelayMs
@@ -151,25 +110,8 @@ export class GameRuntimeConfigStore {
     return this.#nextHandStartAfterDealMs
   }
 
-  /** 供 GET /game/config（不含各类内部延时毫秒） */
-  getClientRulesSnapshot(): Pick<
-    GameRuntimeConfigSnapshot,
-    | 'minThinkingTime'
-    | 'initialChipsMinBigBlindMultiplier'
-    | 'defaultInitialChipsMinBigBlindMultiplier'
-  > {
-    return {
-      minThinkingTime: this.#minThinkingTimeSec,
-      initialChipsMinBigBlindMultiplier:
-        this.#initialChipsMinBigBlindMultiplier,
-      defaultInitialChipsMinBigBlindMultiplier:
-        this.#defaultInitialChipsMinBigBlindMultiplier
-    }
-  }
-
   getFullSnapshot(): GameRuntimeConfigSnapshot {
     return {
-      ...this.getClientRulesSnapshot(),
       actionRequiredWsDelayMs: this.#actionRequiredDelayMs,
       stageChangedWsDelayMs: this.#stageChangedDelayMs,
       startGameBeforeAssignRolesDelayMs:
@@ -197,9 +139,6 @@ export class GameRuntimeConfigStore {
       return { ok: false, message: '请至少传入一个字段' }
     }
 
-    let nextMinThinking = this.#minThinkingTimeSec
-    let nextInitialMult = this.#initialChipsMinBigBlindMultiplier
-    let nextDefaultMult = this.#defaultInitialChipsMinBigBlindMultiplier
     let nextActionReq = this.#actionRequiredDelayMs
     let nextStageCh = this.#stageChangedDelayMs
     let nextStartAssign = this.#startGameBeforeAssignRolesDelayMs
@@ -208,53 +147,6 @@ export class GameRuntimeConfigStore {
     let nextEndsOff = this.#nextHandEndsAtOffsetMs
     let nextDealAfter = this.#nextHandDealAfterEndMs
     let nextStartAfter = this.#nextHandStartAfterDealMs
-
-    if (input.minThinkingTime !== undefined) {
-      if (!isFiniteInt(input.minThinkingTime)) {
-        return { ok: false, message: 'minThinkingTime 须为有限数字' }
-      }
-      nextMinThinking = clampInt(
-        input.minThinkingTime,
-        MIN_THINKING_SEC,
-        MAX_THINKING_SEC
-      )
-    }
-
-    if (input.initialChipsMinBigBlindMultiplier !== undefined) {
-      if (!isFiniteInt(input.initialChipsMinBigBlindMultiplier)) {
-        return {
-          ok: false,
-          message: 'initialChipsMinBigBlindMultiplier 须为有限数字'
-        }
-      }
-      nextInitialMult = clampInt(
-        input.initialChipsMinBigBlindMultiplier,
-        MIN_CHIPS_MULT,
-        MAX_CHIPS_MULT
-      )
-    }
-
-    if (input.defaultInitialChipsMinBigBlindMultiplier !== undefined) {
-      if (!isFiniteInt(input.defaultInitialChipsMinBigBlindMultiplier)) {
-        return {
-          ok: false,
-          message: 'defaultInitialChipsMinBigBlindMultiplier 须为有限数字'
-        }
-      }
-      nextDefaultMult = clampInt(
-        input.defaultInitialChipsMinBigBlindMultiplier,
-        MIN_CHIPS_MULT,
-        MAX_CHIPS_MULT
-      )
-    }
-
-    if (nextDefaultMult < nextInitialMult) {
-      return {
-        ok: false,
-        message:
-          'defaultInitialChipsMinBigBlindMultiplier 不可小于 initialChipsMinBigBlindMultiplier'
-      }
-    }
 
     const applyMs = (
       raw: unknown,
@@ -319,9 +211,6 @@ export class GameRuntimeConfigStore {
       nextStartAfter = r.v
     }
 
-    this.#minThinkingTimeSec = nextMinThinking
-    this.#initialChipsMinBigBlindMultiplier = nextInitialMult
-    this.#defaultInitialChipsMinBigBlindMultiplier = nextDefaultMult
     this.#actionRequiredDelayMs = nextActionReq
     this.#stageChangedDelayMs = nextStageCh
     this.#startGameBeforeAssignRolesDelayMs = nextStartAssign

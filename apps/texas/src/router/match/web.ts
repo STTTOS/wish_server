@@ -6,6 +6,7 @@ import { logger } from '../../logger'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
 import { timeFormat, apiPrefixWeb } from '../../config'
+import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { loadMatchCompositeReadModelFromDbTape } from '../game/services/matchReplayReadModel'
@@ -21,7 +22,7 @@ const matchWebApi = combinePath(apiPrefixWeb)('/match')
 
 router.post(matchWebApi('/list'), async (ctx) => {
   const userId = ctx.state.user?.id
-  const { current: skip, pageSize: take, time } = ctx.request.body
+  const { current: skip, pageSize: take, time, type } = ctx.request.body
   if (!userId) {
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
@@ -41,6 +42,14 @@ router.post(matchWebApi('/list'), async (ctx) => {
   }
 
   const where: Prisma.MatchWhereInput = {}
+  if (
+    type &&
+    type !== 'all' &&
+    !(ROOM_TABLE_TYPES as readonly string[]).includes(type)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 参数异常')
+    return
+  }
   if (!loginUser.isAdmin) {
     where.playerMatchRecords = {
       some: {
@@ -54,6 +63,9 @@ router.post(matchWebApi('/list'), async (ctx) => {
       gte: new Date(start),
       lte: new Date(end)
     }
+  }
+  if (type && type !== 'all') {
+    where.room = { is: { tableType: type } }
   }
 
   const total = await match.count({ where })
@@ -97,12 +109,20 @@ router.post(matchWebApi('/list'), async (ctx) => {
     ctx,
     withList(
       list.map(({ playerMatchRecords, ...rest }) => {
-        const { activeCode, id, initialChips } = rest.room
+        const {
+          activeCode,
+          id,
+          initialChips,
+          tableType,
+          sevenTwoBonusEnabled
+        } = rest.room
 
         return {
           ...rest,
           roomId: id,
           initialChips,
+          tableType,
+          sevenTwoBonusEnabled,
           roomCode: activeCode ?? '',
           memberCount: playerMatchRecords.length,
           startedAt: dayjs(rest.startedAt).format(timeFormat),
@@ -174,6 +194,12 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
           startAt: true,
           stage: true
         }
+      },
+      room: {
+        select: {
+          tableType: true,
+          sevenTwoBonusEnabled: true
+        }
       }
     }
   })
@@ -190,10 +216,17 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
       return
     }
   }
-  const { records, playerMatchRecords, matchStageTimeRecord, ...restDetail } =
-    detail
+  const {
+    records,
+    playerMatchRecords,
+    matchStageTimeRecord,
+    room,
+    ...restDetail
+  } = detail
   response.success(ctx, {
     ...restDetail,
+    tableType: room.tableType,
+    sevenTwoBonusEnabled: room.sevenTwoBonusEnabled,
     startedAt: formatTime(detail.startedAt),
     endedAt: formatTime(detail.endedAt),
     stageRecords: matchStageTimeRecord.map((record) => {

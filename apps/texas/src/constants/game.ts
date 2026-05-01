@@ -1,17 +1,28 @@
-// 允许的最小思考时间
-export const MIN_THINKING_TIME = 5
+export const ROOM_TABLE_TYPES = ['quick', 'standard', 'deep', 'custom'] as const
 
-// 允许的最大思考时间
-export const MAX_THINKING_TIME = 60
+export type RoomTableType = (typeof ROOM_TABLE_TYPES)[number]
 
-// 初始筹码必须大于大盲注的倍数
-export const INITIAL_CHIPS_MIN_BB_MULTIPLIER = 50
+export const ROOM_LOWEST_BET_OPTIONS = [40, 100, 200, 400, 1000] as const
 
-// 默认初始筹码大盲注倍数
-export const DEFAULT_INITIAL_CHIPS_MIN_BB_MULTIPLIER = 100
+export const ROOM_THINKING_TIME_OPTIONS = [10, 20, 30] as const
 
-// 最小大盲注
-export const MIN_BB = 2
+export const ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MIN = 50
+export const ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX = 200
+
+export const ROOM_PRESET_RULES: Record<
+  Exclude<RoomTableType, 'custom'>,
+  { initialChipsBbMultiplier: number; thinkingTime: number }
+> = {
+  quick: { initialChipsBbMultiplier: 50, thinkingTime: 10 },
+  standard: { initialChipsBbMultiplier: 100, thinkingTime: 20 },
+  deep: { initialChipsBbMultiplier: 200, thinkingTime: 30 }
+}
+
+export const CUSTOM_27O_REWARD_TIERS = [
+  { minBbDepth: 150, rewardBb: 10 },
+  { minBbDepth: 100, rewardBb: 8 },
+  { minBbDepth: 50, rewardBb: 5 }
+] as const
 
 // 允许的最多玩家人数
 export const MAX_PLAYERS_COUNT = 10
