@@ -142,7 +142,7 @@ router.post(roomApiClient('/resolve'), async (ctx) => {
 
 /**
  * 客户端：杀进程恢复前校验是否仍为 `RoomMember`。
- * 若已因离线踢出等不再在表中，应跳过 `POST /room/enter`，避免非等待房走 `game/join` 时被重新写回成员。
+ * 若已因离线踢出等不再在表中，应跳过 `POST /room/enter`（避免无意义请求；服务端 `room/enter` 对局中也会走 `game/join` 并可能写回成员）。
  * Body: `{ roomId }`。成功 `data`：`{ isMember: boolean }`。
  */
 router.post(roomApiClient('/resumeMembership'), async (ctx) => {

@@ -24,10 +24,6 @@ export type RoomEnterResult = ApiResult<RoomEnterSuccessData>
  * 入参与 `room/join` 相同（`roomCode`），无需客户端猜阶段。
  */
 export class RoomEnterFacade {
-  static readonly FAIL_DETAIL = {
-    NOT_MEMBER_IN_ACTIVE_ROOM: 'NOT_MEMBER_IN_ACTIVE_ROOM'
-  } as const
-
   constructor(
     private readonly roomJoin: RoomJoinFacade,
     private readonly joinGame: JoinGameUseCase
@@ -103,22 +99,11 @@ export class RoomEnterFacade {
       }
     }
 
-    const existingMember = await prisma.roomMember.findUnique({
-      where: { roomId_userId: { roomId: row.id, userId: input.userId } }, // eslint-disable-line camelcase
-      select: { userId: true }
-    })
-    if (!existingMember) {
-      return {
-        ok: false,
-        status: HTTP_STATUS.CONFLICT,
-        message: '你已不在该对局中，请返回大厅重新加入',
-        details: {
-          type: RoomEnterFacade.FAIL_DETAIL.NOT_MEMBER_IN_ACTIVE_ROOM,
-          roomId: row.id
-        }
-      }
-    }
-
+    /**
+     * 非 waiting：直接走 {@link JoinGameUseCase}（与 `POST /game/join` 一致）。
+     * 尚无 `RoomMember` 时由用例内事务创建，**不得**在此处拦截，否则中途加入会误报 409。
+     * 杀进程恢复：客户端应先调 `POST /room/resumeMembership`，非成员则勿调本接口，避免被踢用户误进。
+     */
     const roomKey = String(row.id)
     const g = await this.joinGame.execute({
       roomId: row.id,
