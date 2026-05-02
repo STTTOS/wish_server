@@ -16,8 +16,9 @@ export type GameRuntime = {
   matchStartedAt: number
   rollbackManager: MatchRollbackManager
   /**
-   * 本手中途离场的聚合状态：
-   * - 集合内 userId 会在本手结束后 `Texas.reset()` 解锁座再 `room.removeById`
+   * 本手中途离场（本手内不可再操作；`leavePending` 等 UI 与此对齐）。
+   * - 本手 `HandEnded` 末尾 `flushDeferredTexasSeatRemovals` 统一出队；
+   *   若此时仍有 `RoomMember` 则保留环上席位，否则 `removeById`。
    */
   pendingLeaveByUserId: Set<number>
   /**
@@ -80,17 +81,34 @@ export class GameRuntimeRegistry {
     runtime.currentMatchId = matchId
   }
 
-  /** 本手 `reset` 解锁座后，摘掉已离房但仍留在环上的玩家（见 `pendingLeaveByUserId`）。 */
-  flushDeferredTexasSeatRemovals(roomKey: string): number[] {
+  /**
+   * 本手 `unlockSeats` / `reset` 之后处理 `pendingLeaveByUserId`（与 `HandEnded` 编排对齐）：
+   * - 本手内离场标记整手有效，不在 `/game/join` 中提前清除；此处**统一**从集合中删除。
+   * - 若 `roomMemberUserIds` 中仍有该用户：视为已回到房间，**保留环上席位**（不 `removeById`），下一手正常参与。
+   * - 否则：从环上 `removeById`（真正摘座），并记入 `removedFromRingUserIds` 供清理连接跟踪。
+   * - 已不在 `room.has`：仍记入 `removedFromRingUserIds`（与旧行为一致）。
+   *
+   * @param roomMemberUserIds 当前 `RoomMember` 用户 id（由调用方查库注入，避免本类依赖 Prisma）。
+   */
+  flushDeferredTexasSeatRemovals(
+    roomKey: string,
+    roomMemberUserIds: ReadonlySet<number>
+  ): { removedFromRingUserIds: number[] } {
     const runtime = this.#runtimes.get(roomKey)
-    if (!runtime?.texas) return []
-    const removedUserIds: number[] = []
+    if (!runtime?.texas) {
+      return { removedFromRingUserIds: [] }
+    }
+    const removedFromRingUserIds: number[] = []
     for (const userId of [...runtime.pendingLeaveByUserId]) {
       try {
-        if (runtime.texas.room.has(userId)) {
+        if (!runtime.texas.room.has(userId)) {
+          removedFromRingUserIds.push(userId)
+        } else if (roomMemberUserIds.has(userId)) {
+          // 已回房：保留环上实体，仅清除本手离场标记（见循环末尾 delete）
+        } else {
           runtime.texas.room.removeById(userId)
+          removedFromRingUserIds.push(userId)
         }
-        removedUserIds.push(userId)
       } catch (e) {
         logger.error(
           `[runtime] deferred removeById failed roomKey=${roomKey} userId=${userId}`,
@@ -99,7 +117,7 @@ export class GameRuntimeRegistry {
       }
       runtime.pendingLeaveByUserId.delete(userId)
     }
-    return removedUserIds
+    return { removedFromRingUserIds }
   }
 
   queueLeaveDuringHand(roomKey: string, userId: number): void {
@@ -241,7 +259,8 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (runtime?.texas) {
       runtime.texas.reset()
-      this.flushDeferredTexasSeatRemovals(roomKey)
+      /** 销毁时不查库；空集表示无人视为「已回房」，延摘用户一律尝试摘环。 */
+      this.flushDeferredTexasSeatRemovals(roomKey, new Set())
     }
     this.#runtimes.delete(roomKey)
     clearGameRoomWsReplay(roomKey)

@@ -106,7 +106,41 @@ test('flushDeferredTexasSeatRemovals removes queued user ids', () => {
     quitBlockedUntilBlindsPosted: false
   })
 
-  const removed = registry.flushDeferredTexasSeatRemovals('3')
-  assert.deepEqual(removed, [2])
+  const result = registry.flushDeferredTexasSeatRemovals('3', new Set())
+  assert.deepEqual(result.removedFromRingUserIds, [2])
   assert.equal(seatedUserIds.has(2), false)
+})
+
+test('flushDeferredTexasSeatRemovals keeps ring seat when room member exists', () => {
+  const registry = new GameRuntimeRegistry()
+  const seatedUserIds = new Set([1, 2])
+  const fakeTexas = {
+    reset: () => undefined,
+    room: {
+      has: (userId: number) => seatedUserIds.has(userId),
+      removeById: (userId: number) => void seatedUserIds.delete(userId)
+    }
+  } as unknown as Texas
+
+  registry.register({
+    roomId: 4,
+    roomKey: '4',
+    roomInfo: fakeRoomInfo,
+    texas: fakeTexas,
+    currentMatchId: 400,
+    matchStartedAt: Date.now(),
+    rollbackManager: noopRollbackManager,
+    pendingLeaveByUserId: new Set([2]),
+    pendingPostBigBlindUserIds: new Set(),
+    offlineUserIds: new Set(),
+    offlineHandCountByUserId: new Map(),
+    autoTopUpEnabledByUserId: new Map(),
+    rosterSeq: 0,
+    quitBlockedUntilBlindsPosted: false
+  })
+
+  const result = registry.flushDeferredTexasSeatRemovals('4', new Set([2]))
+  assert.deepEqual(result.removedFromRingUserIds, [])
+  assert.equal(seatedUserIds.has(2), true)
+  assert.equal(registry.getOrThrow('4').pendingLeaveByUserId.size, 0)
 })

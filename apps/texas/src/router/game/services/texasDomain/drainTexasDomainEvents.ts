@@ -22,16 +22,17 @@ import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
 } from './playerTurnTimeoutScheduler'
-import prisma, {
-  match,
-  betRecord,
-  room as roomModel,
-  matchStageTimeRecord
-} from '../../../../models'
 import {
   cancelNextHandCountdown,
   unregisterNextHandHooks
 } from '../../../../gameRuntime/nextHandCountdown'
+import prisma, {
+  match,
+  betRecord,
+  roomMember,
+  room as roomModel,
+  matchStageTimeRecord
+} from '../../../../models'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -537,9 +538,18 @@ async function handleHandEnded(
     // 在其他玩家加入时, 有新的BB anchor
     texas.rotateRolesForNewHand()
 
-    const removedAfterHandEndUserIds =
-      gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
-    for (const userId of removedAfterHandEndUserIds) {
+    const pendingLeaveCountBeforeFlush = getRuntime().pendingLeaveByUserId.size
+    const roomMemberRows = await roomMember.findMany({
+      where: { roomId },
+      select: { userId: true }
+    })
+    const roomMemberUserIds = new Set(roomMemberRows.map((row) => row.userId))
+    const { removedFromRingUserIds } =
+      gameRuntimeRegistry.flushDeferredTexasSeatRemovals(
+        roomKey,
+        roomMemberUserIds
+      )
+    for (const userId of removedFromRingUserIds) {
       gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
     }
     const offlineGrace = await settleOfflineSeatGrace(ctx)
@@ -557,7 +567,8 @@ async function handleHandEnded(
     }
 
     const rosterDirty =
-      removedAfterHandEndUserIds.length > 0 ||
+      removedFromRingUserIds.length > 0 ||
+      pendingLeaveCountBeforeFlush > 0 ||
       offlineGrace.kickedUserIds.length > 0 ||
       newlySeatedUserIds.length > 0
     if (rosterDirty) {

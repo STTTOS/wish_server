@@ -189,6 +189,10 @@ export class JoinGameUseCase {
     try {
       const seatStatus = texas.room.getPlayerSeatStatusById(userId)
       if (seatStatus === 'on-set') {
+        /**
+         * 本手中途离场后仍在环上 on-set：`pendingLeave` 整手有效，不在此清除、不推 roster
+         * （避免 seat/watcher 双写；手末 `HandEnded` 与观战入座一并推 `game-table-roster`）。
+         */
         return { ok: true, data: null }
       }
       if (seatStatus === 'hang') {

@@ -42,6 +42,11 @@ router.post(toolsApi('/take'), async (ctx) => {
     return
   }
 
+  if (gameRuntimeRegistry.hasQueuedLeave(roomId, user.id)) {
+    response.error(ctx, HTTP_STATUS.CONFLICT, '本手已离场，无法操作')
+    return
+  }
+
   try {
     const preEvents = texas.dispatchCommand(
       actionToTableCommand(user.id, actionType, amount)

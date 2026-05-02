@@ -57,6 +57,14 @@ export class TakeActionUseCase {
       }
     }
 
+    if (gameRuntimeRegistry.hasQueuedLeave(roomKey, userId)) {
+      return {
+        ok: false,
+        status: HTTP_STATUS.CONFLICT,
+        message: '本手已离场，无法操作'
+      }
+    }
+
     const activePlayerId = texas.controller.activePlayer?.getUserInfo().id
     if (activePlayerId !== userId) {
       const lastAction = player.getAction()
