@@ -33,6 +33,8 @@ export type GameRuntime = {
   offlineHandCountByUserId: Map<number, number>
   /** 自动补码开关（默认开）。 */
   autoTopUpEnabledByUserId: Map<number, boolean>
+  /** 已预约「下一手 onLock 补至起始筹码」的在座用户（与自动补码独立）。 */
+  pendingNextHandManualTopUpUserIds: Set<number>
   /** `game-table-roster` 单调版本，与全房 WS `seq` 独立，仅用于名单快照对账。 */
   rosterSeq: number
 }
@@ -252,6 +254,24 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return true
     return runtime.autoTopUpEnabledByUserId.get(userId) ?? true
+  }
+
+  requestNextHandManualTopUp(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingNextHandManualTopUpUserIds.add(userId)
+  }
+
+  hasNextHandManualTopUpRequest(roomKey: string, userId: number): boolean {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return false
+    return runtime.pendingNextHandManualTopUpUserIds.has(userId)
+  }
+
+  clearNextHandManualTopUpRequest(roomKey: string, userId: number): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.pendingNextHandManualTopUpUserIds.delete(userId)
   }
 
   /** 销毁运行时：reset Texas 后移除上下文。 */

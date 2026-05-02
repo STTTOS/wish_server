@@ -240,14 +240,22 @@ export async function autoTopUpOnSeatPlayersAtHandLock(
 
 /**
  * onLock 统一处理补码申请：
- * - auto enabled 且余额 < initialChips，则自动补到 initialChips
+ * - 自动补码（开关开）：仅当桌上余额 ≤ 1BB（`lowestBetAmount`）且仍低于起始筹码时，补至 `initialChips`
+ * - 主动预约：运行时 `pendingNextHandManualTopUpUserIds` 命中且余额低于起始筹码时，补至 `initialChips`
  * - 统一补码处理后若余额 <= 0：踢出房间并广播 quit（用于客户端退场）
  */
 export async function applyTopUpPlansAtHandLock(
   params: AutoTopUpAtHandLockParams
 ): Promise<ApplyTopUpPlansAtHandLockResult> {
-  const { roomId, roomKey, texas, initialChips, wsGateway, handMatchId } =
-    params
+  const {
+    roomId,
+    roomKey,
+    texas,
+    lowestBetAmount,
+    initialChips,
+    wsGateway,
+    handMatchId
+  } = params
   const afterMatchId = handMatchId
   const kickedUserIds: number[] = []
   const seated = texas.room.getPlayersBySeatStatus('on-set')
@@ -255,9 +263,24 @@ export async function applyTopUpPlansAtHandLock(
   for (const player of seated) {
     const userId = player.getUserInfo().id
     const balanceBefore = Math.round(player.balance)
+    const wantsManual = gameRuntimeRegistry.hasNextHandManualTopUpRequest(
+      roomKey,
+      userId
+    )
+    if (balanceBefore >= initialChips) {
+      if (wantsManual) {
+        gameRuntimeRegistry.clearNextHandManualTopUpRequest(roomKey, userId)
+      }
+    }
     const autoEnabled = gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
+    const wantsAuto =
+      autoEnabled &&
+      balanceBefore <= lowestBetAmount &&
+      balanceBefore < initialChips
     const targetBalance =
-      autoEnabled && balanceBefore < initialChips ? initialChips : null
+      balanceBefore < initialChips && (wantsManual || wantsAuto)
+        ? initialChips
+        : null
 
     if (targetBalance != null && targetBalance > balanceBefore) {
       const topUpAmount = targetBalance - balanceBefore
@@ -266,7 +289,11 @@ export async function applyTopUpPlansAtHandLock(
           roomId_userId_afterMatchId: { roomId, userId, afterMatchId }
         }
       })
-      if (!existing) {
+      if (existing) {
+        if (wantsManual) {
+          gameRuntimeRegistry.clearNextHandManualTopUpRequest(roomKey, userId)
+        }
+      } else {
         const r = await commitTopUpEngineAndDb({
           userId,
           roomId,
@@ -286,6 +313,8 @@ export async function applyTopUpPlansAtHandLock(
             tag: r.tag,
             message: 'message' in r ? r.message : undefined
           })
+        } else if (wantsManual) {
+          gameRuntimeRegistry.clearNextHandManualTopUpRequest(roomKey, userId)
         }
       }
     }

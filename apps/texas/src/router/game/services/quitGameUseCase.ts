@@ -9,8 +9,11 @@ import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
-import { unregisterNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
+import {
+  cancelNextHandCountdown,
+  unregisterNextHandHooks
+} from '../../../gameRuntime/nextHandCountdown'
 
 type QuitTxResult =
   | { kind: 'noop' }
@@ -258,6 +261,7 @@ export class QuitGameUseCase {
     if (!txRes.deferTexasSeatRemoval) {
       gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
     }
+    gameRuntimeRegistry.clearNextHandManualTopUpRequest(roomKey, userId)
     const texas = gameRuntimeRegistry.getTexas(roomKey)
 
     if (texas) {
@@ -267,9 +271,24 @@ export class QuitGameUseCase {
           if (texas.room.has(userId)) {
             texas.room.removeById(userId)
           }
+        } else if (didFoldDueToLeave && texas.room.has(userId)) {
+          /**
+           * 本手内离场：`FoldDueToLeave`+drain 先于删 `RoomMember` 执行，`HandEnded` 里
+           * `flushDeferredTexasSeatRemovals` 仍查到成员 → 误判「在房」而保留环上实体。
+           * 事务已删成员后在此补摘环，避免下一手仍带幽灵座。
+           */
+          texas.room.removeById(userId)
+          gameRuntimeRegistry.cancelQueuedLeave(roomKey, userId)
         }
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
+      }
+
+      if (!txRes.deletedRoom) {
+        const seatedOnSet = texas.room.getPlayersBySeatStatus('on-set').length
+        if (seatedOnSet < 2) {
+          cancelNextHandCountdown(roomId)
+        }
       }
 
       if (txRes.deletedRoom) {

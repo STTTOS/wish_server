@@ -489,6 +489,7 @@ router.post(matchApi('/replayTape'), async (ctx) => {
   const unfoldedOnSetCount = matchInfo.playerMatchRecords.filter(
     (record) => !record.isFold
   ).length
+  const replayRoomInitialChips = Number(matchInfo.room.initialChips ?? 0)
   const settleList = sortSettleRecordsByOutcome(
     matchInfo.playerMatchRecords
   ).map((record) => {
@@ -503,19 +504,24 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       rankCategory: record.rankCategory,
       rankStrength: record.rankStrength
     })
+    const balanceAfter = Number(record.balanceAfterHand ?? 0)
+    const stackAllowsVoluntaryShowHand =
+      replayRoomInitialChips <= 0 || balanceAfter < replayRoomInitialChips
     return {
       userId: record.userId,
       name: record.user.name,
       avatarUrl: record.user.avatarUrl,
       avatarKey: record.user.avatarKey,
       pokerBackgroundKey: record.user.pokerBackgroundKey,
-      balance: Number(record.balanceAfterHand ?? 0),
+      balance: balanceAfter,
       wager: record.wager,
       sevenTwoBonusPaid: record.sevenTwoBonusPaid,
       sevenTwoBonusReceived: record.sevenTwoBonusReceived,
       isAllIn: record.isAllIn,
       isFold: record.isFold,
-      canVoluntaryShowHand: record.isFold || unfoldedOnSetCount === 1,
+      canVoluntaryShowHand:
+        stackAllowsVoluntaryShowHand &&
+        (record.isFold || unfoldedOnSetCount === 1),
       handPokes: visible.handPokes,
       rankCategory: visible.rankCategory,
       rankStrength: visible.rankStrength

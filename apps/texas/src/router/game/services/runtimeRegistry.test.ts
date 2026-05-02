@@ -40,6 +40,7 @@ test('GameRuntimeRegistry destroyRuntime resets texas and removes runtime', () =
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
     autoTopUpEnabledByUserId: new Map(),
+    pendingNextHandManualTopUpUserIds: new Set(),
     rosterSeq: 0,
     quitBlockedUntilBlindsPosted: false
   })
@@ -69,6 +70,7 @@ test('GameRuntimeRegistry current match read/write', () => {
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
     autoTopUpEnabledByUserId: new Map(),
+    pendingNextHandManualTopUpUserIds: new Set(),
     rosterSeq: 0,
     quitBlockedUntilBlindsPosted: false
   })
@@ -102,6 +104,7 @@ test('flushDeferredTexasSeatRemovals removes queued user ids', () => {
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
     autoTopUpEnabledByUserId: new Map(),
+    pendingNextHandManualTopUpUserIds: new Set(),
     rosterSeq: 0,
     quitBlockedUntilBlindsPosted: false
   })
@@ -135,6 +138,7 @@ test('flushDeferredTexasSeatRemovals keeps ring seat when room member exists', (
     offlineUserIds: new Set(),
     offlineHandCountByUserId: new Map(),
     autoTopUpEnabledByUserId: new Map(),
+    pendingNextHandManualTopUpUserIds: new Set(),
     rosterSeq: 0,
     quitBlockedUntilBlindsPosted: false
   })

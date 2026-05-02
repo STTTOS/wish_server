@@ -392,6 +392,11 @@ async function handleHandEnded(
       ])
     )
 
+    const initialChipsForShowHand =
+      roomRule?.initialChips != null && roomRule.initialChips > 0
+        ? roomRule.initialChips
+        : null
+
     const buildSettleListForViewer = (viewerUserId: number) =>
       sortedSeated.map((pl) => {
         const userId = pl.getUserInfo().id
@@ -403,6 +408,9 @@ async function handleHandEnded(
         if (hideHoleFromViewer) {
           handPokes = []
         }
+        const stackAllowsVoluntaryShowHand =
+          initialChipsForShowHand == null ||
+          pl.balance < initialChipsForShowHand
         return {
           userId,
           name: profile?.name ?? pl.getUserInfo().name ?? `玩家${userId}`,
@@ -418,6 +426,7 @@ async function handleHandEnded(
           isAllIn: pl.getStatus() === 'allIn',
           isFold,
           canVoluntaryShowHand:
+            stackAllowsVoluntaryShowHand &&
             !sevenTwoAutoShownUserIds.has(userId) &&
             (isFold || unfoldedOnSetCount === 1),
           handPokes,

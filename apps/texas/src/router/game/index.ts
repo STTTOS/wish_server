@@ -15,6 +15,7 @@ import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { NextHandTopUpRequestUseCase } from './services/nextHandTopUpRequestUseCase'
 import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
@@ -45,6 +46,7 @@ const startGameUseCase = new StartGameUseCase()
 const takeActionUseCase = new TakeActionUseCase()
 const chipTopUpUseCase = new ChipTopUpUseCase()
 const submitTopUpPlanUseCase = new SubmitTopUpPlanUseCase()
+const nextHandTopUpRequestUseCase = new NextHandTopUpRequestUseCase()
 const gameWsGateway = new GameWsGateway()
 const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
 const joinGameUseCase = new JoinGameUseCase()
@@ -188,6 +190,27 @@ router.post(gameClientApi('/topUpPlan'), async (ctx) => {
     autoTopUpEnabled
   })
   respondFromApiResult(ctx, result, { okMessage: '成功' })
+})
+
+/**
+ * 预约下一手开局（onLock）将桌上筹码补至起始筹码。
+ * body: { roomId: number }
+ */
+router.post(gameClientApi('/nextHandTopUpRequest'), async (ctx) => {
+  const body = ctx.request.body as { roomId?: unknown }
+  const roomId = Number(body?.roomId)
+  const userId = ctx.state.user!.id
+
+  if (!roomId || !Number.isInteger(roomId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const result = await nextHandTopUpRequestUseCase.execute({
+    userId,
+    roomId
+  })
+  respondFromApiResult(ctx, result, { okMessage: '已预约下一手补码' })
 })
 
 /**
