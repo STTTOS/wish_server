@@ -95,11 +95,16 @@ function applySevenTwoOffsuitBonusAtGameEnd(params: {
       (max, player) => Math.max(max, player.rankStrength),
       Number.NEGATIVE_INFINITY
     )
-    winners = activePlayers.filter(
-      (player) =>
-        player.rankStrength === maxRankStrength &&
-        isSevenTwoOffsuit(player.getHandPokes())
+    const atMaxRank = activePlayers.filter(
+      (player) => player.rankStrength === maxRankStrength
     )
+    /** 摊牌：仅唯一最大牌力者可拿 27o 奖励；平分底池（多人并列最大）则不触发 */
+    if (atMaxRank.length === 1) {
+      const uniqueBest = atMaxRank[0]!
+      if (isSevenTwoOffsuit(uniqueBest.getHandPokes())) {
+        winners = [uniqueBest]
+      }
+    }
   }
   if (winners.length === 0) return { paidByUserId, receivedByUserId }
 
@@ -392,11 +397,6 @@ async function handleHandEnded(
       ])
     )
 
-    const initialChipsForShowHand =
-      roomRule?.initialChips != null && roomRule.initialChips > 0
-        ? roomRule.initialChips
-        : null
-
     const buildSettleListForViewer = (viewerUserId: number) =>
       sortedSeated.map((pl) => {
         const userId = pl.getUserInfo().id
@@ -408,9 +408,6 @@ async function handleHandEnded(
         if (hideHoleFromViewer) {
           handPokes = []
         }
-        const stackAllowsVoluntaryShowHand =
-          initialChipsForShowHand == null ||
-          pl.balance < initialChipsForShowHand
         return {
           userId,
           name: profile?.name ?? pl.getUserInfo().name ?? `玩家${userId}`,
@@ -426,9 +423,8 @@ async function handleHandEnded(
           isAllIn: pl.getStatus() === 'allIn',
           isFold,
           canVoluntaryShowHand:
-            stackAllowsVoluntaryShowHand &&
-            !sevenTwoAutoShownUserIds.has(userId) &&
-            (isFold || unfoldedOnSetCount === 1),
+            (isFold || unfoldedOnSetCount === 1) &&
+            !sevenTwoAutoShownUserIds.has(userId),
           handPokes,
           ...(hideHoleFromViewer
             ? {
