@@ -8,6 +8,8 @@ import type {
 } from '@wishufree/texas-ws-contract'
 
 import { ws } from '../../../server'
+import { gameRuntimeRegistry } from './runtimeRegistry'
+import { buildGameTableRosterData } from './currentGameStateSnapshot'
 
 /**
  * Game WS 网关：封装“开始游戏流程”相关的 WS 发送与等待动作。
@@ -207,20 +209,16 @@ export class GameWsGateway {
     ws.disconnectUserGameSockets(roomId, userId)
   }
 
-  notifyPlayerQuitGame(
-    roomKey: string,
-    data: WsPlayerQuitGameData,
-    options?: { excludeUserId?: number }
-  ) {
+  /**
+   * 仅向离场玩家单播（`/game` 不入全房 replay 缓冲）。
+   * 其他客户端依赖 `game-table-roster` 更新牌桌在座/观战名单。
+   */
+  notifyPlayerQuitGame(_roomKey: string, data: WsPlayerQuitGameData) {
     const msg: WsMessage<'player-quit-game'> = {
       type: 'player-quit-game',
       data
     }
-    if (options?.excludeUserId != null) {
-      ws.broadcastGameRoomExcept(roomKey, options.excludeUserId, msg)
-      return
-    }
-    ws.broadcastGameRoom(roomKey, msg)
+    ws.broadcastGameToUser(data.userId, msg)
   }
 
   notifyPlayerLeftGame(
@@ -249,15 +247,28 @@ export class GameWsGateway {
     })
   }
 
-  notifyPlayersSeated(
+  /** 从当前 Texas runtime 构造全量 `game-table-roster` 并广播；无 runtime 时 no-op。 */
+  async notifyGameTableRosterFromRuntime(
     roomKey: string,
-    data: WsMessage<'players-seated'>['data']
-  ) {
+    roomId: number
+  ): Promise<void> {
+    const texas = gameRuntimeRegistry.getTexas(roomKey)
+    if (!texas) return
+    const rosterSeq = gameRuntimeRegistry.bumpGameTableRosterSeq(roomKey)
+    const data = await buildGameTableRosterData({
+      texas,
+      roomId,
+      roomKey,
+      rosterSeq
+    })
     ws.broadcastGameRoom(roomKey, {
-      type: 'players-seated',
+      type: 'game-table-roster',
       data
     })
-    ws.resyncGameRoomSeatPresence(roomKey, data.userIds ?? [])
+    ws.resyncGameRoomSeatPresence(
+      roomKey,
+      data.seats.map((s) => s.userId)
+    )
   }
 
   notifyPlayersPostedBigBlind(

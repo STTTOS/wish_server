@@ -32,6 +32,8 @@ export type GameRuntime = {
   offlineHandCountByUserId: Map<number, number>
   /** 自动补码开关（默认开）。 */
   autoTopUpEnabledByUserId: Map<number, boolean>
+  /** `game-table-roster` 单调版本，与全房 WS `seq` 独立，仅用于名单快照对账。 */
+  rosterSeq: number
 }
 
 /**
@@ -116,6 +118,14 @@ export class GameRuntimeRegistry {
     const runtime = this.#runtimes.get(roomKey)
     if (!runtime) return false
     return runtime.pendingLeaveByUserId.has(userId)
+  }
+
+  /** 生成下一帧 `game-table-roster.rosterSeq`（仅广播名单时递增）。 */
+  bumpGameTableRosterSeq(roomKey: string): number {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return 0
+    runtime.rosterSeq = (runtime.rosterSeq ?? 0) + 1
+    return runtime.rosterSeq
   }
 
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {

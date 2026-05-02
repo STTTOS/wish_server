@@ -302,11 +302,11 @@ export class QuitGameUseCase {
     }
 
     if (!txRes.deferTexasSeatRemoval) {
-      this.wsGateway.notifyPlayerQuitGame(
-        roomKey,
-        { roomId, userId },
-        { excludeUserId: userId }
-      )
+      this.wsGateway.notifyPlayerQuitGame(roomKey, {
+        roomId,
+        userId,
+        reason: 'quit'
+      })
     }
 
     if (txRes.deletedRoom) {
@@ -316,6 +316,10 @@ export class QuitGameUseCase {
         roomId,
         memberCount: txRes.restCount
       })
+    }
+
+    if (!txRes.deletedRoom && gameRuntimeRegistry.hasTexas(roomKey)) {
+      await this.wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
     }
 
     this.wsGateway.disconnectUserGameSockets(roomId, userId)

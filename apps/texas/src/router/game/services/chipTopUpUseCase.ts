@@ -321,6 +321,10 @@ export async function applyTopUpPlansAtHandLock(
     }
   }
 
+  if (kickedUserIds.length > 0) {
+    await wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
+  }
+
   return { kickedUserIds }
 }
 

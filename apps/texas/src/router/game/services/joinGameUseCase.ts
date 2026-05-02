@@ -204,6 +204,10 @@ export class JoinGameUseCase {
             pool: texas.pool.totalAmount
           })
           await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+          await this.#wsGateway.notifyGameTableRosterFromRuntime(
+            roomKey,
+            roomId
+          )
         }
         return { ok: true, data: null }
       }
@@ -246,6 +250,7 @@ export class JoinGameUseCase {
         })
       }
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+      await this.#wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
       return { ok: true, data: null }
     } catch (e: unknown) {
       const rollbackMemberIfNeeded = async () => {
@@ -279,6 +284,10 @@ export class JoinGameUseCase {
             try {
               texas.room.seatById(userId)
               await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
+              await this.#wsGateway.notifyGameTableRosterFromRuntime(
+                roomKey,
+                roomId
+              )
             } catch (inner: unknown) {
               if (
                 inner instanceof TexasError &&

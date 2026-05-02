@@ -182,7 +182,11 @@ export type WsOnlineStatus = 'online' | 'offline'
 export type WsPlayerQuitGameData = {
   roomId: number
   userId: number
-  reason?: 'quit' | 'zero_balance_no_topup'
+  /**
+   * 单播给 `userId` 本人：用于被踢/补码失败等退场提示。
+   * 他人以 `game-table-roster` 为准同步牌桌名单。
+   */
+  reason?: 'quit' | 'zero_balance_no_topup' | 'offline_grace'
 }
 
 /** 对局内玩家连接状态变化（仅用于展示/倒计时策略，不代表离桌）。 */
@@ -205,13 +209,6 @@ export type WsGameRoomClosedData = {
   reason: 'insufficient_players'
 }
 
-/** 局间由观战席转为在座（用于客户端刷新 PlayerSet）。 */
-export type WsPlayersSeatedData = {
-  roomId: number
-  matchId: number | null
-  userIds: number[]
-}
-
 export type WsPlayersPostedBigBlindData = {
   roomId: number
   matchId: number | null
@@ -224,6 +221,29 @@ export type WsPlayersPostedBigBlindData = {
     currentStageBetAmount: number
   }>
   pool: number
+}
+
+/** 在座行：含本手「已提交离场、环上尚未摘除」的 `leavePending`（与 HTTP `fetchCurrentGameState.seats` 可对齐）。 */
+export type WsGameTableRosterSeat = WsPlayerProfileItem & {
+  leavePending?: boolean
+  onlineStatus?: WsOnlineStatus
+}
+
+/** 观战行：仅 profile + 连接态，不含 `leavePending` 语义。 */
+export type WsGameTableRosterWatcher = WsPlayerProfileItem & {
+  onlineStatus?: WsOnlineStatus
+}
+
+/**
+ * 全房牌桌名单快照：当前 on-set（`seats`）与 hang（`watchers`）的展示权威。
+ * 与 `player-left-game` 配合：全房名单以本事件为准；`player-quit-game` 仅单播离场本人（见该类型注释）。
+ */
+export type WsGameTableRosterData = {
+  roomId: number
+  /** 单调递增，便于客户端检测丢序并触发 `fetchCurrentGameState` 纠偏。 */
+  rosterSeq: number
+  seats: WsGameTableRosterSeat[]
+  watchers: WsGameTableRosterWatcher[]
 }
 
 export type WsPlayerHandVoluntarilyShownData = {
@@ -272,8 +292,8 @@ export type WsEventDataMap = {
   'player-left-game': WsPlayerLeftGameData
   'player-quit-game': WsPlayerQuitGameData
   'game-room-closed': WsGameRoomClosedData
-  'players-seated': WsPlayersSeatedData
   'players-posted-big-blind': WsPlayersPostedBigBlindData
+  'game-table-roster': WsGameTableRosterData
   'player-hand-voluntarily-shown': WsPlayerHandVoluntarilyShownData
   'game-room-replay': WsGameRoomReplayData
 }

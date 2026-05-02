@@ -154,18 +154,20 @@ function applySevenTwoOffsuitBonusAtGameEnd(params: {
  * 规则：
  * - 只统计 `on-set` 玩家（观战不参与对局离线治理）。
  * - 玩家在线则清零其离线手数；离线则 +1。
- * - 达到阈值（当前为 2 手）后：从 roomMember 与桌上移除，并广播 `player-quit-game`。
+ * - 达到阈值（当前为 2 手）后：从 roomMember 与桌上移除，并对被踢用户单播 `player-quit-game`（`reason: offline_grace`）。
  * - 若移除后房间无成员：关闭房间并销毁运行时。
  *
  * 返回值：
  * - `{ roomClosed: true }` 表示已关闭房间，调用方应立即结束后续开新手流程。
+ * - `kickedUserIds`：本回合因离线宽限被摘座并删成员的用户（用于随后补发 `game-table-roster`）。
  */
 async function settleOfflineSeatGrace(
   ctx: TexasEventContext
-): Promise<{ roomClosed: boolean }> {
+): Promise<{ roomClosed: boolean; kickedUserIds: number[] }> {
   const { texas, roomId, roomKey, wsGateway } = ctx
   const onSeatPlayers = texas.room.getPlayersBySeatStatus('on-set')
-  if (onSeatPlayers.length === 0) return { roomClosed: false }
+  if (onSeatPlayers.length === 0)
+    return { roomClosed: false, kickedUserIds: [] }
 
   const toKick: number[] = []
   for (const player of onSeatPlayers) {
@@ -180,7 +182,7 @@ async function settleOfflineSeatGrace(
     }
   }
 
-  if (toKick.length === 0) return { roomClosed: false }
+  if (toKick.length === 0) return { roomClosed: false, kickedUserIds: [] }
 
   const txResult = await prisma.$transaction(async (tx) => {
     await tx.roomMember.deleteMany({
@@ -211,11 +213,11 @@ async function settleOfflineSeatGrace(
         e
       )
     }
-    wsGateway.notifyPlayerQuitGame(
-      roomKey,
-      { roomId, userId: uid },
-      { excludeUserId: uid }
-    )
+    wsGateway.notifyPlayerQuitGame(roomKey, {
+      roomId,
+      userId: uid,
+      reason: 'offline_grace'
+    })
   }
 
   if (txResult.memberCount === 0) {
@@ -227,14 +229,14 @@ async function settleOfflineSeatGrace(
     })
     wsGateway.broadcastRoomListRoomDeleted(roomId)
     gameRuntimeRegistry.destroyRuntime(roomKey)
-    return { roomClosed: true }
+    return { roomClosed: true, kickedUserIds: toKick }
   }
 
   wsGateway.broadcastRoomListMemberCountChanged({
     roomId,
     memberCount: txResult.memberCount
   })
-  return { roomClosed: false }
+  return { roomClosed: false, kickedUserIds: toKick }
 }
 
 /** Append-only 领域事件磁带，供回放；`createdAt` 由 DB 默认即可推算思考间隔 */
@@ -539,11 +541,6 @@ async function handleHandEnded(
       gameRuntimeRegistry.flushDeferredTexasSeatRemovals(roomKey)
     for (const userId of removedAfterHandEndUserIds) {
       gameRuntimeRegistry.clearConnectionTracking(roomKey, userId)
-      wsGateway.notifyPlayerQuitGame(
-        roomKey,
-        { roomId, userId },
-        { excludeUserId: userId }
-      )
     }
     const offlineGrace = await settleOfflineSeatGrace(ctx)
     if (offlineGrace.roomClosed) return
@@ -559,12 +556,12 @@ async function handleHandEnded(
       }
     }
 
-    if (newlySeatedUserIds.length > 0) {
-      wsGateway.notifyPlayersSeated(roomKey, {
-        roomId,
-        matchId: currentMatchId,
-        userIds: newlySeatedUserIds
-      })
+    const rosterDirty =
+      removedAfterHandEndUserIds.length > 0 ||
+      offlineGrace.kickedUserIds.length > 0 ||
+      newlySeatedUserIds.length > 0
+    if (rosterDirty) {
+      await wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
     }
     gameRuntimeRegistry.setQuitBlockedUntilBlindsPosted(roomKey, false)
 

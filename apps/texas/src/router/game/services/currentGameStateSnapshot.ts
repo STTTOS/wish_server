@@ -1,7 +1,13 @@
 import type { Texas, Stage, HandLifecycle } from 'texas-poker-core'
+import type {
+  WsGameTableRosterData,
+  WsGameTableRosterSeat,
+  WsGameTableRosterWatcher
+} from '@wishufree/texas-ws-contract'
 
 import { type RankCategory } from 'texas-poker-core'
 
+import prisma from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
@@ -13,8 +19,10 @@ import {
 
 export type FetchCurrentGameStatePayload = {
   roomGameStatus: string
-  playersOnSeat: Array<{
+  /** 与 WS `game-table-roster.seats` 字段名对齐；含本手中途离场未摘座 `leavePending`。 */
+  seats: Array<{
     userInfo: { id: number; name: string }
+    leavePending: boolean
     role: ReturnType<NonNullable<import('texas-poker-core').Player['getRole']>>
     actionIndex: number
     isFold: boolean
@@ -29,7 +37,8 @@ export type FetchCurrentGameStatePayload = {
     rankCategory?: RankCategory
     rankStrength: number
   }>
-  playersOnWatch: Array<{
+  /** 与 WS `game-table-roster.watchers` 字段名对齐。 */
+  watchers: Array<{
     userInfo: { id: number; name: string }
     onlineStatus: 'online' | 'offline'
   }>
@@ -63,6 +72,102 @@ export type FetchCurrentGameStatePayload = {
   }
 }
 
+async function loadUserProfilesByIds(userIds: number[]): Promise<
+  Map<
+    number,
+    {
+      userId: number
+      name: string
+      avatarUrl: string | null
+      avatarKey: string
+    }
+  >
+> {
+  const unique = [
+    ...new Set(userIds.filter((id) => Number.isFinite(id) && id > 0))
+  ]
+  if (unique.length === 0) {
+    return new Map()
+  }
+  const rows = await prisma.user.findMany({
+    where: { id: { in: unique } },
+    select: { id: true, name: true, avatarUrl: true, avatarKey: true }
+  })
+  return new Map(
+    rows.map((u) => [
+      u.id,
+      {
+        userId: u.id,
+        name: u.name || `玩家${u.id}`,
+        avatarUrl: u.avatarUrl ?? null,
+        avatarKey: u.avatarKey || 'cartoon/default'
+      }
+    ])
+  )
+}
+
+function fallbackProfile(
+  profileById: Map<
+    number,
+    {
+      userId: number
+      name: string
+      avatarUrl: string | null
+      avatarKey: string
+    }
+  >,
+  userId: number,
+  nameFromEngine: string
+) {
+  return (
+    profileById.get(userId) ?? {
+      userId,
+      name: nameFromEngine || `玩家${userId}`,
+      avatarUrl: null as string | null,
+      avatarKey: 'cartoon/default'
+    }
+  )
+}
+
+/**
+ * 组装 `game-table-roster` 与 HTTP 快照共用的「名单 + profile」读模型（`rosterSeq` 由调用方写入 payload）。
+ */
+export async function buildGameTableRosterData(input: {
+  texas: Texas
+  roomId: number
+  roomKey: string
+  rosterSeq: number
+}): Promise<WsGameTableRosterData> {
+  const { texas, roomId, roomKey, rosterSeq } = input
+  const seatPlayers = texas.dealer.getPlayersByActionSequence()
+  const hangPlayers = texas.room.getPlayersBySeatStatus('hang')
+  const ids: number[] = []
+  for (const p of seatPlayers) ids.push(p.getUserInfo().id)
+  for (const p of hangPlayers) ids.push(p.getUserInfo().id)
+  const profileById = await loadUserProfilesByIds(ids)
+
+  const seats: WsGameTableRosterSeat[] = seatPlayers.map((player) => {
+    const uid = player.getUserInfo().id
+    const prof = fallbackProfile(profileById, uid, player.getUserInfo().name)
+    return {
+      ...prof,
+      leavePending: gameRuntimeRegistry.hasQueuedLeave(roomKey, uid),
+      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(roomKey, uid)
+    }
+  })
+
+  const watchers: WsGameTableRosterWatcher[] = hangPlayers.map((player) => {
+    const uid = player.getUserInfo().id
+    const prof = fallbackProfile(profileById, uid, player.getUserInfo().name)
+    return {
+      ...prof,
+      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(roomKey, uid)
+    }
+  })
+
+  return { roomId, rosterSeq, seats, watchers }
+}
+
 /**
  * 组装 `POST /game/fetchCurrentGameState` 载荷：对齐 Core 读模型与全房 WS 事件所需字段。
  */
@@ -77,38 +182,36 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const handLifecycle = texas.controller.status
   const inHand = handLifecycle === 'in_hand'
 
-  const playersOnSeat = texas.dealer
-    .getPlayersByActionSequence()
-    .map((player, actionIndex) => {
-      const st = player.getStatus()
-      return {
-        userInfo: player.getUserInfo(),
-        role: player.getRole(),
-        actionIndex,
-        isFold: st === 'out',
-        isAllIn: st === 'allIn',
-        balance: player.balance,
-        currentStageTotalAmount: player.currentStageTotalAmount,
-        totalBetAmount: player.totalBetAmount,
-        action: player.getAction(),
-        onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
-          roomKey,
-          player.getUserInfo().id
-        ),
-        rankCategory: player.rankCategory,
-        rankStrength: player.rankStrength
-      }
-    })
+  const seatPlayers = texas.dealer.getPlayersByActionSequence()
+  const hangPlayers = texas.room.getPlayersBySeatStatus('hang')
 
-  const playersOnWatch = texas.room
-    .getPlayersBySeatStatus('hang')
-    .map((player) => ({
+  const seats = seatPlayers.map((player, actionIndex) => {
+    const st = player.getStatus()
+    const uid = player.getUserInfo().id
+    return {
       userInfo: player.getUserInfo(),
-      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
-        roomKey,
-        player.getUserInfo().id
-      )
-    }))
+      leavePending: gameRuntimeRegistry.hasQueuedLeave(roomKey, uid),
+      role: player.getRole(),
+      actionIndex,
+      isFold: st === 'out',
+      isAllIn: st === 'allIn',
+      balance: player.balance,
+      currentStageTotalAmount: player.currentStageTotalAmount,
+      totalBetAmount: player.totalBetAmount,
+      action: player.getAction(),
+      onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(roomKey, uid),
+      rankCategory: player.rankCategory,
+      rankStrength: player.rankStrength
+    }
+  })
+
+  const watchers = hangPlayers.map((player) => ({
+    userInfo: player.getUserInfo(),
+    onlineStatus: gameRuntimeRegistry.getUserConnectionStatus(
+      roomKey,
+      player.getUserInfo().id
+    )
+  }))
 
   const currentMatchId = await getCurrentMatchIdWithFallback(roomId)
   const commonPokes = texas.controller.getRevealedPokes()
@@ -144,8 +247,8 @@ export async function buildFetchCurrentGameStatePayload(input: {
 
   return {
     roomGameStatus,
-    playersOnSeat,
-    playersOnWatch,
+    seats,
+    watchers,
     matchInfo: {
       matchId: currentMatchId,
       roomId: Number(roomId),
