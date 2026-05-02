@@ -9,11 +9,8 @@ import { gameRuntimeRegistry } from './runtimeRegistry'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { drainAndInterpretTexas } from './texasDomain/drainTexasDomainEvents'
 import { getTexasEventContextForRoom } from './texasDomain/texasEventContext'
+import { unregisterNextHandHooks } from '../../../gameRuntime/nextHandCountdown'
 import { handleFatalTexasEngineError } from './texasDomain/handleFatalTexasEngineError'
-import {
-  cancelNextHandCountdown,
-  unregisterNextHandHooks
-} from '../../../gameRuntime/nextHandCountdown'
 
 type QuitTxResult =
   | { kind: 'noop' }
@@ -320,13 +317,6 @@ export class QuitGameUseCase {
         }
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
-      }
-
-      if (!txRes.deletedRoom) {
-        const seatedOnSet = texas.room.getPlayersBySeatStatus('on-set').length
-        if (seatedOnSet < 2) {
-          cancelNextHandCountdown(roomId)
-        }
       }
 
       if (txRes.deletedRoom) {
