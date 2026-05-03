@@ -26,6 +26,11 @@ import {
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
 const userWebApi = combinePath(apiPrefixWeb)('/user')
+const DEFAULT_PRIVACY_SETTINGS = {
+  showHistoryRecords: true,
+  showRecordOverview: true,
+  autoCallOnOffline: false
+}
 
 /**
  * 用户登录 / 注册（客户端 sign 与 Web login 共用逻辑）
@@ -292,6 +297,41 @@ router.post(userWebApi('/info'), async (ctx) => {
   await fetchUserInfo(ctx)
 })
 
+/** 查询任意用户公开资料（登录态下可访问，用于他人视角资料页）。 */
+router.post(userClientApi('/profile'), async (ctx) => {
+  const viewerId = ctx.state.user?.id
+  const { userId }: { userId?: number } = ctx.request.body ?? {}
+  if (!viewerId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  if (!userId || Number.isNaN(Number(userId)) || Number(userId) <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 userId')
+    return
+  }
+  const profile = await user.findUnique({
+    where: { id: Number(userId) },
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      avatarKey: true,
+      pokerBackgroundKey: true,
+      username: true,
+      createdAt: true
+    }
+  })
+  if (!profile) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  response.success(ctx, {
+    ...profile,
+    createdAt: dayjs(profile.createdAt).format(timeFormat),
+    pokerBackgroundKey: profile.pokerBackgroundKey ?? 'default'
+  })
+})
+
 /**
  * 牌桌背景预设 key，body: { pokerBackgroundKey: string }
  */
@@ -387,19 +427,50 @@ router.post(userClientApi('/settings'), async (ctx) => {
   })
 
   if (!settings) {
-    response.success(
-      ctx,
-      {
-        showHistoryRecords: true,
-        showRecordOverview: true,
-        autoCallOnOffline: false
-      },
-      '查询成功'
-    )
+    response.success(ctx, DEFAULT_PRIVACY_SETTINGS, '查询成功')
     return
   }
 
   response.success(ctx, settings, '查询成功')
+})
+
+/** 查询指定用户隐私开关（用于他人视角 profile）；仅返回可见性字段。 */
+router.post(userClientApi('/privacy'), async (ctx) => {
+  const viewerId = ctx.state.user?.id
+  const { userId }: { userId?: number } = ctx.request.body ?? {}
+  if (!viewerId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  if (!userId || Number.isNaN(Number(userId)) || Number(userId) <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 userId')
+    return
+  }
+
+  const exists = await user.findUnique({
+    where: { id: Number(userId) },
+    select: { id: true }
+  })
+  if (!exists) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+
+  const settings = await userSettings.findUnique({
+    where: { userId: Number(userId) },
+    select: {
+      showHistoryRecords: true,
+      showRecordOverview: true
+    }
+  })
+  response.success(
+    ctx,
+    settings ?? {
+      showHistoryRecords: DEFAULT_PRIVACY_SETTINGS.showHistoryRecords,
+      showRecordOverview: DEFAULT_PRIVACY_SETTINGS.showRecordOverview
+    },
+    '查询成功'
+  )
 })
 
 // 修改用户设置

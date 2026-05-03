@@ -13,8 +13,10 @@ import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import {
+  user,
   match,
   userRoomStat,
+  userSettings,
   matchDomainEvent,
   playerMatchRecord
 } from '../../models'
@@ -24,6 +26,42 @@ import {
 } from '../game/services/matchReplayReadModel'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
+
+function parseTargetUserId(
+  raw: unknown,
+  fallbackUserId: number
+): number | null {
+  if (raw == null) return fallbackUserId
+  const n = Number(raw)
+  if (!Number.isInteger(n) || n <= 0) return null
+  return n
+}
+
+async function canViewUserHistory(viewerUserId: number, targetUserId: number) {
+  if (viewerUserId === targetUserId) return true
+  const settings = await userSettings.findUnique({
+    where: { userId: targetUserId },
+    select: { showHistoryRecords: true }
+  })
+  return settings?.showHistoryRecords !== false
+}
+
+async function canViewUserOverview(viewerUserId: number, targetUserId: number) {
+  if (viewerUserId === targetUserId) return true
+  const settings = await userSettings.findUnique({
+    where: { userId: targetUserId },
+    select: { showRecordOverview: true }
+  })
+  return settings?.showRecordOverview !== false
+}
+
+async function ensureTargetUserExists(targetUserId: number): Promise<boolean> {
+  const exists = await user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true }
+  })
+  return exists != null
+}
 
 /** 对局详情结算行：底牌与牌力同一套可见性（本人始终可见；他人由调用处 hideHoleCardsFromViewer 决定，含弃牌/独赢无摊牌） */
 function settleRecordVisibleFields<
@@ -76,14 +114,34 @@ function sortSettleRecordsByOutcome<
  * 查询当前用户的对局记录（分页）
  */
 router.post(matchApi('/list'), async (ctx) => {
-  const userId = ctx.state.user!.id
+  const viewerUserId = ctx.state.user!.id
   const {
     current = 1,
     pageSize = 10,
     roomId,
-    type
-  }: WithPaginationReq & { roomId?: number; type?: string } = ctx.request
-    .body ?? {}
+    type,
+    userId
+  }: WithPaginationReq & {
+    roomId?: number
+    type?: string
+    userId?: number
+  } = ctx.request.body ?? {}
+
+  const targetUserId = parseTargetUserId(userId, viewerUserId)
+  if (targetUserId == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'userId 参数异常')
+    return
+  }
+  if (!(await ensureTargetUserExists(targetUserId))) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  if (!(await canViewUserHistory(viewerUserId, targetUserId))) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '该玩家隐藏了历史战绩', {
+      type: 'USER_HISTORY_PRIVATE'
+    })
+    return
+  }
 
   const skip = (current - 1) * pageSize
   const take = pageSize
@@ -108,7 +166,7 @@ router.post(matchApi('/list'), async (ctx) => {
       : null)
   }
   const where: Prisma.PlayerMatchRecordWhereInput = {
-    userId,
+    userId: targetUserId,
     match: matchWhere
   }
 
@@ -162,7 +220,7 @@ router.post(matchApi('/list'), async (ctx) => {
       initialChips,
       tableType: match.room.tableType,
       sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
-      replaySupported: _count.domainEvents > 0,
+      replaySupported: targetUserId === viewerUserId && _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
     }
@@ -208,10 +266,26 @@ router.post(matchApi('/rooms'), async (ctx) => {
  * 战绩总览：当前用户总对局数、allIn 次数、弃牌次数
  */
 router.post(matchApi('/overview'), async (ctx) => {
-  const userId = ctx.state.user!.id
+  const viewerUserId = ctx.state.user!.id
+  const { userId }: { userId?: number } = ctx.request.body ?? {}
+  const targetUserId = parseTargetUserId(userId, viewerUserId)
+  if (targetUserId == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'userId 参数异常')
+    return
+  }
+  if (!(await ensureTargetUserExists(targetUserId))) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  if (!(await canViewUserOverview(viewerUserId, targetUserId))) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '该玩家隐藏了战绩总览', {
+      type: 'USER_OVERVIEW_PRIVATE'
+    })
+    return
+  }
 
   const records = await playerMatchRecord.findMany({
-    where: { userId },
+    where: { userId: targetUserId },
     select: {
       isAllIn: true,
       isFold: true,
@@ -270,7 +344,7 @@ router.post(matchApi('/overview'), async (ctx) => {
  * 查询对局详情（当前用户必须参与过该对局）
  */
 router.post(matchApi('/detail'), async (ctx) => {
-  const userId = ctx.state.user!.id
+  const viewerUserId = ctx.state.user!.id
   const { matchId }: { matchId?: number } = ctx.request.body ?? {}
 
   if (!matchId) {
@@ -335,13 +409,15 @@ router.post(matchApi('/detail'), async (ctx) => {
     return
   }
 
-  const participated = await playerMatchRecord.findUnique({
+  const viewerParticipated = await playerMatchRecord.findUnique({
     where: {
-      matchId_userId: { matchId, userId }
+      matchId_userId: { matchId, userId: viewerUserId }
     }
   })
-  if (!participated) {
-    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权查看该对局')
+  if (!viewerParticipated) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '你未参与此对局,无法查看详情', {
+      type: 'MATCH_NOT_PARTICIPATED'
+    })
     return
   }
 
@@ -359,7 +435,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   /** 仅一人未弃牌收池，无摊牌；赢家底牌对其他人不可见 */
   const isNoShowdownSingleWinner =
     totalPlayers >= 1 && foldedCount === totalPlayers - 1
-  const viewerId = userId
+  const viewerId = viewerUserId
 
   // 玩家结算记录：未弃牌在前（先比 rankStrength，再比 wager）；弃牌在后（按 wager）
   const settleRecords = sortSettleRecordsByOutcome(playerMatchRecords).map(
