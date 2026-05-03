@@ -24,6 +24,11 @@ import {
   loadMatchReplayTapeForViewer,
   loadMatchCompositeReadModelFromDbTape
 } from '../game/services/matchReplayReadModel'
+import {
+  settleRecordVisibleFields,
+  sortSettleRecordsByOutcome,
+  projectSettleRecordsForMatchDetail
+} from './matchSettleVisibility'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
@@ -61,53 +66,6 @@ async function ensureTargetUserExists(targetUserId: number): Promise<boolean> {
     select: { id: true }
   })
   return exists != null
-}
-
-/** 对局详情结算行：底牌与牌力同一套可见性（本人始终可见；他人由调用处 hideHoleCardsFromViewer 决定，含弃牌/独赢无摊牌） */
-function settleRecordVisibleFields<
-  H,
-  C extends string | null,
-  S extends number
->(args: {
-  isSelf: boolean
-  isFold: boolean
-  hideHoleCardsFromViewer: boolean
-  handPokes: H
-  rankCategory: C
-  rankStrength: S
-}): { handPokes: H | []; rankCategory: C | null; rankStrength: S | 0 } {
-  const {
-    isSelf,
-    hideHoleCardsFromViewer,
-    handPokes,
-    rankCategory,
-    rankStrength
-  } = args
-  const visible = isSelf || !hideHoleCardsFromViewer
-  return {
-    handPokes: visible ? handPokes : [],
-    rankCategory: visible ? rankCategory : null,
-    rankStrength: visible ? rankStrength : 0
-  }
-}
-
-function sortSettleRecordsByOutcome<
-  T extends { isFold: boolean; rankStrength: number; wager: number | null }
->(records: readonly T[]): T[] {
-  const wagerDesc = (
-    a: { wager: number | null },
-    b: { wager: number | null }
-  ) => (Number(b.wager) || 0) - (Number(a.wager) || 0)
-  return [...records].sort((a, b) => {
-    if (a.isFold !== b.isFold) return a.isFold ? 1 : -1
-    if (!a.isFold && !b.isFold) {
-      if (a.rankStrength !== b.rankStrength) {
-        return b.rankStrength - a.rankStrength
-      }
-      return wagerDesc(a, b)
-    }
-    return wagerDesc(a, b)
-  })
 }
 
 /**
@@ -375,6 +333,7 @@ router.post(matchApi('/detail'), async (ctx) => {
           handPokes: true,
           rankStrength: true,
           rankCategory: true,
+          rankSignature: true,
           totalBetAmount: true,
           sevenTwoBonusPaid: true,
           sevenTwoBonusReceived: true
@@ -430,52 +389,10 @@ router.post(matchApi('/detail'), async (ctx) => {
     ...restMatchInfo
   } = matchInfo
 
-  const totalPlayers = playerMatchRecords.length
-  const foldedCount = playerMatchRecords.filter((p) => p.isFold).length
-  /** 仅一人未弃牌收池，无摊牌；赢家底牌对其他人不可见 */
-  const isNoShowdownSingleWinner =
-    totalPlayers >= 1 && foldedCount === totalPlayers - 1
-  const viewerId = viewerUserId
-
-  // 玩家结算记录：未弃牌在前（先比 rankStrength，再比 wager）；弃牌在后（按 wager）
-  const settleRecords = sortSettleRecordsByOutcome(playerMatchRecords).map(
-    ({
-      handPokes,
-      isFold,
-      user: { id: recordUserId, ...user },
-      rankCategory,
-      rankStrength,
-      ...rest
-    }) => {
-      const isSelf = recordUserId === viewerId
-      /** 非本人：弃牌者始终不可见；一人独赢无摊牌时其余所有人底牌均不可见（含赢家） */
-      const hideHoleCardsFromViewer =
-        !isSelf && (isFold || isNoShowdownSingleWinner)
-
-      const {
-        handPokes: outHandPokes,
-        rankCategory: outRankCategory,
-        rankStrength: outRankStrength
-      } = settleRecordVisibleFields({
-        isSelf,
-        isFold,
-        hideHoleCardsFromViewer,
-        handPokes,
-        rankCategory,
-        rankStrength
-      })
-
-      return {
-        ...user,
-        ...rest,
-        userId: recordUserId,
-        isFold,
-        handPokes: outHandPokes,
-        rankCategory: outRankCategory,
-        rankStrength: outRankStrength
-      }
-    }
-  )
+  const settleRecords = projectSettleRecordsForMatchDetail(playerMatchRecords, {
+    viewerUserId,
+    isAdmin: false
+  })
 
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({
@@ -575,7 +492,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       hideHoleCardsFromViewer,
       handPokes: record.handPokes,
       rankCategory: record.rankCategory,
-      rankStrength: record.rankStrength
+      rankStrength: record.rankStrength,
+      rankSignature: record.rankSignature
     })
     const balanceAfter = Number(record.balanceAfterHand ?? 0)
     return {
@@ -595,7 +513,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
         Number(record.sevenTwoBonusReceived ?? 0) <= 0,
       handPokes: visible.handPokes,
       rankCategory: visible.rankCategory,
-      rankStrength: visible.rankStrength
+      rankStrength: visible.rankStrength,
+      rankSignature: visible.rankSignature
     }
   })
 

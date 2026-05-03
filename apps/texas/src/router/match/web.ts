@@ -1,14 +1,16 @@
-import dayjs from 'dayjs'
+import type { ParameterizedContext } from 'koa'
+
 import { Prisma } from '@prisma/texas-client'
 
 import router from '../instance'
 import { logger } from '../../logger'
+import { apiPrefixWeb } from '../../config'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
-import { timeFormat, apiPrefixWeb } from '../../config'
 import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
+import { projectSettleRecordsForMatchDetail } from './matchSettleVisibility'
 import { loadMatchCompositeReadModelFromDbTape } from '../game/services/matchReplayReadModel'
 import {
   user,
@@ -20,13 +22,51 @@ import {
 
 const matchWebApi = combinePath(apiPrefixWeb)('/match')
 
-router.post(matchWebApi('/list'), async (ctx) => {
+type WebCtx = ParameterizedContext
+
+async function assertWebUser(ctx: WebCtx): Promise<number | null> {
   const userId = ctx.state.user?.id
-  const { current: skip, pageSize: take, time, type } = ctx.request.body
   if (!userId) {
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
-    return
+    return null
   }
+  return userId
+}
+
+/** 管理员或本局参与者可查看对局敏感数据（错误、原始记录等） */
+async function assertMatchSensitiveAccess(
+  ctx: WebCtx,
+  matchId: number
+): Promise<{ userId: number; isAdmin: boolean } | null> {
+  const userId = await assertWebUser(ctx)
+  if (userId == null) return null
+
+  const loginUser = await user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true }
+  })
+  if (!loginUser) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return null
+  }
+  if (loginUser.isAdmin) {
+    return { userId, isAdmin: true }
+  }
+  const participated = await playerMatchRecord.findUnique({
+    where: { matchId_userId: { matchId, userId } }
+  })
+  if (!participated) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '无权限查看该对局')
+    return null
+  }
+  return { userId, isAdmin: false }
+}
+
+router.post(matchWebApi('/list'), async (ctx) => {
+  const userId = await assertWebUser(ctx)
+  if (userId == null) return
+
+  const { current: skip, pageSize: take, time, type } = ctx.request.body
   if (!skip || !take) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
     return
@@ -77,10 +117,12 @@ router.post(matchWebApi('/list'), async (ctx) => {
       id: true,
       startedAt: true,
       bestRankCategory: true,
+      bestRankSignature: true,
       commonPokes: true,
       lowestBetAmount: true,
       endedAt: true,
       boardThroughStage: true,
+      totalBetAmount: true,
       playerMatchRecords: {
         select: {
           id: true
@@ -125,8 +167,8 @@ router.post(matchWebApi('/list'), async (ctx) => {
           sevenTwoBonusEnabled,
           roomCode: activeCode ?? '',
           memberCount: playerMatchRecords.length,
-          startedAt: dayjs(rest.startedAt).format(timeFormat),
-          endedAt: dayjs(rest.endedAt).format(timeFormat),
+          startedAt: formatTime(rest.startedAt),
+          endedAt: formatTime(rest.endedAt),
           errorCount: fatalByMatchId.get(rest.id) ?? 0
         }
       }),
@@ -136,12 +178,10 @@ router.post(matchWebApi('/list'), async (ctx) => {
 })
 
 router.post(matchWebApi('/detail/:id'), async (ctx) => {
-  const userId = ctx.state.user?.id
+  const userId = await assertWebUser(ctx)
+  if (userId == null) return
+
   const id = Number(ctx.params.id)
-  if (!userId) {
-    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
-    return
-  }
   if (isNaN(id)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
@@ -175,7 +215,6 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
         }
       },
       playerMatchRecords: {
-        orderBy: [{ isFold: 'asc' }, { rankStrength: 'desc' }],
         include: {
           user: {
             select: {
@@ -236,17 +275,10 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
         startAt: formatTime(record.startAt)
       }
     }),
-    settleRecords: playerMatchRecords.map(
-      ({ user: { id, ...restUser }, isFold, handPokes, ...restRecord }) => {
-        return {
-          ...restUser,
-          ...restRecord,
-          userId: id,
-          isFold,
-          handPokes: isFold ? [] : handPokes
-        }
-      }
-    ),
+    settleRecords: projectSettleRecordsForMatchDetail(playerMatchRecords, {
+      viewerUserId: userId,
+      isAdmin: loginUser.isAdmin
+    }),
     betRecords: records.map(({ user: { id, ...restUser }, ...restRecord }) => {
       return {
         ...restUser,
@@ -263,6 +295,9 @@ router.post(matchWebApi('/error/:id'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
+  const access = await assertMatchSensitiveAccess(ctx, id)
+  if (!access) return
+
   const list = await engineFatalIncident.findMany({
     where: { matchId: id },
     orderBy: { createdAt: 'desc' }
@@ -286,6 +321,9 @@ router.post(matchWebApi('/records/:matchId'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
+  const access = await assertMatchSensitiveAccess(ctx, matchId)
+  if (!access) return
+
   const list = await betRecord.findMany({
     where: {
       matchId
@@ -300,12 +338,26 @@ router.post(matchWebApi('/players/:matchId'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数错误')
     return
   }
+  const access = await assertMatchSensitiveAccess(ctx, matchId)
+  if (!access) return
+
   const list = await playerMatchRecord.findMany({
     where: {
       matchId
     },
     include: {
-      user: true
+      user: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          avatarKey: true,
+          pokerBackgroundKey: true,
+          balance: true,
+          username: true,
+          createdAt: true
+        }
+      }
     }
   })
   response.success(ctx, { list })
