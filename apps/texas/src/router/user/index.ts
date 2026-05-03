@@ -151,14 +151,17 @@ router.post(userWebApi('/login'), async (ctx) => {
   }
 
   const target = await user.findFirst({ where: { username } })
+  /** 与密码错误同码同文案，避免暴露「用户名是否存在」；勿用 404（Web 端会把 404 当成整页资源缺失跳转） */
   if (!target) {
-    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '用户名或密码错误', {
+      type: 'INVALID_LOGIN'
+    })
     return
   }
 
   if (target.password !== password) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '密码错误', {
-      type: 'INVALID_CREDENTIALS'
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '用户名或密码错误', {
+      type: 'INVALID_LOGIN'
     })
     return
   }
