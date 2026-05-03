@@ -195,6 +195,8 @@ type WsMessage<T extends WsEventType = WsEventType> = {
   lastActionStage: StageEnum   // 最后一轮可操作下注结束时的阶段（引擎 currentStage）
   boardThroughStage: StageEnum // 公共牌发到哪一街（引擎 endStage）
   bestRankCategory: RankCategory
+  /** 与 `bestPokes[0]` 一致（texas-poker-core `RankSignature`）；独赢弃牌等可无 */
+  bestRankSignature?: string
   gameDuration: number   // 秒
   bestPokes: Array<Poke[]>
   totalBetAmount: number

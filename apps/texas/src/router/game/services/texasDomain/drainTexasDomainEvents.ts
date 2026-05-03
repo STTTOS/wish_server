@@ -1,6 +1,6 @@
-import type { Player } from 'texas-poker-core'
 import type { ActionType } from '@prisma/texas-client'
 import type { TexasEventContext } from './texasEventContext'
+import type { Player, RankSignature } from 'texas-poker-core'
 import type { WsMatchOverview } from '@wishufree/texas-ws-contract'
 
 import { Prisma } from '@prisma/texas-client'
@@ -36,6 +36,14 @@ import prisma, {
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
+}
+
+/** 较新 core 的 `HandEnded` 含 `bestRankSignature`；兼容依赖包类型尚未升级的情况。 */
+function bestRankSignatureFromHandEnded(
+  payload: Extract<TexasDomainEvent, { type: 'HandEnded' }>['payload']
+): RankSignature | null {
+  const v = (payload as { bestRankSignature?: string }).bestRankSignature
+  return v != null && v !== '' ? (v as RankSignature) : null
 }
 
 const OFFLINE_TURN_THINKING_TIME_MS = 5000
@@ -444,6 +452,7 @@ async function handleHandEnded(
       data: {
         commonPokes: p.pokesRevealed,
         bestRankCategory: p.bestRankCategory,
+        bestRankSignature: bestRankSignatureFromHandEnded(p),
         endedAt: gameEndAt,
         boardThroughStage: p.endStage,
         bestPokes: p.bestPokes,
@@ -519,6 +528,7 @@ async function handleHandEnded(
       matchOverview,
       boardThroughStage: p.endStage,
       bestRankCategory: p.bestRankCategory,
+      bestRankSignature: bestRankSignatureFromHandEnded(p) ?? undefined,
       gameDuration: Math.floor(
         (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
       ),

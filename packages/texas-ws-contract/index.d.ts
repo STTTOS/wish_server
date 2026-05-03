@@ -2,6 +2,7 @@ import type {
   ActionType,
   Poke,
   RankCategory,
+  RankSignature,
   RoleEnum,
   StageEnum
 } from 'texas-poker-core'
@@ -116,6 +117,8 @@ export type WsGameEndData = {
   matchOverview: WsMatchOverview
   boardThroughStage: StageEnum
   bestRankCategory?: RankCategory
+  /** 与 `bestPokes[0]` 对应的牌力签名；摊牌时下发，独赢弃牌可无此字段。 */
+  bestRankSignature?: RankSignature
   gameDuration: number
   bestPokes: Array<Poke[]>
   totalBetAmount: number

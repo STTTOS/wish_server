@@ -343,6 +343,8 @@ model Match {
   commonPokes       Json?
   // 存储计算后的最大牌力
   bestRankCategory  RankCategory?
+  /// 与 bestPokes[0] 对应的 texas-poker-core 牌力签名（如 `q14+13+12+11+9`）
+  bestRankSignature String?
   // string[][] 记录这场对局结算时可以形成最大牌型的扑克牌
   bestPokes         Json?
   // 大盲注

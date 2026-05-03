@@ -10,7 +10,7 @@
  * 默认仅打印；写入数据库：
  *   npx ts-node --transpile-only scripts/backfillMatchSettlementFromCore.ts --apply
  */
-import type { Poke, User, RankCategory } from 'texas-poker-core'
+import type { Poke, User, RankCategory, RankSignature } from 'texas-poker-core'
 
 import { Texas, RoleEnum, type Player } from 'texas-poker-core'
 import {
@@ -204,6 +204,7 @@ type RecomputedRow = {
 type RecomputedMatch = {
   bestPokes: unknown
   bestRankCategory: RankCategory | null
+  bestRankSignature: RankSignature | null
   rows: RecomputedRow[]
 }
 
@@ -337,9 +338,14 @@ function recomputeOneMatch(params: {
     }
   })
 
+  const pokesArr = tableBest.pokes as Poke[][]
+  const bestRankSignature: RankSignature | null =
+    pokesArr?.[0]?.length === 5 ? getFiveCardsRankSignature(pokesArr[0]) : null
+
   return {
     bestPokes: tableBest.pokes as unknown,
     bestRankCategory: tableBest.rankCategory,
+    bestRankSignature,
     rows
   }
 }
@@ -436,10 +442,13 @@ async function main() {
     }
 
     const oldBestCat = m.bestRankCategory
+    const oldBestSig = m.bestRankSignature ?? null
     const oldBestPokes = JSON.stringify(m.bestPokes ?? null)
     const newBestPokes = JSON.stringify(next.bestPokes ?? null)
     const matchMetaChanged =
-      oldBestCat !== next.bestRankCategory || oldBestPokes !== newBestPokes
+      oldBestCat !== next.bestRankCategory ||
+      oldBestPokes !== newBestPokes ||
+      oldBestSig !== (next.bestRankSignature ?? null)
 
     const pmrDiffs: {
       matchId: number
@@ -509,7 +518,8 @@ async function main() {
               : (JSON.parse(
                   JSON.stringify(next.bestPokes)
                 ) as Prisma.InputJsonValue),
-          bestRankCategory: next.bestRankCategory
+          bestRankCategory: next.bestRankCategory,
+          bestRankSignature: next.bestRankSignature
         }
       })
     })
