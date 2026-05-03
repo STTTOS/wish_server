@@ -5,6 +5,7 @@ import './match'
 import './opsWeb'
 import './action'
 import './system'
+import './userOpsWeb'
 import './announcement'
 
 export { default as default } from './instance'
