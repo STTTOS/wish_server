@@ -25,7 +25,7 @@ import {
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
-/** 对局详情结算行：按查看者掩码底牌与牌力（本人始终可见自己的底牌；弃牌/独赢无摊牌规则见调用处） */
+/** 对局详情结算行：底牌与牌力同一套可见性（本人始终可见；他人由调用处 hideHoleCardsFromViewer 决定，含弃牌/独赢无摊牌） */
 function settleRecordVisibleFields<
   H,
   C extends string | null,
@@ -40,18 +40,16 @@ function settleRecordVisibleFields<
 }): { handPokes: H | []; rankCategory: C | null; rankStrength: S | 0 } {
   const {
     isSelf,
-    isFold,
     hideHoleCardsFromViewer,
     handPokes,
     rankCategory,
     rankStrength
   } = args
-  const showHoleCards = isSelf || !hideHoleCardsFromViewer
-  const showRankInfo = !isFold && (isSelf || !hideHoleCardsFromViewer)
+  const visible = isSelf || !hideHoleCardsFromViewer
   return {
-    handPokes: showHoleCards ? handPokes : [],
-    rankCategory: showRankInfo ? rankCategory : null,
-    rankStrength: showRankInfo ? rankStrength : 0
+    handPokes: visible ? handPokes : [],
+    rankCategory: visible ? rankCategory : null,
+    rankStrength: visible ? rankStrength : 0
   }
 }
 
