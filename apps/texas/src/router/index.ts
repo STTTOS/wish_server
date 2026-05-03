@@ -7,5 +7,6 @@ import './action'
 import './system'
 import './userOpsWeb'
 import './announcement'
+import './matchDomainEventWeb'
 
 export { default as default } from './instance'
