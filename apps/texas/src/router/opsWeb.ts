@@ -41,10 +41,10 @@ router.post(engineFatalWebApi('/list'), async (ctx) => {
   }
 
   const where: Prisma.EngineFatalIncidentWhereInput = {}
-  if (matchId != null && Number.isFinite(matchId)) {
+  if (matchId != null && Number.isInteger(matchId) && matchId > 0) {
     where.matchId = matchId
   }
-  if (roomId != null && Number.isFinite(roomId)) {
+  if (roomId != null && Number.isInteger(roomId) && roomId > 0) {
     where.roomId = roomId
   }
   if (time?.length === 2) {
@@ -103,10 +103,10 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
   }
 
   const where: Prisma.RoomWhereInput = { deletedAt: null }
-  if (roomId != null && Number.isFinite(roomId)) {
+  if (roomId != null && Number.isInteger(roomId) && roomId > 0) {
     where.id = roomId
   }
-  if (ownerId != null && Number.isFinite(ownerId)) {
+  if (ownerId != null && Number.isInteger(ownerId) && ownerId > 0) {
     where.ownerId = ownerId
   }
   const validStatuses: RoomGameStatus[] = [
