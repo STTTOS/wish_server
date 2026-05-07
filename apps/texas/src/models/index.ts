@@ -16,7 +16,8 @@ export const {
   roomMember,
   roomChipTopUp,
   userRoomStat,
-  engineFatalIncident
+  engineFatalIncident,
+  assetUsageEvent
 } = prisma
 
 export default prisma

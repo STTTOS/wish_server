@@ -4,14 +4,15 @@ import type { PrismaUniqueConstraintMeta } from '../interface'
 import dayjs from 'dayjs'
 import { omit } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
-import { Prisma } from '@prisma/texas-client'
+import { Prisma, AssetUsageType } from '@prisma/texas-client'
 
 import response from '../../utils/response'
 import { getToken } from '../../utils/login'
-import { user, userSettings } from '../../models'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { user, userSettings, assetUsageEvent } from '../../models'
+import { isAllowedClientAssetUsage } from '../../constants/clientAssetIdValidation'
 import {
   setLoginSession,
   getLoginSession,
@@ -526,4 +527,50 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
   })
 
   response.success(ctx, updatedSettings, '设置更新成功')
+})
+
+/**
+ * 客户端资源使用打点（卡背 / 牌桌）。鉴权可选：未登录时 userId 为空。
+ * body: { assetType: 'poker_back' | 'table_bg', assetId: string, platform?: string }
+ */
+router.post(userClientApi('/asset-usage'), async (ctx) => {
+  const body = (ctx.request.body ?? {}) as {
+    assetType?: string
+    assetId?: string
+    platform?: string
+  }
+  const { assetType, assetId, platform } = body
+  if (assetType !== 'poker_back' && assetType !== 'table_bg') {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'assetType 无效')
+    return
+  }
+  if (typeof assetId !== 'string' || !assetId.trim()) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'assetId 无效')
+    return
+  }
+  if (!isAllowedClientAssetUsage(assetType, assetId)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'assetId 不在允许列表')
+    return
+  }
+  const platformNorm =
+    typeof platform === 'string' && platform.trim().length > 0
+      ? platform.trim().slice(0, 16)
+      : null
+  const userId = ctx.state.user?.id ?? null
+
+  const enumType: AssetUsageType =
+    assetType === 'poker_back'
+      ? AssetUsageType.poker_back
+      : AssetUsageType.table_bg
+
+  await assetUsageEvent.create({
+    data: {
+      userId: userId != null ? userId : null,
+      assetType: enumType,
+      assetId: assetId.trim(),
+      platform: platformNorm
+    }
+  })
+
+  response.success(ctx, null)
 })

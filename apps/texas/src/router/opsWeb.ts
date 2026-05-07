@@ -13,11 +13,12 @@ import formatTime from '../utils/formatTime'
 import combinePath from '../utils/combinePath'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import response, { withList } from '../utils/response'
-import { room, match, engineFatalIncident } from '../models'
+import { room, match, assetUsageEvent, engineFatalIncident } from '../models'
 
 const engineFatalWebApi = combinePath(apiPrefixWeb)('/engine-fatal')
 const roomOpsWebApi = combinePath(apiPrefixWeb)('/room-ops')
 const dashboardWebApi = combinePath(apiPrefixWeb)('/dashboard')
+const assetUsageWebApi = combinePath(apiPrefixWeb)('/asset-usage')
 
 router.post(engineFatalWebApi('/list'), async (ctx) => {
   if ((await assertWebAdmin(ctx)) == null) return
@@ -242,5 +243,45 @@ router.post(dashboardWebApi('/summary'), async (ctx) => {
     matchesEndedToday,
     engineFatalsToday,
     dailySeries
+  })
+})
+
+/** 客户端卡背 / 牌桌使用次数聚合（管理员） */
+router.post(assetUsageWebApi('/summary'), async (ctx) => {
+  if ((await assertWebAdmin(ctx)) == null) return
+
+  const { time, assetType } = (ctx.request.body ?? {}) as {
+    time?: [string, string]
+    assetType?: 'poker_back' | 'table_bg' | 'all'
+  }
+
+  const where: Prisma.AssetUsageEventWhereInput = {}
+  if (time?.length === 2) {
+    where.serverTs = {
+      gte: new Date(time[0]),
+      lte: new Date(time[1])
+    }
+  }
+  if (assetType === 'poker_back' || assetType === 'table_bg') {
+    where.assetType = assetType
+  }
+
+  const grouped = await assetUsageEvent.groupBy({
+    by: ['assetType', 'assetId'],
+    where,
+    _count: { id: true },
+    orderBy: { _count: { id: 'desc' } },
+    take: 300
+  })
+
+  const total = await assetUsageEvent.count({ where })
+
+  response.success(ctx, {
+    total,
+    rows: grouped.map((r) => ({
+      assetType: r.assetType,
+      assetId: r.assetId,
+      count: r._count.id
+    }))
   })
 })

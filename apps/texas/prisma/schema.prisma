@@ -426,3 +426,22 @@ model BetRecord {
 //   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 //   user  User  @relation(fields: [playerId], references: [id])
 // }
+
+enum AssetUsageType {
+  poker_back
+  table_bg
+}
+
+/// 客户端卡背 / 牌桌使用事件（追加流水；id 与 `clientAssetIds.manifest` 同源校验）
+model AssetUsageEvent {
+  id        Int            @id @default(autoincrement())
+  userId    Int?
+  assetType AssetUsageType
+  assetId   String         @db.VarChar(64)
+  serverTs  DateTime       @default(now()) @map("server_ts") @db.DateTime(3)
+  platform  String?        @db.VarChar(16)
+
+  @@index([assetType, assetId, serverTs])
+  @@index([userId, serverTs])
+  @@map("asset_usage_event")
+}
