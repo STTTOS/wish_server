@@ -93,7 +93,11 @@ export class GameWsGateway {
     roomKey: string,
     data: WsMessage<'player-built-in-voice'>['data']
   ) {
-    ws.broadcastGameRoom(roomKey, { type: 'player-built-in-voice', data })
+    ws.broadcastGameRoom(
+      roomKey,
+      { type: 'player-built-in-voice', data },
+      { skipReplay: true }
+    )
   }
 
   notifyGameEnd(roomKey: string, data: WsMessage<'game-end'>['data']) {

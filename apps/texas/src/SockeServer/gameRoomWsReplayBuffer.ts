@@ -13,6 +13,7 @@
  *
  * - {@link SocketServer.broadcastGameToUser}、{@link SocketServer.broadcastGameEach} **不入缓冲**
  *   （底牌等单播仍以 HTTP 快照等为准）。
+ * - 全房广播若带 **`skipReplay`**（如 `player-built-in-voice` 内置语音）同样**不入缓冲**，断线重连不补发。
  *
  * ## 关键步骤（与 SockeServer 的配合）
  *

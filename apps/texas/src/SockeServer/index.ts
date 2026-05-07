@@ -636,15 +636,22 @@ class SocketServer {
 
   /**
    * @description 向 /game 房间内所有端广播
+   * @param options.skipReplay 为 true 时仅 emit、不写入全房 replay 环形缓冲（与私牌单播同理；如内置语音）。
    */
-  broadcastGameRoom(roomId: string, data: Parameters<Socket['send']>[0]) {
+  broadcastGameRoom(
+    roomId: string,
+    data: Parameters<Socket['send']>[0],
+    options?: { skipReplay?: boolean }
+  ) {
     // TODO: 日志 payload 脱敏（与 broadcastGameToUser 一致）：game-end 的 settleList[].handPokes / pokesToReveal / bestPokes，game-stage-changed 的 pokesToReveal 等
     logger.info(
       `broadcastGameRoom, ${this.#getUserIdsInGameRoom(
         roomId
       )}, data: ${JSON.stringify(data)}`
     )
-    recordGameRoomBroadcast(roomId, data)
+    if (!options?.skipReplay) {
+      recordGameRoomBroadcast(roomId, data)
+    }
     this.#gameNs.to(roomId).emit('message', data)
   }
 
