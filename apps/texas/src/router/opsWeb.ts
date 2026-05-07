@@ -257,9 +257,19 @@ router.post(assetUsageWebApi('/summary'), async (ctx) => {
 
   const where: Prisma.AssetUsageEventWhereInput = {}
   if (time?.length === 2) {
+    const from = new Date(time[0])
+    const to = new Date(time[1])
+    if (
+      Number.isNaN(from.getTime()) ||
+      Number.isNaN(to.getTime()) ||
+      from.getTime() > to.getTime()
+    ) {
+      response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'time 参数无效')
+      return
+    }
     where.serverTs = {
-      gte: new Date(time[0]),
-      lte: new Date(time[1])
+      gte: from,
+      lte: to
     }
   }
   if (assetType === 'poker_back' || assetType === 'table_bg') {
