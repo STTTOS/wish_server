@@ -8,11 +8,21 @@
  */
 export const NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS = 5000
 
-/** 推送报文里的 `serverNow` 起算，到 `lockAt`（毫秒） */
+/**
+ * 局间倒计时（相对推送里的 `serverNow`）语义：
+ * - `lockAt`：从此刻起不可再退出（锁座），须不晚于 `endsAt`。
+ * - `endsAt`：客户端「整段局间倒计时」常见终点；到达后服务端再走发牌/开局链。
+ * 二者必须满足 lock 偏移 <= ends 偏移，否则会先分配角色再锁座（见 `nextHandCountdown` 定时器顺序）。
+ */
+/** 到 `lockAt` 的毫秒偏移（「第几秒开始锁座」） */
 export const NEXT_HAND_LOCK_AT_OFFSET_MS = 3000
 
-/** 推送报文里的 `serverNow` 起算，到 `endsAt`（毫秒）；客户端整段倒计时终点 */
-export const NEXT_HAND_ENDS_AT_OFFSET_MS = 5000
+/** 锁座之后到 `endsAt` 的尾段（毫秒）；整段倒计时时长 = 本值 + `NEXT_HAND_LOCK_AT_OFFSET_MS` */
+export const NEXT_HAND_LOCKED_TAIL_BEFORE_ENDS_MS = 2000
+
+/** 到 `endsAt` 的毫秒偏移；与上面两常量保持恒等式，避免改了一处漏改另一处 */
+export const NEXT_HAND_ENDS_AT_OFFSET_MS =
+  NEXT_HAND_LOCK_AT_OFFSET_MS + NEXT_HAND_LOCKED_TAIL_BEFORE_ENDS_MS
 
 /** 抵达 `endsAt` 后再延迟多久发牌（毫秒） */
 export const NEXT_HAND_DEAL_AFTER_END_MS = 2000
