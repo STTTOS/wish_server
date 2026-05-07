@@ -5,8 +5,8 @@ export const CLIENT_MIN_APP_VERSION_KEY = 'texas:system:client:minAppVersion'
 export const APP_VERSION_TOO_LOW_DETAILS_TYPE = 'APP_VERSION_TOO_LOW'
 
 /**
- * 不要求携带 `version` 的客户端路径（极旧包或仅读状态类接口）。
- * 其余 `/api/client/*` 均须 `version` 且不低于服务端最低版本。
+ * 不要求携带 `version` 的 `/api/client/*` 路径（维护态可读接口）。
+ * **单一数据源**：`router/system/maintenanceConstants` 中维护 HTTP 白名单须包含本数组（通过展开引用），避免两处漂移。
  */
 export const CLIENT_VERSION_CHECK_WHITELIST_PATHS = [
   '/api/client/system/maintenance/status',

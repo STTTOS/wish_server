@@ -1,4 +1,5 @@
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { CLIENT_VERSION_CHECK_WHITELIST_PATHS } from '../../constants/clientVersionConstants'
 
 export const MAINTENANCE_CODE = HTTP_STATUS.SERVICE_UNAVAILABLE
 export const MAINTENANCE_MESSAGE =
@@ -9,8 +10,7 @@ export const MAINTENANCE_KEY = 'texas:system:maintenance:enabled'
 export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
   '/api/client/user/info',
   '/api/client/user/logout',
-  '/api/client/system/maintenance/status',
-  '/api/client/system/maintenanceNotice',
+  ...CLIENT_VERSION_CHECK_WHITELIST_PATHS,
   '/api/web/system/maintenance/status',
   '/api/web/system/maintenance/set',
   '/api/web/user/logout',
