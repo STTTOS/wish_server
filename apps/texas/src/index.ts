@@ -23,6 +23,7 @@ import customHandle403 from './middleware/customHandle403'
 import loggerMiddleware from './middleware/loggerMiddleware'
 import maintenanceGuard from './middleware/maintenanceGuard'
 import { respondFromApiResult } from './utils/respondFromApiResult'
+import clientAppVersionGuard from './middleware/clientAppVersionGuard'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
 
 async function recoverRoomsWithoutRuntimeOnBoot() {
@@ -167,6 +168,7 @@ app.use(
     }
   })
 )
+app.use(clientAppVersionGuard)
 app.use(loggerMiddleware)
 //路由中间件
 app.use(router.routes())

@@ -3,13 +3,19 @@ import dayjs from 'dayjs'
 import router from '../instance'
 import response from '../../utils/response'
 import { announcement } from '../../models'
+import { assertWebAdmin } from '../webAuth'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { isValidSemverCoreString } from '../../utils/semverCompare'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   isMaintenanceEnabled,
   setMaintenanceEnabled
 } from '../../utils/maintenanceSwitch'
+import {
+  getMinClientAppVersion,
+  setMinClientAppVersion
+} from '../../utils/clientMinVersionPolicy'
 
 const systemApiWeb = combinePath(apiPrefixWeb)('/system')
 const systemApiClient = combinePath(apiPrefixClient)('/system')
@@ -107,4 +113,49 @@ router.post(systemApiWeb('/maintenance/set'), async (ctx) => {
   }
 
   response.success(ctx, { enabled }, enabled ? '维护已开启' : '维护已关闭')
+})
+
+// 后台：查询客户端最低 App 版本（管理员）
+router.post(systemApiWeb('/client-version/detail'), async (ctx) => {
+  if ((await assertWebAdmin(ctx)) == null) return
+  const minVersion = await getMinClientAppVersion()
+  response.success(
+    ctx,
+    {
+      minVersion,
+      hint: '与 Expo app.json 中 expo.version 对齐；低于此版本的 App 调用 /api/client/* 将返回 403'
+    },
+    '查询成功'
+  )
+})
+
+// 后台：设置客户端最低 App 版本（管理员）
+router.post(systemApiWeb('/client-version/set'), async (ctx) => {
+  if ((await assertWebAdmin(ctx)) == null) return
+  const { minVersion: raw } = (ctx.request.body ?? {}) as {
+    minVersion?: unknown
+  }
+  if (typeof raw !== 'string' || !raw.trim()) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '参数异常：需要字符串 minVersion'
+    )
+    return
+  }
+  const minVersion = raw.trim()
+  if (!isValidSemverCoreString(minVersion)) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      'minVersion 须为 semver 主版本号，如 1.0.0'
+    )
+    return
+  }
+  const ok = await setMinClientAppVersion(minVersion)
+  if (!ok) {
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '最低版本写入失败')
+    return
+  }
+  response.success(ctx, { minVersion }, '已更新最低客户端版本')
 })
