@@ -390,8 +390,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   } = matchInfo
 
   const settleRecords = projectSettleRecordsForMatchDetail(playerMatchRecords, {
-    viewerUserId,
-    isAdmin: false
+    viewerUserId
   })
 
   const actionRecords = records.map(

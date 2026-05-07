@@ -3,7 +3,7 @@ import type { Role } from '@prisma/texas-client'
 /**
  * 对局详情结算行：底牌与牌力同一套可见性（本人始终可见；
  * 他人：弃牌者不可见；一人独赢无摊牌时其余所有人底牌与牌力均不可见）。
- * 与客户端 `matchApi('/detail')` 一致；管理员 `isAdmin` 时不掩码。
+ * Web `match/detail` 与客户端 `matchApi('/detail')` 共用；不因管理员身份放宽。
  */
 export function settleRecordVisibleFields<
   H,
@@ -97,7 +97,7 @@ export type PlayerMatchRecordForSettleProjection = {
 
 export function projectSettleRecordsForMatchDetail(
   playerMatchRecords: readonly PlayerMatchRecordForSettleProjection[],
-  opts: { viewerUserId: number; isAdmin: boolean }
+  opts: { viewerUserId: number }
 ) {
   const sorted = sortSettleRecordsByOutcome(playerMatchRecords)
   const isNoShowdownSingleWinner =
@@ -113,19 +113,6 @@ export function projectSettleRecordsForMatchDetail(
       rankSignature,
       ...rest
     }) => {
-      if (opts.isAdmin) {
-        return {
-          ...user,
-          ...rest,
-          userId: recordUserId,
-          isFold,
-          handPokes,
-          rankCategory,
-          rankStrength,
-          rankSignature: rankSignature ?? null
-        }
-      }
-
       const isSelf = recordUserId === opts.viewerUserId
       const hideHoleCardsFromViewer =
         !isSelf && (isFold || isNoShowdownSingleWinner)

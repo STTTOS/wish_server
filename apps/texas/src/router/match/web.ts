@@ -235,8 +235,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
       }
     }),
     settleRecords: projectSettleRecordsForMatchDetail(playerMatchRecords, {
-      viewerUserId: userId,
-      isAdmin: loginUser.isAdmin
+      viewerUserId: userId
     }),
     betRecords: records.map(({ user: { id, ...restUser }, ...restRecord }) => {
       return {
