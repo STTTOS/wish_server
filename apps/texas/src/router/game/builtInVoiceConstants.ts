@@ -1,28 +1,9 @@
-/** 客户端可选的内置语音 key，须与白名单一致 */
-export const BUILT_IN_VOICE_NAMES = [
-  'i_want_to_check_pokes',
-  'shin_my_shoes_for_me',
-  'ma_le',
-  'urge_someone_to_reveal_their_hand',
-  'there_is_nothing_wrong_with_the_cards',
-  'dasima_am_i_strong',
-  'dasima_heihei',
-  'dasima_what_r_u_doing',
-  'dasima_how_do_you_do',
-  'cxk_what_r_u_doing',
-  // 你好 我是丁真
-  'hello_i_am_ding_zhen',
-  // 丁真 喂!
-  'ding_zhen_wei',
-  // 五五开 诶嘿嘿
-  'white_hei_hei',
-  // pdd 心态崩了
-  'pdd_what_the_fuck'
-] as const
+import { CLIENT_BUILT_IN_VOICE_NAMES } from '../../constants/clientAssetIds.manifest'
+
+/** 与 RN `constants/builtInVoices` 经 export-client-asset-ids 生成的清单一致 */
+export const BUILT_IN_VOICE_NAMES = CLIENT_BUILT_IN_VOICE_NAMES
 
 export type BuiltInVoiceName = (typeof BUILT_IN_VOICE_NAMES)[number]
-
-export const BUILT_IN_VOICE_NAME_SET = new Set<string>(BUILT_IN_VOICE_NAMES)
 
 /** 同一房间内，相邻两次内置语音 WS 广播的最小间隔（毫秒） */
 export const BUILT_IN_VOICE_ROOM_EMIT_MIN_INTERVAL_MS = 3000

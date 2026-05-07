@@ -14,7 +14,9 @@ import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
+import { BUILT_IN_VOICE_USER_COOLDOWN_MS } from './builtInVoiceConstants'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { isAllowedBuiltInVoiceName } from '../../constants/clientAssetIdValidation'
 import { NextHandTopUpRequestUseCase } from './services/nextHandTopUpRequestUseCase'
 import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
 import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
@@ -27,10 +29,6 @@ import {
   gameRuntimeConfig,
   type GameRuntimeConfigPatch
 } from '../../utils/gameRuntimeConfig'
-import {
-  BUILT_IN_VOICE_NAME_SET,
-  BUILT_IN_VOICE_USER_COOLDOWN_MS
-} from './builtInVoiceConstants'
 import {
   MAX_PLAYERS_COUNT,
   ROOM_PRESET_RULES,
@@ -326,7 +324,7 @@ router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 voiceName')
     return
   }
-  if (!BUILT_IN_VOICE_NAME_SET.has(voiceNameRaw)) {
+  if (!isAllowedBuiltInVoiceName(voiceNameRaw)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '内置语音不存在')
     return
   }

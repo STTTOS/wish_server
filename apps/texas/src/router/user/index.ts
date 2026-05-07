@@ -12,7 +12,6 @@ import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { user, userSettings, assetUsageEvent } from '../../models'
-import { isAllowedClientAssetUsage } from '../../constants/clientAssetIdValidation'
 import {
   setLoginSession,
   getLoginSession,
@@ -24,6 +23,11 @@ import {
   apiPrefixClient,
   tokenValidatedTime
 } from '../../config'
+import {
+  isAllowedClientAssetUsage,
+  isAllowedProfileAvatarKey,
+  isAllowedPokerBackgroundKey
+} from '../../constants/clientAssetIdValidation'
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
 const userWebApi = combinePath(apiPrefixWeb)('/user')
@@ -361,6 +365,14 @@ router.post(userClientApi('/setPokerBackground'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'pokerBackgroundKey 过长')
     return
   }
+  if (!isAllowedPokerBackgroundKey(key)) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      'pokerBackgroundKey 不在允许列表'
+    )
+    return
+  }
 
   try {
     await user.update({
@@ -396,12 +408,17 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '请传入有效的 avatarKey')
     return
   }
+  const avatarKeyNorm = avatarKey.trim()
+  if (!isAllowedProfileAvatarKey(avatarKeyNorm)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'avatarKey 不在允许列表')
+    return
+  }
 
   try {
     await user.update({
       where: { id: userId },
       data: {
-        avatarKey: avatarKey.trim(),
+        avatarKey: avatarKeyNorm,
         avatarUrl: null
       }
     })
