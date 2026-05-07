@@ -8,9 +8,7 @@ export const MAINTENANCE_MESSAGE =
 export const MAINTENANCE_KEY = 'texas:system:maintenance:enabled'
 
 export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
-  '/api/client/user/info',
   '/api/client/user/logout',
-  '/api/client/system/maintenance/status',
   ...CLIENT_VERSION_CHECK_WHITELIST_PATHS,
   '/api/web/system/maintenance/status',
   '/api/web/system/maintenance/set',

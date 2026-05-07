@@ -9,6 +9,7 @@ export const APP_VERSION_TOO_LOW_DETAILS_TYPE = 'APP_VERSION_TOO_LOW'
  * **单一数据源**：`router/system/maintenanceConstants` 中维护 HTTP 白名单须包含本数组（通过展开引用），避免两处漂移。
  */
 export const CLIENT_VERSION_CHECK_WHITELIST_PATHS = [
+  '/api/client/system/maintenance/status',
   '/api/client/system/maintenanceNotice',
   '/api/client/user/info'
 ] as const
