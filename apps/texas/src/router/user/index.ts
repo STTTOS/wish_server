@@ -530,10 +530,16 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
 })
 
 /**
- * 客户端资源使用打点（卡背 / 牌桌）。鉴权可选：未登录时 userId 为空。
+ * 客户端资源使用打点（卡背 / 牌桌）。须登录；与藏品/改卡面能力一致。
  * body: { assetType: 'poker_back' | 'table_bg', assetId: string, platform?: string }
  */
 router.post(userClientApi('/asset-usage'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+
   const body = (ctx.request.body ?? {}) as {
     assetType?: string
     assetId?: string
@@ -556,7 +562,6 @@ router.post(userClientApi('/asset-usage'), async (ctx) => {
     typeof platform === 'string' && platform.trim().length > 0
       ? platform.trim().slice(0, 16)
       : null
-  const userId = ctx.state.user?.id ?? null
 
   const enumType: AssetUsageType =
     assetType === 'poker_back'
@@ -565,7 +570,7 @@ router.post(userClientApi('/asset-usage'), async (ctx) => {
 
   await assetUsageEvent.create({
     data: {
-      userId: userId != null ? userId : null,
+      userId,
       assetType: enumType,
       assetId: assetId.trim(),
       platform: platformNorm

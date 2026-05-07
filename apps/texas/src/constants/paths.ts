@@ -33,8 +33,7 @@ export const AUTH_OPTIONAL_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/client\/user\/logout$/,
   /^\/api\/web\/user\/logout$/,
   /^\/api\/client\/user\/info/,
-  /^\/api\/web\/user\/info/,
-  /^\/api\/client\/user\/asset-usage$/
+  /^\/api\/web\/user\/info/
 ]
 
 export const pathMatches = (

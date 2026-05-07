@@ -40,6 +40,7 @@ model User {
   userRoomStats     UserRoomStat[]
   settings          UserSettings?
   announcementReads AnnouncementRead[]
+  assetUsageEvents  AssetUsageEvent[]
 }
 
 model UserSettings {
@@ -432,10 +433,11 @@ enum AssetUsageType {
   table_bg
 }
 
-/// 客户端卡背 / 牌桌使用事件（追加流水；id 与 `clientAssetIds.manifest` 同源校验）
+/// 客户端卡背 / 牌桌使用事件（追加流水；仅登录用户可写；id 与 manifest 同源校验）
 model AssetUsageEvent {
   id        Int            @id @default(autoincrement())
-  userId    Int?
+  userId    Int
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   assetType AssetUsageType
   assetId   String         @db.VarChar(64)
   serverTs  DateTime       @default(now()) @map("server_ts") @db.DateTime(3)
