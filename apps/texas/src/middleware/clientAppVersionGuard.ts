@@ -12,6 +12,10 @@ import {
 
 const whitelist = new Set<string>(CLIENT_VERSION_CHECK_WHITELIST_PATHS)
 
+/** 与版本低于 min 时一致，便于老包（未带 version）走同一套客户端提示 */
+const CLIENT_VERSION_TOO_LOW_MESSAGE =
+  '当前应用版本过低, 为了正常游戏体验, 需要更新到最新版本'
+
 function readClientVersion(ctx: ParameterizedContext<DefaultState>): unknown {
   const method = ctx.method.toUpperCase()
   if (method === 'GET') {
@@ -39,21 +43,14 @@ export default async function clientAppVersionGuard(
   }
 
   const raw = readClientVersion(ctx)
-  let versionStr: string
+  let explicitVersion: string | undefined
   if (typeof raw === 'string' && raw.trim() !== '') {
-    versionStr = raw.trim()
+    explicitVersion = raw.trim()
   } else if (typeof raw === 'number' && Number.isFinite(raw)) {
-    versionStr = String(raw)
-  } else {
-    response.error(
-      ctx,
-      HTTP_STATUS.BAD_REQUEST,
-      '请携带 version 参数（与 App 的 app.json / expo.version 一致）'
-    )
-    return
+    explicitVersion = String(raw)
   }
 
-  if (parseSemverCore(versionStr) == null) {
+  if (explicitVersion != null && parseSemverCore(explicitVersion) == null) {
     response.error(
       ctx,
       HTTP_STATUS.BAD_REQUEST,
@@ -68,21 +65,18 @@ export default async function clientAppVersionGuard(
     return
   }
 
-  const cmp = compareSemverCore(versionStr, minVersion)
+  /** 未携带 version 的老包按 0.0.0 参与比较：min 为 0.0.0 时仍放行，min 提高后与「版本过低」同一提示 */
+  const effectiveVersion = explicitVersion ?? '0.0.0'
+  const cmp = compareSemverCore(effectiveVersion, minVersion)
   if (cmp == null) {
     await next()
     return
   }
   if (cmp < 0) {
-    response.error(
-      ctx,
-      HTTP_STATUS.FORBIDDEN,
-      '当前应用版本过低, 为了正常游戏体验, 需要更新到最新版本',
-      {
-        type: APP_VERSION_TOO_LOW_DETAILS_TYPE,
-        minVersion
-      }
-    )
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, CLIENT_VERSION_TOO_LOW_MESSAGE, {
+      type: APP_VERSION_TOO_LOW_DETAILS_TYPE,
+      minVersion
+    })
     return
   }
 
