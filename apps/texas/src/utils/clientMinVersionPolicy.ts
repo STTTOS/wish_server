@@ -10,7 +10,7 @@ let redisReady = false
 let redisInitStarted = false
 
 /** 无 Redis 或未连接时的进程内回退（默认不拦截任何版本） */
-let memoryMinVersion = '0.0.0'
+let memoryMinVersion = '1.0.2'
 
 const ensureRedisReady = async () => {
   if (!redisUrl || redisReady) return
