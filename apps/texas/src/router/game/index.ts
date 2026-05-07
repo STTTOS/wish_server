@@ -69,6 +69,7 @@ router.get(gameClientApi('/config'), async (ctx) => {
  * 管理员：运行时调整各类延时（毫秒），无需重启。
  * `GET /game/config` 返回的是静态规则配置；改后返回完整快照供核对。
  * body 至少含一个字段，毫秒项范围 0～120000。
+ * 局间倒计时：`nextHandLockAtOffsetMs` + `nextHandLockedTailBeforeEndsMs`（勿传已废弃的 `nextHandEndsAtOffsetMs`）。
  */
 router.post(gameClientApi('/setRuntimeConfig'), async (ctx) => {
   const userId = ctx.state.user!.id

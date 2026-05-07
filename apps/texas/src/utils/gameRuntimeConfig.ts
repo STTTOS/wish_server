@@ -5,10 +5,10 @@ import {
 } from '../constants/game'
 import {
   NEXT_HAND_DEAL_AFTER_END_MS,
-  NEXT_HAND_ENDS_AT_OFFSET_MS,
   NEXT_HAND_LOCK_AT_OFFSET_MS,
   NEXT_HAND_START_AFTER_DEAL_MS,
-  NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
+  NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS,
+  NEXT_HAND_LOCKED_TAIL_BEFORE_ENDS_MS
 } from '../gameRuntime/nextHandConstants'
 
 const MIN_MS = 0
@@ -37,8 +37,8 @@ export type GameRuntimeConfigPatch = {
   nextHandCountdownPushDelayMs?: unknown
   /** 倒计时起点到 `lockAt`（锁座）的偏移 */
   nextHandLockAtOffsetMs?: unknown
-  /** 倒计时起点到 `endsAt`（分配角色时刻）的偏移 */
-  nextHandEndsAtOffsetMs?: unknown
+  /** 锁座后到 `endsAt`（分配角色）的尾段；与 lock 相加为 ends 偏移。勿再传 `nextHandEndsAtOffsetMs` */
+  nextHandLockedTailBeforeEndsMs?: unknown
   /** `endsAt` 之后再延迟多久发牌 */
   nextHandDealAfterEndMs?: unknown
   /** 发牌后再延迟多久 `controller.start` */
@@ -56,7 +56,9 @@ export type GameRuntimeConfigSnapshot = {
   nextHandCountdownPushDelayMs: number
   /** 倒计时起点到锁座 `lockAt`（毫秒） */
   nextHandLockAtOffsetMs: number
-  /** 倒计时起点到分配角色 `endsAt`（毫秒） */
+  /** 锁座后到分配角色 `endsAt`（毫秒） */
+  nextHandLockedTailBeforeEndsMs: number
+  /** 派生：`lock + tail`，与 WS `endsAt` 一致 */
   nextHandEndsAtOffsetMs: number
   /** `endsAt` 之后再延迟发牌（毫秒） */
   nextHandDealAfterEndMs: number
@@ -74,7 +76,7 @@ export class GameRuntimeConfigStore {
 
   #nextHandCountdownPushDelayMs = NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
   #nextHandLockAtOffsetMs = NEXT_HAND_LOCK_AT_OFFSET_MS
-  #nextHandEndsAtOffsetMs = NEXT_HAND_ENDS_AT_OFFSET_MS
+  #nextHandLockedTailBeforeEndsMs = NEXT_HAND_LOCKED_TAIL_BEFORE_ENDS_MS
   #nextHandDealAfterEndMs = NEXT_HAND_DEAL_AFTER_END_MS
   #nextHandStartAfterDealMs = NEXT_HAND_START_AFTER_DEAL_MS
 
@@ -98,8 +100,12 @@ export class GameRuntimeConfigStore {
     return this.#nextHandLockAtOffsetMs
   }
 
+  getNextHandLockedTailBeforeEndsMs(): number {
+    return this.#nextHandLockedTailBeforeEndsMs
+  }
+
   getNextHandEndsAtOffsetMs(): number {
-    return this.#nextHandEndsAtOffsetMs
+    return this.#nextHandLockAtOffsetMs + this.#nextHandLockedTailBeforeEndsMs
   }
 
   getNextHandDealAfterEndMs(): number {
@@ -118,7 +124,8 @@ export class GameRuntimeConfigStore {
         this.#startGameBeforeAssignRolesDelayMs,
       nextHandCountdownPushDelayMs: this.#nextHandCountdownPushDelayMs,
       nextHandLockAtOffsetMs: this.#nextHandLockAtOffsetMs,
-      nextHandEndsAtOffsetMs: this.#nextHandEndsAtOffsetMs,
+      nextHandLockedTailBeforeEndsMs: this.#nextHandLockedTailBeforeEndsMs,
+      nextHandEndsAtOffsetMs: this.getNextHandEndsAtOffsetMs(),
       nextHandDealAfterEndMs: this.#nextHandDealAfterEndMs,
       nextHandStartAfterDealMs: this.#nextHandStartAfterDealMs
     }
@@ -144,7 +151,7 @@ export class GameRuntimeConfigStore {
     let nextStartAssign = this.#startGameBeforeAssignRolesDelayMs
     let nextPushDelay = this.#nextHandCountdownPushDelayMs
     let nextLockOff = this.#nextHandLockAtOffsetMs
-    let nextEndsOff = this.#nextHandEndsAtOffsetMs
+    let nextTail = this.#nextHandLockedTailBeforeEndsMs
     let nextDealAfter = this.#nextHandDealAfterEndMs
     let nextStartAfter = this.#nextHandStartAfterDealMs
 
@@ -187,15 +194,27 @@ export class GameRuntimeConfigStore {
       if (!r.ok) return r
       nextPushDelay = r.v
     }
+    const rawBody = input as Record<string, unknown>
+    if (rawBody.nextHandEndsAtOffsetMs !== undefined) {
+      return {
+        ok: false,
+        message:
+          '已移除 nextHandEndsAtOffsetMs，请分别配置 nextHandLockAtOffsetMs 与 nextHandLockedTailBeforeEndsMs（ends = lock + tail）'
+      }
+    }
+
     if (input.nextHandLockAtOffsetMs !== undefined) {
       const r = applyMs(input.nextHandLockAtOffsetMs, 'nextHandLockAtOffsetMs')
       if (!r.ok) return r
       nextLockOff = r.v
     }
-    if (input.nextHandEndsAtOffsetMs !== undefined) {
-      const r = applyMs(input.nextHandEndsAtOffsetMs, 'nextHandEndsAtOffsetMs')
+    if (input.nextHandLockedTailBeforeEndsMs !== undefined) {
+      const r = applyMs(
+        input.nextHandLockedTailBeforeEndsMs,
+        'nextHandLockedTailBeforeEndsMs'
+      )
       if (!r.ok) return r
-      nextEndsOff = r.v
+      nextTail = r.v
     }
     if (input.nextHandDealAfterEndMs !== undefined) {
       const r = applyMs(input.nextHandDealAfterEndMs, 'nextHandDealAfterEndMs')
@@ -216,7 +235,7 @@ export class GameRuntimeConfigStore {
     this.#startGameBeforeAssignRolesDelayMs = nextStartAssign
     this.#nextHandCountdownPushDelayMs = nextPushDelay
     this.#nextHandLockAtOffsetMs = nextLockOff
-    this.#nextHandEndsAtOffsetMs = nextEndsOff
+    this.#nextHandLockedTailBeforeEndsMs = nextTail
     this.#nextHandDealAfterEndMs = nextDealAfter
     this.#nextHandStartAfterDealMs = nextStartAfter
 
