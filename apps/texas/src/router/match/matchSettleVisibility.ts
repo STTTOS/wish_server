@@ -91,7 +91,7 @@ export type PlayerMatchRecordForSettleProjection = {
     name: string
     avatarUrl: string | null
     avatarKey?: string
-    pokerBackgroundKey?: string | null
+    pokerBackgroundKey?: string
   }
 }
 

@@ -421,7 +421,7 @@ async function handleHandEnded(
           name: profile?.name ?? pl.getUserInfo().name ?? `玩家${userId}`,
           avatarUrl: profile?.avatarUrl ?? null,
           avatarKey: profile?.avatarKey ?? 'cartoon/default',
-          pokerBackgroundKey: profile?.pokerBackgroundKey ?? null,
+          pokerBackgroundKey: profile?.pokerBackgroundKey ?? 'default',
           balance: pl.balance,
           wager: pl.wager,
           sevenTwoBonusPaid:

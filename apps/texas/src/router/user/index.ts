@@ -287,11 +287,10 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
   if (!userInfo) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
   } else {
-    const { createdAt, pokerBackgroundKey, ...rest } = userInfo
+    const { createdAt, ...rest } = userInfo
     response.success(ctx, {
       createdAt: dayjs(createdAt).format(timeFormat),
-      ...rest,
-      pokerBackgroundKey: pokerBackgroundKey ?? 'default'
+      ...rest
     })
   }
 }
@@ -335,8 +334,7 @@ router.post(userClientApi('/profile'), async (ctx) => {
   }
   response.success(ctx, {
     ...profile,
-    createdAt: dayjs(profile.createdAt).format(timeFormat),
-    pokerBackgroundKey: profile.pokerBackgroundKey ?? 'default'
+    createdAt: dayjs(profile.createdAt).format(timeFormat)
   })
 })
 

@@ -162,7 +162,7 @@ export class RoomJoinFacade {
       name: joinUser.name,
       avatarUrl: joinUser.avatarUrl,
       avatarKey: joinUser.avatarKey,
-      pokerBackgroundKey: joinUser.pokerBackgroundKey ?? 'default',
+      pokerBackgroundKey: joinUser.pokerBackgroundKey,
       joinedAt: dayjs().format(timeFormat),
       isOwner: txRes.ownerId === joinUser.id
     }

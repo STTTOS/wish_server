@@ -10,7 +10,7 @@ export type RoomJoinAuthData = {
     name: string
     avatarUrl: string | null
     avatarKey: string
-    pokerBackgroundKey: string | null
+    pokerBackgroundKey: string
   }
 }
 export type RoomJoinAuthResult = ApiResult<RoomJoinAuthData>

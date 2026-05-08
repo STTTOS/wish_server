@@ -101,7 +101,7 @@ router.post(roomApiClient('/list'), async (ctx) => {
         code: activeCode ?? '',
         owner: {
           ...owner,
-          pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+          pokerBackgroundKey: owner.pokerBackgroundKey
         },
         initialChips,
         thinkingTime,
@@ -283,7 +283,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
     code: activeCode ?? '',
     owner: {
       ...owner,
-      pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+      pokerBackgroundKey: owner.pokerBackgroundKey
     },
     // gameStatus,
     playSession: roomPlaySessionFromGameStatus(gameStatus),

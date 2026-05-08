@@ -61,7 +61,7 @@ export class RoomCreateFacade {
               name: string
               avatarUrl: string | null
               avatarKey: string
-              pokerBackgroundKey: string | null
+              pokerBackgroundKey: string
             }
           }
         }
@@ -217,7 +217,7 @@ export class RoomCreateFacade {
         code: roomCode,
         owner: {
           ...owner,
-          pokerBackgroundKey: owner.pokerBackgroundKey ?? 'default'
+          pokerBackgroundKey: owner.pokerBackgroundKey
         },
         initialChips,
         thinkingTime,

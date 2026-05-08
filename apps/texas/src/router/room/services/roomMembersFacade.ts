@@ -78,7 +78,7 @@ export class RoomMembersFacade {
         name: u.name,
         avatarUrl: u.avatarUrl,
         avatarKey: u.avatarKey,
-        pokerBackgroundKey: u.pokerBackgroundKey ?? 'default',
+        pokerBackgroundKey: u.pokerBackgroundKey,
         joinedAt: dayjs(joinedAt).format(timeFormat),
         isOwner: ownerId === u.id,
         isOnline: onWaiting || onGame,
