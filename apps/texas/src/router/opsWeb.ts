@@ -3,7 +3,6 @@
  */
 import type { RoomGameStatus } from '@prisma/texas-client'
 
-import dayjs from 'dayjs'
 import { Prisma } from '@prisma/texas-client'
 
 import router from './instance'
@@ -13,7 +12,8 @@ import formatTime from '../utils/formatTime'
 import combinePath from '../utils/combinePath'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import response, { withList } from '../utils/response'
-import { room, match, assetUsageEvent, engineFatalIncident } from '../models'
+import { room, assetUsageEvent, engineFatalIncident } from '../models'
+import { buildDashboardSummary } from '../webOps/buildDashboardSummary'
 
 const engineFatalWebApi = combinePath(apiPrefixWeb)('/engine-fatal')
 const roomOpsWebApi = combinePath(apiPrefixWeb)('/room-ops')
@@ -174,76 +174,8 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
 router.post(dashboardWebApi('/summary'), async (ctx) => {
   if ((await assertWebAdmin(ctx)) == null) return
 
-  const since = dayjs().subtract(7, 'day').startOf('day').toDate()
-  const todayStart = dayjs().startOf('day').toDate()
-
-  const dayRanges = Array.from({ length: 7 }, (_, i) => {
-    const d = dayjs().subtract(6 - i, 'day')
-    return {
-      day: d.format('YYYY-MM-DD'),
-      start: d.startOf('day').toDate(),
-      end: d.endOf('day').toDate()
-    }
-  })
-
-  const perDayCountPromises = dayRanges.flatMap(({ start, end }) => [
-    match.count({
-      where: { endedAt: { gte: start, lte: end } }
-    }),
-    engineFatalIncident.count({
-      where: { createdAt: { gte: start, lte: end } }
-    })
-  ])
-
-  const [
-    matchesEndedLast7d,
-    engineFatalsLast7d,
-    roomsInPlay,
-    roomsTotal,
-    matchesEndedToday,
-    engineFatalsToday,
-    ...perDayCounts
-  ] = await Promise.all([
-    match.count({
-      where: { endedAt: { gte: since } }
-    }),
-    engineFatalIncident.count({
-      where: { createdAt: { gte: since } }
-    }),
-    room.count({
-      where: {
-        deletedAt: null,
-        gameStatus: {
-          in: ['entering', 'starting_hand', 'in_hand', 'between_hands']
-        }
-      }
-    }),
-    room.count({ where: { deletedAt: null } }),
-    match.count({
-      where: { endedAt: { gte: todayStart } }
-    }),
-    engineFatalIncident.count({
-      where: { createdAt: { gte: todayStart } }
-    }),
-    ...perDayCountPromises
-  ])
-
-  const dailySeries = dayRanges.map((r, i) => ({
-    day: r.day,
-    matchesEnded: Number(perDayCounts[i * 2] ?? 0),
-    engineFatals: Number(perDayCounts[i * 2 + 1] ?? 0)
-  }))
-
-  response.success(ctx, {
-    rangeStart: formatTime(since),
-    matchesEndedLast7d,
-    engineFatalsLast7d,
-    roomsInPlay,
-    roomsTotal,
-    matchesEndedToday,
-    engineFatalsToday,
-    dailySeries
-  })
+  const payload = await buildDashboardSummary()
+  response.success(ctx, payload)
 })
 
 /** 客户端卡背 / 牌桌使用次数聚合（管理员） */

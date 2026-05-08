@@ -43,6 +43,33 @@ model User {
   settings          UserSettings?
   announcementReads AnnouncementRead[]
   assetUsageEvents  AssetUsageEvent[]
+  dailyFortunes     UserDailyFortune[]
+}
+
+/// 每日抽签档位（与 `fortuneDrawRandom` / `fortuneTierCatalog` 一致）
+enum FortuneTierKey {
+  daJi
+  shangJi
+  zhongJi
+  xiaoJi
+  ping
+}
+
+/// 每日抽签（北京时间 `fortuneOn` 自然日，每用户每天一行）
+/// 签文不入库：仅持久化 `tierKey`；定局时刻以 `createdAt`（入库时刻）为准，API 中 `sealedAtUtc` 由其导出
+model UserDailyFortune {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  fortuneOn String        @db.VarChar(10)
+  tierKey   FortuneTierKey
+  luckyPoke String        @db.VarChar(4)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fortuneOn])
+  @@index([userId])
+  @@map("user_daily_fortune")
 }
 
 model UserSettings {
