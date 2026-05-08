@@ -66,7 +66,10 @@ router.post(userOpsWebApi('/list'), async (ctx) => {
         isAdmin: true,
         createdAt: true,
         updatedAt: true,
-        deletedAt: true
+        deletedAt: true,
+        _count: {
+          select: { matchRecords: true }
+        }
       }
     })
   ])
@@ -74,8 +77,9 @@ router.post(userOpsWebApi('/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      rows.map((r) => ({
+      rows.map(({ _count, ...r }) => ({
         ...r,
+        matchRecordsCount: _count.matchRecords,
         createdAt: formatTime(r.createdAt),
         updatedAt: formatTime(r.updatedAt),
         deletedAt: formatTime(r.deletedAt)
@@ -137,6 +141,7 @@ router.post(userOpsWebApi('/detail'), async (ctx) => {
 
   response.success(ctx, {
     ...row,
+    matchRecordsCount: row._count.matchRecords,
     createdAt: formatTime(row.createdAt),
     updatedAt: formatTime(row.updatedAt),
     deletedAt: formatTime(row.deletedAt),
