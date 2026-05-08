@@ -26,7 +26,8 @@ import {
 import {
   isAllowedClientAssetUsage,
   isAllowedProfileAvatarKey,
-  isAllowedPokerBackgroundKey
+  isAllowedPokerBackgroundKey,
+  isAllowedTableBackgroundKey
 } from '../../constants/clientAssetIdValidation'
 
 const userClientApi = combinePath(apiPrefixClient)('/user')
@@ -279,6 +280,7 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
       avatarUrl: true,
       avatarKey: true,
       pokerBackgroundKey: true,
+      tableBackgroundKey: true,
       username: true,
       createdAt: true,
       isAdmin: true
@@ -324,6 +326,7 @@ router.post(userClientApi('/profile'), async (ctx) => {
       avatarUrl: true,
       avatarKey: true,
       pokerBackgroundKey: true,
+      tableBackgroundKey: true,
       username: true,
       createdAt: true
     }
@@ -339,7 +342,7 @@ router.post(userClientApi('/profile'), async (ctx) => {
 })
 
 /**
- * 牌桌背景预设 key，body: { pokerBackgroundKey: string }
+ * 卡面（牌背）预设 key，body: { pokerBackgroundKey: string }
  */
 router.post(userClientApi('/setPokerBackground'), async (ctx) => {
   const userId = ctx.state.user!.id
@@ -376,6 +379,58 @@ router.post(userClientApi('/setPokerBackground'), async (ctx) => {
     await user.update({
       where: { id: userId },
       data: { pokerBackgroundKey: key }
+    })
+    response.success(ctx, null, '卡面更新成功')
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2025'
+    ) {
+      response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+      return
+    }
+    throw error
+  }
+})
+
+/**
+ * 牌桌台布预设 key，body: { tableBackgroundKey: string }
+ */
+router.post(userClientApi('/setTableBackground'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { tableBackgroundKey }: { tableBackgroundKey?: string } =
+    ctx.request.body ?? {}
+
+  if (
+    tableBackgroundKey === undefined ||
+    typeof tableBackgroundKey !== 'string' ||
+    tableBackgroundKey.trim().length === 0
+  ) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '请传入有效的 tableBackgroundKey'
+    )
+    return
+  }
+  const key = tableBackgroundKey.trim()
+  if (key.length > 128) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'tableBackgroundKey 过长')
+    return
+  }
+  if (!isAllowedTableBackgroundKey(key)) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      'tableBackgroundKey 不在允许列表'
+    )
+    return
+  }
+
+  try {
+    await user.update({
+      where: { id: userId },
+      data: { tableBackgroundKey: key }
     })
     response.success(ctx, null, '牌桌背景更新成功')
   } catch (error) {

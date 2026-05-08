@@ -163,6 +163,7 @@ export class RoomJoinFacade {
       avatarUrl: joinUser.avatarUrl,
       avatarKey: joinUser.avatarKey,
       pokerBackgroundKey: joinUser.pokerBackgroundKey,
+      tableBackgroundKey: joinUser.tableBackgroundKey,
       joinedAt: dayjs().format(timeFormat),
       isOwner: txRes.ownerId === joinUser.id
     }

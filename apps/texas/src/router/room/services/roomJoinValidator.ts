@@ -11,6 +11,7 @@ export type RoomJoinAuthData = {
     avatarUrl: string | null
     avatarKey: string
     pokerBackgroundKey: string
+    tableBackgroundKey: string
   }
 }
 export type RoomJoinAuthResult = ApiResult<RoomJoinAuthData>
@@ -66,7 +67,8 @@ export async function validateRoomJoinAuth(input: {
       name: true,
       avatarUrl: true,
       avatarKey: true,
-      pokerBackgroundKey: true
+      pokerBackgroundKey: true,
+      tableBackgroundKey: true
     }
   })
 
@@ -83,7 +85,8 @@ export async function validateRoomJoinAuth(input: {
         name: joinUser.name,
         avatarUrl: joinUser.avatarUrl,
         avatarKey: joinUser.avatarKey,
-        pokerBackgroundKey: joinUser.pokerBackgroundKey
+        pokerBackgroundKey: joinUser.pokerBackgroundKey,
+        tableBackgroundKey: joinUser.tableBackgroundKey
       }
     }
   }

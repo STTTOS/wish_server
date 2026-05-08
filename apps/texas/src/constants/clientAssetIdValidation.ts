@@ -31,6 +31,11 @@ export function isAllowedPokerBackgroundKey(key: string): boolean {
   return isAllowedClientAssetUsage('poker_back', key)
 }
 
+/** 牌桌台布（与客户端 tableBackgroundKey、打点 table_bg 同源清单） */
+export function isAllowedTableBackgroundKey(key: string): boolean {
+  return isAllowedClientAssetUsage('table_bg', key)
+}
+
 /** 预设头像 compoundKey：category/id，与 RN profileAvatars 导出一致 */
 export function isAllowedProfileAvatarKey(avatarKey: string): boolean {
   const k = avatarKey.trim()

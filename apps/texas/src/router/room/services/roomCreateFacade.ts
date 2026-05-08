@@ -62,6 +62,7 @@ export class RoomCreateFacade {
               avatarUrl: string | null
               avatarKey: string
               pokerBackgroundKey: string
+              tableBackgroundKey: string
             }
           }
         }
@@ -75,7 +76,8 @@ export class RoomCreateFacade {
             name: true,
             avatarUrl: true,
             avatarKey: true,
-            pokerBackgroundKey: true
+            pokerBackgroundKey: true,
+            tableBackgroundKey: true
           }
         })
         if (!userInfo) {

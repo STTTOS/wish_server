@@ -322,6 +322,7 @@ router.post(matchApi('/detail'), async (ctx) => {
               avatarUrl: true,
               avatarKey: true,
               pokerBackgroundKey: true,
+              tableBackgroundKey: true,
               name: true
             }
           },
@@ -347,6 +348,7 @@ router.post(matchApi('/detail'), async (ctx) => {
               avatarUrl: true,
               avatarKey: true,
               pokerBackgroundKey: true,
+              tableBackgroundKey: true,
               name: true
             }
           },
@@ -443,7 +445,8 @@ router.post(matchApi('/replayTape'), async (ctx) => {
                 name: true,
                 avatarUrl: true,
                 avatarKey: true,
-                pokerBackgroundKey: true
+                pokerBackgroundKey: true,
+                tableBackgroundKey: true
               }
             }
           }

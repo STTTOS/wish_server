@@ -72,7 +72,8 @@ router.post(roomApiClient('/list'), async (ctx) => {
           name: true,
           avatarUrl: true,
           avatarKey: true,
-          pokerBackgroundKey: true
+          pokerBackgroundKey: true,
+          tableBackgroundKey: true
         }
       },
       members: {
@@ -256,7 +257,8 @@ router.post(roomApiClient('/detail'), async (ctx) => {
           name: true,
           avatarUrl: true,
           avatarKey: true,
-          pokerBackgroundKey: true
+          pokerBackgroundKey: true,
+          tableBackgroundKey: true
         }
       }
     }

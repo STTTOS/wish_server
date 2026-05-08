@@ -14,6 +14,7 @@ export type RoomMemberClientRow = {
   avatarUrl: string | null
   avatarKey: string
   pokerBackgroundKey: string
+  tableBackgroundKey: string
   joinedAt: string
   isOwner: boolean
   /** 是否在等待房或游戏房任一 WS 通道在线 */
@@ -60,7 +61,8 @@ export class RoomMembersFacade {
             name: true,
             avatarUrl: true,
             avatarKey: true,
-            pokerBackgroundKey: true
+            pokerBackgroundKey: true,
+            tableBackgroundKey: true
           }
         }
       },
@@ -79,6 +81,7 @@ export class RoomMembersFacade {
         avatarUrl: u.avatarUrl,
         avatarKey: u.avatarKey,
         pokerBackgroundKey: u.pokerBackgroundKey,
+        tableBackgroundKey: u.tableBackgroundKey,
         joinedAt: dayjs(joinedAt).format(timeFormat),
         isOwner: ownerId === u.id,
         isOnline: onWaiting || onGame,

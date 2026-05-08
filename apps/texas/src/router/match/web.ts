@@ -165,7 +165,8 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
               name: true,
               avatarUrl: true,
               avatarKey: true,
-              pokerBackgroundKey: true
+              pokerBackgroundKey: true,
+              tableBackgroundKey: true
             }
           }
         },
@@ -181,7 +182,8 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
               name: true,
               avatarUrl: true,
               avatarKey: true,
-              pokerBackgroundKey: true
+              pokerBackgroundKey: true,
+              tableBackgroundKey: true
             }
           }
         }
@@ -311,6 +313,7 @@ router.post(matchWebApi('/players/:matchId'), async (ctx) => {
           avatarUrl: true,
           avatarKey: true,
           pokerBackgroundKey: true,
+          tableBackgroundKey: true,
           balance: true,
           username: true,
           createdAt: true

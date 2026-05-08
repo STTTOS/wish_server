@@ -317,6 +317,7 @@ export type WsWaitingRoomMemberJoinedData = {
   avatarUrl: string | null
   avatarKey: string
   pokerBackgroundKey: string
+  tableBackgroundKey: string
   joinedAt: string
   isOwner: boolean
 }
@@ -362,6 +363,7 @@ export type WsRoomListRoomCreatedData = {
     avatarUrl: string | null
     avatarKey: string
     pokerBackgroundKey: string
+    tableBackgroundKey: string
   }
   initialChips: number
   thinkingTime: number
