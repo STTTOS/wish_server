@@ -69,7 +69,7 @@ function toFortuneBody(
 
 /**
  * 获取当日抽签情况。
- * `fortuneOn` 为北京日历日（东八区 `Asia/Shanghai`），用于 `(userId, fortuneOn)` 唯一约束（每日至多一签）；
+ * `fortuneOn` 为中国标准时区（东八区，俗称北京时间）的日历日；代码用 IANA `Asia/Shanghai` 表示该时区。用于 `(userId, fortuneOn)` 唯一约束（每日至多一签）；
  * 跨自然日换日。
  */
 router.post(
@@ -116,7 +116,7 @@ router.post(
 
 /**
  * 抽签并落库。档位与幸运牌由 `userId` + **服务端本次处理时的 UTC ISO** 决定（与入库同一瞬间，简单可靠）。
- * `fortuneOn` 仍为北京日、每日一行。幂等：同日已抽则 200 返回已存行。
+ * `fortuneOn` 仍按上述中国标准时区日历日、每日一行。幂等：同日已抽则 200 返回已存行。
  */
 router.post(
   fortuneClientApi('/draw'),
