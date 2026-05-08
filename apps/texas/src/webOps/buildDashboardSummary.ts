@@ -1,10 +1,20 @@
 /**
  * 管理端看板汇总：聚合查询与按日序列，供 `router/opsWeb` 使用，路由层只做鉴权与响应。
+ *
+ * 日历边界（「今日」、近 7 日按日桶）均按 **中国标准时区**（IANA `Asia/Shanghai`，与 fortune 一致），
+ * 而非 Node 进程默认时区；例如北京时间 00:02 时「今日」统计为当日 00:00～当前时刻已结束对局数。
  */
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
 
 import formatTime from '../utils/formatTime'
 import { room, match, engineFatalIncident } from '../models'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
+const DASHBOARD_TZ = 'Asia/Shanghai'
 
 export type DashboardSummaryPayload = {
   rangeStart: string | null
@@ -20,14 +30,15 @@ export type DashboardSummaryPayload = {
 }
 
 export async function buildDashboardSummary(): Promise<DashboardSummaryPayload> {
-  const since = dayjs().subtract(7, 'day').startOf('day').toDate()
-  const todayStart = dayjs().startOf('day').toDate()
+  const nowTz = dayjs().tz(DASHBOARD_TZ)
+  const since = nowTz.subtract(7, 'day').startOf('day').toDate()
+  const todayStart = nowTz.startOf('day').toDate()
 
   const dayRanges = Array.from({ length: 7 }, (_, i) => {
-    const d = dayjs().subtract(6 - i, 'day')
+    const d = nowTz.subtract(6 - i, 'day').startOf('day')
     return {
       day: d.format('YYYY-MM-DD'),
-      start: d.startOf('day').toDate(),
+      start: d.toDate(),
       end: d.endOf('day').toDate()
     }
   })
