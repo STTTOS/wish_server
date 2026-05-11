@@ -58,7 +58,7 @@ export class ShowMyHandPokesUseCase {
       return {
         ok: false,
         status: HTTP_STATUS.CONFLICT,
-        message: '仅局间（between_hands）可亮牌'
+        message: '仅局间可亮牌'
       }
     }
 
