@@ -14,6 +14,8 @@ import { HTTP_STATUS } from '../constants/httpStatus'
 import response, { withList } from '../utils/response'
 import { room, assetUsageEvent, engineFatalIncident } from '../models'
 import { buildDashboardSummary } from '../webOps/buildDashboardSummary'
+import { buildRoomOpsListWhere } from '../webOps/buildRoomOpsListWhere'
+import { ROOM_TABLE_TYPES, type RoomTableType } from '../constants/game'
 
 const engineFatalWebApi = combinePath(apiPrefixWeb)('/engine-fatal')
 const roomOpsWebApi = combinePath(apiPrefixWeb)('/room-ops')
@@ -89,27 +91,21 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
     current: page,
     pageSize: take,
     gameStatus,
-    roomId,
-    ownerId
+    ownerNameContains: ownerNameContainsRaw,
+    tableType: tableTypeRaw
   } = (ctx.request.body ?? {}) as {
     current?: number
     pageSize?: number
     gameStatus?: string
-    roomId?: number
-    ownerId?: number
+    /** 房主游戏昵称 `User.name` 子串（模糊） */
+    ownerNameContains?: string
+    tableType?: string
   }
   if (!page || !take) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
     return
   }
 
-  const where: Prisma.RoomWhereInput = { deletedAt: null }
-  if (roomId != null && Number.isInteger(roomId) && roomId > 0) {
-    where.id = roomId
-  }
-  if (ownerId != null && Number.isInteger(ownerId) && ownerId > 0) {
-    where.ownerId = ownerId
-  }
   const validStatuses: RoomGameStatus[] = [
     'waiting',
     'entering',
@@ -117,13 +113,34 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
     'in_hand',
     'between_hands'
   ]
+  let gameStatusFilter: RoomGameStatus | undefined
   if (gameStatus && gameStatus !== 'all') {
     if (!validStatuses.includes(gameStatus as RoomGameStatus)) {
       response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'gameStatus 参数异常')
       return
     }
-    where.gameStatus = gameStatus as RoomGameStatus
+    gameStatusFilter = gameStatus as RoomGameStatus
   }
+
+  const ownerNameTrimmed =
+    typeof ownerNameContainsRaw === 'string' ? ownerNameContainsRaw.trim() : ''
+  const tt = typeof tableTypeRaw === 'string' ? tableTypeRaw.trim() : ''
+  if (
+    tt &&
+    tt !== 'all' &&
+    !(ROOM_TABLE_TYPES as readonly string[]).includes(tt)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'tableType 参数异常')
+    return
+  }
+  const tableType: RoomTableType | undefined =
+    tt && tt !== 'all' ? (tt as RoomTableType) : undefined
+
+  const where = buildRoomOpsListWhere({
+    gameStatus: gameStatusFilter,
+    ownerNameContains: ownerNameTrimmed || undefined,
+    tableType
+  })
 
   const skip = (page - 1) * take
   const [total, rows] = await Promise.all([
