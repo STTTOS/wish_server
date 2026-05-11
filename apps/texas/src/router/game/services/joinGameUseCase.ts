@@ -199,14 +199,6 @@ export class JoinGameUseCase {
         if (engineRoomStatus === 'seats_open') {
           texas.room.seatById(userId)
           gameRuntimeRegistry.enqueuePendingPostBigBlind(roomKey, userId)
-          const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
-          this.#wsGateway.notifyPlayersPostedBigBlind(roomKey, {
-            roomId,
-            matchId: runtime.currentMatchId,
-            seatedUserIds: [userId],
-            posts: [],
-            pool: texas.pool.totalAmount
-          })
           await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
           await this.#wsGateway.notifyGameTableRosterFromRuntime(
             roomKey,
@@ -244,14 +236,6 @@ export class JoinGameUseCase {
         texas.room.join(player)
         texas.room.seat(player)
         gameRuntimeRegistry.enqueuePendingPostBigBlind(roomKey, userId)
-        const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
-        this.#wsGateway.notifyPlayersPostedBigBlind(roomKey, {
-          roomId,
-          matchId: runtime.currentMatchId,
-          seatedUserIds: [userId],
-          posts: [],
-          pool: texas.pool.totalAmount
-        })
       }
       await drainAndInterpretTexas(getTexasEventContextForRoom(roomKey))
       await this.#wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)

@@ -156,30 +156,6 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
         const startEvents =
           texas.startPreflopWithJoiningBigBlinds(pendingPostBbUserIds)
         await drainTexasDomainEvents(startEvents)
-
-        const joinPosts = startEvents.filter(
-          (e): e is Extract<TexasDomainEvent, { type: 'PostedBigBlind' }> =>
-            e.type === 'PostedBigBlind'
-        )
-        if (joinPosts.length > 0) {
-          const posts = joinPosts.map((e) => {
-            const pl = texas.dealer.getById(e.payload.userId)
-            return {
-              userId: e.payload.userId,
-              amount: e.payload.amount,
-              balance: pl?.balance ?? 0,
-              totalBetAmount: pl?.totalBetAmount ?? 0,
-              currentStageBetAmount: pl?.currentStageTotalAmount ?? 0
-            }
-          })
-          wsGateway.notifyPlayersPostedBigBlind(roomKey, {
-            roomId,
-            matchId: getRuntime().currentMatchId,
-            seatedUserIds: [],
-            posts,
-            pool: texas.pool.totalAmount
-          })
-        }
         await transitionRoomGameStatus(roomId, 'in_hand')
       } catch (e: unknown) {
         if (e instanceof TexasError && isFatalTexasErrorCode(e.code)) {

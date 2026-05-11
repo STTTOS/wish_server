@@ -221,7 +221,9 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `players-posted-big-blind`
 
-用途：对局中途加入的玩家入座通知 + 翻前补缴大盲结果。`seatedUserIds` 用于客户端刷新 `playerSet`（拉取成员后更新 UI）；`posts` 用于按行动样式渲染“补缴大盲”下注表现。
+用途：翻前**入座大盲 / `PostBigBlind` 指令**入账结果。与 Core `PostedJoiningBigBlinds` 对齐：**一条消息内** `posts` 为当批全部行（批量开局为多行，`PostBigBlind` 为单元素）。不再先发空 `posts` 再补单条；入座与名单以 `game-table-roster` 等为准。
+
+`seatedUserIds` 与本次 `posts[].userId` 一致，便于服务端刷新在座 WebSocket 订阅；客户端应以 **`posts` 数组** 渲染多条「补缴大盲」下注（含 `requested` 与 `amount` 的短码语义）。
 
 ```ts
 {
@@ -231,6 +233,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
   posts: Array<{
     userId: number
     amount: number
+    requested: number
     balance: number
     totalBetAmount: number
     currentStageBetAmount: number

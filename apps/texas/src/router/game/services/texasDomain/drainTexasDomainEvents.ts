@@ -731,27 +731,44 @@ async function processTexasDomainEvent(
       }
       return
     }
-    case 'PostedBigBlind':
-      {
-        const matchId = getRuntime().currentMatchId
-        if (matchId != null) {
-          await betRecord.createMany({
-            data: [
-              {
-                userId: e.payload.userId,
-                actionType: 'bet' as ActionType,
-                amount: e.payload.amount,
-                stage: 'pre_flop',
-                matchId,
-                domainHandId: e.payload.handId,
-                domainEventSeq: e.payload.seq
-              }
-            ],
-            skipDuplicates: true
-          })
+    case 'PostedJoiningBigBlinds': {
+      const matchId = getRuntime().currentMatchId
+      if (matchId != null) {
+        await betRecord.createMany({
+          data: e.payload.posts.map((post) => ({
+            userId: post.userId,
+            actionType: 'bet' as ActionType,
+            amount: post.amount,
+            stage: 'pre_flop',
+            matchId,
+            domainHandId: e.payload.handId,
+            domainEventSeq: e.payload.seq
+          })),
+          skipDuplicates: true
+        })
+      }
+      const posts = e.payload.posts.map((post) => {
+        const pl = texas.dealer.getById(post.userId)
+        return {
+          userId: post.userId,
+          amount: post.amount,
+          requested: post.requested,
+          balance: pl?.balance ?? 0,
+          totalBetAmount: pl?.totalBetAmount ?? 0,
+          currentStageBetAmount: pl?.currentStageTotalAmount ?? 0
         }
+      })
+      if (posts.length > 0) {
+        wsGateway.notifyPlayersPostedBigBlind(roomKey, {
+          roomId,
+          matchId: getRuntime().currentMatchId,
+          seatedUserIds: posts.map((p) => p.userId),
+          posts,
+          pool: texas.pool.totalAmount
+        })
       }
       return
+    }
     case 'PotUpdated':
     case 'TurnEnded':
     case 'PotAwarded':

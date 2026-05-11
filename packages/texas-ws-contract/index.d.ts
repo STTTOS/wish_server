@@ -215,10 +215,14 @@ export type WsGameRoomClosedData = {
 export type WsPlayersPostedBigBlindData = {
   roomId: number
   matchId: number | null
+  /** 与 `posts[].userId` 一致；服务端据此 `resyncGameRoomSeatPresence`。 */
   seatedUserIds: number[]
+  /** 与 Core `PostedJoiningBigBlinds.payload.posts` 对齐的一次性批量（含单元素 `PostBigBlind`）。 */
   posts: Array<{
     userId: number
     amount: number
+    /** 桌级大盲规定额；短码时 `amount` 可能更小。 */
+    requested: number
     balance: number
     totalBetAmount: number
     currentStageBetAmount: number
