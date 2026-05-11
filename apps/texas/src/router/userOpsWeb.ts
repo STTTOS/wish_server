@@ -11,6 +11,7 @@ import formatTime from '../utils/formatTime'
 import combinePath from '../utils/combinePath'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import response, { withList } from '../utils/response'
+import { orderByForUserOpsList } from './userOpsListOrderBy'
 
 const userOpsWebApi = combinePath(apiPrefixWeb)('/user-ops')
 
@@ -21,12 +22,16 @@ router.post(userOpsWebApi('/list'), async (ctx) => {
     current: page,
     pageSize: take,
     q,
-    includeDeleted
+    includeDeleted,
+    sortField,
+    sortOrder
   } = (ctx.request.body ?? {}) as {
     current?: number
     pageSize?: number
     q?: string
     includeDeleted?: boolean
+    sortField?: string
+    sortOrder?: string
   }
   if (!page || !take) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
@@ -46,13 +51,14 @@ router.post(userOpsWebApi('/list'), async (ctx) => {
   }
 
   const skip = (page - 1) * take
+  const orderBy = orderByForUserOpsList({ sortField, sortOrder })
   const [total, rows] = await Promise.all([
     user.count({ where }),
     user.findMany({
       where,
       skip,
       take,
-      orderBy: { id: 'desc' },
+      orderBy,
       select: {
         id: true,
         name: true,

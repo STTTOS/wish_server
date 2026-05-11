@@ -1,14 +1,15 @@
-import { Prisma } from '@prisma/texas-client'
+import type { Stage } from '@prisma/texas-client'
 
 import router from '../instance'
 import { logger } from '../../logger'
 import { apiPrefixWeb } from '../../config'
 import formatTime from '../../utils/formatTime'
 import combinePath from '../../utils/combinePath'
-import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
+import { buildMatchListWhere } from './buildMatchListWhere'
 import { assertWebUser, assertMatchSensitiveAccess } from '../webAuth'
+import { ROOM_TABLE_TYPES, type RoomTableType } from '../../constants/game'
 import { projectSettleRecordsForMatchDetail } from './matchSettleVisibility'
 import { loadMatchCompositeReadModelFromDbTape } from '../game/services/matchReplayReadModel'
 import {
@@ -19,13 +20,35 @@ import {
   engineFatalIncident
 } from '../../models'
 
+/** 与 Prisma `Stage` / `Match.boardThroughStage` 一致 */
+const BOARD_THROUGH_STAGES = new Set(['pre_flop', 'flop', 'turn', 'river'])
+
 const matchWebApi = combinePath(apiPrefixWeb)('/match')
 
 router.post(matchWebApi('/list'), async (ctx) => {
   const userId = await assertWebUser(ctx)
   if (userId == null) return
 
-  const { current: skip, pageSize: take, time, type } = ctx.request.body
+  const {
+    current: skip,
+    pageSize: take,
+    time,
+    type,
+    playerName,
+    matchStatus,
+    boardThroughStage: boardThroughStageRaw
+  } = ctx.request.body as {
+    current?: number
+    pageSize?: number
+    time?: [string, string]
+    type?: string
+    /** 管理员：参与用户昵称（`User.name`）模糊查询 */
+    playerName?: string
+    /** `all` | `in_progress` | `ended` */
+    matchStatus?: string
+    /** `all` 或 `pre_flop` | `flop` | `turn` | `river` */
+    boardThroughStage?: string
+  }
   if (!skip || !take) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
     return
@@ -40,7 +63,6 @@ router.post(matchWebApi('/list'), async (ctx) => {
     return
   }
 
-  const where: Prisma.MatchWhereInput = {}
   if (
     type &&
     type !== 'all' &&
@@ -49,23 +71,47 @@ router.post(matchWebApi('/list'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 参数异常')
     return
   }
-  if (!loginUser.isAdmin) {
-    where.playerMatchRecords = {
-      some: {
-        userId
-      }
-    }
+
+  const tableType: RoomTableType | undefined =
+    type && type !== 'all' ? (type as RoomTableType) : undefined
+
+  const timeRange =
+    time?.length === 2
+      ? { start: new Date(time[0]), end: new Date(time[1]) }
+      : undefined
+
+  const participantNameTrimmed =
+    typeof playerName === 'string' ? playerName.trim() : ''
+  if (!loginUser.isAdmin && participantNameTrimmed) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '仅管理员可按参与用户昵称筛选')
+    return
   }
-  if (time) {
-    const [start, end] = time
-    where.startedAt = {
-      gte: new Date(start),
-      lte: new Date(end)
-    }
+
+  const progress =
+    matchStatus === 'in_progress' || matchStatus === 'ended'
+      ? matchStatus
+      : 'all'
+  if (matchStatus && matchStatus !== 'all' && progress === 'all') {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'matchStatus 参数异常')
+    return
   }
-  if (type && type !== 'all') {
-    where.room = { is: { tableType: type } }
+
+  const bts =
+    typeof boardThroughStageRaw === 'string' ? boardThroughStageRaw.trim() : ''
+  if (bts && bts !== 'all' && !BOARD_THROUGH_STAGES.has(bts)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'boardThroughStage 参数异常')
+    return
   }
+
+  const where = buildMatchListWhere({
+    viewerUserId: userId,
+    isAdmin: loginUser.isAdmin,
+    tableType,
+    timeRange,
+    matchProgress: progress,
+    boardThroughStage: bts && bts !== 'all' ? (bts as Stage) : undefined,
+    participantNameContains: participantNameTrimmed || undefined
+  })
 
   const total = await match.count({ where })
   const list = await match.findMany({
@@ -87,7 +133,15 @@ router.post(matchWebApi('/list'), async (ctx) => {
           id: true
         }
       },
-      room: true
+      room: {
+        select: {
+          id: true,
+          activeCode: true,
+          initialChips: true,
+          tableType: true,
+          sevenTwoBonusEnabled: true
+        }
+      }
     },
     orderBy: {
       startedAt: 'desc'
@@ -109,14 +163,14 @@ router.post(matchWebApi('/list'), async (ctx) => {
   response.success(
     ctx,
     withList(
-      list.map(({ playerMatchRecords, ...rest }) => {
+      list.map(({ playerMatchRecords, room, ...rest }) => {
         const {
           activeCode,
           id,
           initialChips,
           tableType,
           sevenTwoBonusEnabled
-        } = rest.room
+        } = room
 
         return {
           ...rest,
@@ -198,6 +252,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
       room: {
         select: {
           tableType: true,
+          initialChips: true,
           sevenTwoBonusEnabled: true
         }
       }
@@ -226,6 +281,7 @@ router.post(matchWebApi('/detail/:id'), async (ctx) => {
   response.success(ctx, {
     ...restDetail,
     tableType: room.tableType,
+    initialChips: room.initialChips,
     sevenTwoBonusEnabled: room.sevenTwoBonusEnabled,
     startedAt: formatTime(detail.startedAt),
     endedAt: formatTime(detail.endedAt),
