@@ -1,9 +1,7 @@
 import type { BindTexasLifecycleParams } from './types'
 
 import {
-  RoleEnum,
   TexasError,
-  TexasCoreErrorCode,
   isFatalTexasErrorCode,
   type TexasDomainEvent
 } from 'texas-poker-core'
@@ -153,56 +151,32 @@ export function bindTexasLifecycleEvents(params: BindTexasLifecycleParams): {
     },
     onStart: async () => {
       try {
-        const startEvents = texas.start()
-        await drainTexasDomainEvents(startEvents)
         const pendingPostBbUserIds =
           runtimeRegistry.consumePendingPostBigBlind(roomKey)
-        const posted: Array<{
-          userId: number
-          amount: number
-          balance: number
-          totalBetAmount: number
-          currentStageBetAmount: number
-        }> = []
-        for (const userId of pendingPostBbUserIds) {
-          const seatStatus = texas.room.getPlayerSeatStatusById(userId)
-          if (seatStatus !== 'on-set') continue
-          const pl = texas.dealer.getById(userId)
-          if (!pl) continue
-          const role = pl.getRole()
-          if (role === RoleEnum.SB || role === RoleEnum.BB) continue
-          try {
-            const ev = texas.dispatchCommand({
-              type: 'PostBigBlind',
-              playerId: userId
-            })
-            const postedEv = ev.find((x) => x.type === 'PostedBigBlind')
-            if (postedEv?.type === 'PostedBigBlind') {
-              posted.push({
-                userId,
-                amount: postedEv.payload.amount,
-                balance: pl.balance,
-                totalBetAmount: pl.totalBetAmount,
-                currentStageBetAmount: pl.currentStageTotalAmount
-              })
+        const startEvents =
+          texas.startPreflopWithJoiningBigBlinds(pendingPostBbUserIds)
+        await drainTexasDomainEvents(startEvents)
+
+        const joinPosts = startEvents.filter(
+          (e): e is Extract<TexasDomainEvent, { type: 'PostedBigBlind' }> =>
+            e.type === 'PostedBigBlind'
+        )
+        if (joinPosts.length > 0) {
+          const posts = joinPosts.map((e) => {
+            const pl = texas.dealer.getById(e.payload.userId)
+            return {
+              userId: e.payload.userId,
+              amount: e.payload.amount,
+              balance: pl?.balance ?? 0,
+              totalBetAmount: pl?.totalBetAmount ?? 0,
+              currentStageBetAmount: pl?.currentStageTotalAmount ?? 0
             }
-            await drainTexasDomainEvents(ev)
-          } catch (err: unknown) {
-            if (
-              err instanceof TexasError &&
-              err.code === TexasCoreErrorCode.CTRL_POST_BB_IS_ACTIVE_PLAYER
-            ) {
-              continue
-            }
-            throw err
-          }
-        }
-        if (posted.length > 0) {
+          })
           wsGateway.notifyPlayersPostedBigBlind(roomKey, {
             roomId,
             matchId: getRuntime().currentMatchId,
             seatedUserIds: [],
-            posts: posted,
+            posts,
             pool: texas.pool.totalAmount
           })
         }
