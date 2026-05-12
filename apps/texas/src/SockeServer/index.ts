@@ -40,6 +40,8 @@ class SocketServer {
   #roomListNs: Namespace
   #waitingRoomNs: Namespace
   #gameRoomConnectWaiters = new GameConnectionWaiterStore()
+  /** entering 阶段：等全员在 `/waiting-room` 在线（客户端进 `/match` 后再建 `/game`） */
+  #waitingRoomEnteringWaiters = new GameConnectionWaiterStore()
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
   #waitingRoomPresenceOfflineAnnounced = new Set<string>()
@@ -353,6 +355,7 @@ class SocketServer {
 
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
+      this.#notifyWaitingRoomEnteringWaiters(roomKey)
       /** 补发：HTTP 已 join 但 WS 连晚于 `game-entering` 广播时，避免卡在等待页 */
       void this.#replayMissedEnteringIfNeeded(socket, roomId)
 
@@ -520,6 +523,7 @@ class SocketServer {
       }
     }
     void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
+    this.#notifyWaitingRoomEnteringWaiters(roomKey)
   }
 
   #getSocketsInGameRoom(roomId: string) {
@@ -567,10 +571,14 @@ class SocketServer {
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
     gameRuntimeRegistry.markUserOnline(channel, userId)
     if (!wasOffline) return
-    this.broadcastGameRoom(channel, {
-      type: 'player-status-change',
-      data: { roomId: Number(channel), userId, status: 'online' as const }
-    })
+    this.broadcastGameRoom(
+      channel,
+      {
+        type: 'player-status-change',
+        data: { roomId: Number(channel), userId, status: 'online' as const }
+      },
+      { skipReplay: true }
+    )
   }
 
   /**
@@ -625,10 +633,14 @@ class SocketServer {
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
     gameRuntimeRegistry.markUserOffline(channel, userId)
     if (!wasOffline) {
-      this.broadcastGameRoom(channel, {
-        type: 'player-status-change',
-        data: { roomId: Number(channel), userId, status: 'offline' as const }
-      })
+      this.broadcastGameRoom(
+        channel,
+        {
+          type: 'player-status-change',
+          data: { roomId: Number(channel), userId, status: 'offline' as const }
+        },
+        { skipReplay: true }
+      )
     }
 
     void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
@@ -834,9 +846,9 @@ class SocketServer {
     const tracker = this.#gameEnteringTrackers.get(roomKey)
     if (!tracker) return
 
-    const connectedUserIds = this.getConnectedGameRoomUserIds(roomKey).filter(
-      (id) => tracker.expected.has(id)
-    )
+    const connectedUserIds = Array.from(
+      this.getWaitingRoomOnlineUserIds(tracker.roomIdNumber)
+    ).filter((id) => tracker.expected.has(id))
     const msg: WsMessage<'game-entering-progress'> = {
       type: 'game-entering-progress',
       data: {
@@ -855,12 +867,19 @@ class SocketServer {
     )
   }
 
+  #notifyWaitingRoomEnteringWaiters(roomKey: string) {
+    this.#waitingRoomEnteringWaiters.notifyConnected(
+      roomKey,
+      Array.from(this.getWaitingRoomOnlineUserIds(Number(roomKey)))
+    )
+  }
+
   getConnectedGameRoomUserIds(roomId: string): number[] {
     return this.#getUserIdsInGameRoom(roomId)
   }
 
   /**
-   * 等待指定 userId 列表全部建立 /game namespace 连接（事件驱动）
+   * 等待指定 userId 列表全部建立 /game namespace 连接（非 entering 流程；entering 用 {@link waitForWaitingRoomUsersConnected}）。
    */
   waitForGameRoomUsersConnected(
     roomId: string,
@@ -873,6 +892,24 @@ class SocketServer {
       roomId,
       userIds,
       () => this.getConnectedGameRoomUserIds(roomId),
+      timeoutMs
+    )
+  }
+
+  /**
+   * 等待指定用户均在 `/waiting-room` 该房在线（entering 阶段；对局 `/game` 在客户端进桌后再建）。
+   */
+  waitForWaitingRoomUsersConnected(
+    roomId: string,
+    userIds: number[],
+    options?: { timeoutMs?: number }
+  ): Promise<void> {
+    const timeoutMs =
+      options?.timeoutMs ?? WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
+    return this.#waitingRoomEnteringWaiters.waitForConnected(
+      roomId,
+      userIds,
+      () => Array.from(this.getWaitingRoomOnlineUserIds(Number(roomId))),
       timeoutMs
     )
   }

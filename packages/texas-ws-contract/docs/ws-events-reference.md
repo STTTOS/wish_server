@@ -37,7 +37,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 ### `game-entering-progress`
 
-用途：进入流程中的连接进度（用于 App 显示谁已连上 `/game`）。
+用途：进入流程中的连接进度（用于 App 显示谁已在 `/waiting-room` 该房在线；`/game` 在进桌页建立）。
 
 ```ts
 {

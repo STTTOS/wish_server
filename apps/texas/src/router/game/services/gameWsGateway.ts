@@ -147,8 +147,21 @@ export class GameWsGateway {
     return ws.waitForGameRoomUsersConnected(roomKey, userIds, { timeoutMs })
   }
 
+  /** entering：等全员在 `/waiting-room` 在线（对局 `/game` 仅在客户端进桌后建立）。 */
+  waitForAllWaitingRoomConnections(
+    roomKey: string,
+    userIds: number[],
+    timeoutMs = 20_000
+  ) {
+    return ws.waitForWaitingRoomUsersConnected(roomKey, userIds, { timeoutMs })
+  }
+
   getConnectedGameRoomUserIds(roomKey: string) {
     return ws.getConnectedGameRoomUserIds(roomKey)
+  }
+
+  getWaitingRoomOnlineUserIds(roomId: number): number[] {
+    return Array.from(ws.getWaitingRoomOnlineUserIds(roomId))
   }
 
   broadcastWaitingRoomMemberLeft(

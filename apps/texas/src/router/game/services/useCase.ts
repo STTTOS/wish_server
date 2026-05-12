@@ -32,7 +32,7 @@ type StartFlowInput = {
   userIds: number[]
 }
 
-/** 等待 /game 连接后的只读快照，供决策与开局分支使用。 */
+/** 等待 `/waiting-room` 在线后的只读快照（entering 阶段不依赖 `/game`）。 */
 type EnteringSnapshot = {
   roomId: number
   /** waiting-room 房主（仅用于 entering 阶段治理） */
@@ -81,7 +81,7 @@ export class StartGameUseCase {
   }
 
   /**
-   * 根据「已连上 /game 的 userId」推导未连列表、在房成员子集与运行时引擎引导用户。
+   * 根据「已在 `/waiting-room` 该房在线的 userId」推导未连列表、在房成员子集与运行时引擎引导用户。
    * 无副作用；waiting-room 房主未连时取已连成员第一位。
    *
    * 不变量：`members` 与 `userIds` 同源时，`runtimeStarterUserId` 为假仅当 `connectedUserIds` 为空
@@ -129,7 +129,7 @@ export class StartGameUseCase {
   }
 
   /**
-   * 全员未连 /game：软删房间、清空成员、断连、推送 game-entering-resolved + 房间列表删除。
+   * 全员未在 `/waiting-room` 在线：软删房间、清空成员、断连、推送 game-entering-resolved + 房间列表删除。
    */
   async #handleDestroyRoom(input: {
     roomId: number
@@ -270,20 +270,20 @@ export class StartGameUseCase {
   }
 
   /**
-   * 等待全员 /game 连接（超时仅打日志），再拉当前连接列表并组装 EnteringSnapshot。
+   * 等待全员在 `/waiting-room` 在线（超时仅打日志），再拉当前在线列表并组装 EnteringSnapshot。
    */
   async #collectConnectionSnapshot(
     input: StartFlowInput
   ): Promise<EnteringSnapshot> {
     const { roomId, lobbyOwnerId, roomInfo, members, roomKey, userIds } = input
     try {
-      await this.wsGateway.waitForAllGameConnections(roomKey, userIds)
+      await this.wsGateway.waitForAllWaitingRoomConnections(roomKey, userIds)
     } catch (e) {
-      logger.warn('[entring] wait for all game connections timeout', e)
+      logger.warn('[entring] wait for all waiting-room connections timeout', e)
     }
 
     const connectedUserIds = this.wsGateway
-      .getConnectedGameRoomUserIds(roomKey)
+      .getWaitingRoomOnlineUserIds(roomId)
       .filter((id) => userIds.includes(id))
     const { unconnectedUserIds, connectedMembers, runtimeStarterUserId } =
       this.#buildConnectionSnapshot({

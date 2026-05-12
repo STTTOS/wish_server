@@ -51,7 +51,7 @@ export async function validateStartGameRequest(
 }
 
 /**
- * 将房间标记为 entering 并通知等待房间用户准备连接 /game。
+ * 将房间标记为 entering 并通知等待房间用户进入加载流程（`/game` 在进桌页建立）。
  */
 export async function markRoomEnteringAndNotify(
   roomId: number,
