@@ -4,9 +4,19 @@ import { it, describe } from 'node:test'
 import { buildRoomOpsListWhere } from './buildRoomOpsListWhere'
 
 describe('buildRoomOpsListWhere', () => {
-  it('always excludes soft-deleted rooms', () => {
+  it('defaults to all rooms including soft-deleted', () => {
     const w = buildRoomOpsListWhere({})
+    assert.equal(w.deletedAt, undefined)
+  })
+
+  it('active lifecycle keeps only non-deleted', () => {
+    const w = buildRoomOpsListWhere({ lifecycle: 'active' })
     assert.deepEqual(w.deletedAt, null)
+  })
+
+  it('dissolved lifecycle requires deletedAt', () => {
+    const w = buildRoomOpsListWhere({ lifecycle: 'dissolved' })
+    assert.deepEqual(w.deletedAt, { not: null })
   })
 
   it('combines gameStatus, owner name, tableType', () => {

@@ -2,6 +2,7 @@
  * Web 管理端：跨对局排障与房间运维（仅管理员）
  */
 import type { RoomGameStatus } from '@prisma/texas-client'
+import type { RoomOpsLifecycleFilter } from '../webOps/buildRoomOpsListWhere'
 
 import { Prisma } from '@prisma/texas-client'
 
@@ -16,6 +17,8 @@ import { room, assetUsageEvent, engineFatalIncident } from '../models'
 import { buildDashboardSummary } from '../webOps/buildDashboardSummary'
 import { buildRoomOpsListWhere } from '../webOps/buildRoomOpsListWhere'
 import { ROOM_TABLE_TYPES, type RoomTableType } from '../constants/game'
+import { buildRoomOpsDetailPayload } from '../webOps/buildRoomOpsDetailPayload'
+import { historicalMemberCountsForRoomIds } from '../webOps/historicalMemberCountsForRoomIds'
 
 const engineFatalWebApi = combinePath(apiPrefixWeb)('/engine-fatal')
 const roomOpsWebApi = combinePath(apiPrefixWeb)('/room-ops')
@@ -92,7 +95,8 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
     pageSize: take,
     gameStatus,
     ownerNameContains: ownerNameContainsRaw,
-    tableType: tableTypeRaw
+    tableType: tableTypeRaw,
+    roomLifecycle: roomLifecycleRaw
   } = (ctx.request.body ?? {}) as {
     current?: number
     pageSize?: number
@@ -100,6 +104,8 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
     /** 房主游戏昵称 `User.name` 子串（模糊） */
     ownerNameContains?: string
     tableType?: string
+    /** `all` | `active` | `dissolved` */
+    roomLifecycle?: string
   }
   if (!page || !take) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '分页参数错误')
@@ -136,10 +142,26 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
   const tableType: RoomTableType | undefined =
     tt && tt !== 'all' ? (tt as RoomTableType) : undefined
 
+  const validLifecycle: RoomOpsLifecycleFilter[] = [
+    'all',
+    'active',
+    'dissolved'
+  ]
+  let lifecycle: RoomOpsLifecycleFilter = 'all'
+  if (roomLifecycleRaw != null && String(roomLifecycleRaw).trim() !== '') {
+    const lc = String(roomLifecycleRaw).trim() as RoomOpsLifecycleFilter
+    if (!validLifecycle.includes(lc)) {
+      response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'roomLifecycle 参数异常')
+      return
+    }
+    lifecycle = lc
+  }
+
   const where = buildRoomOpsListWhere({
     gameStatus: gameStatusFilter,
     ownerNameContains: ownerNameTrimmed || undefined,
-    tableType
+    tableType,
+    lifecycle
   })
 
   const skip = (page - 1) * take
@@ -149,7 +171,7 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
       where,
       skip,
       take,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ activeCode: 'desc' }, { createdAt: 'desc' }],
       include: {
         owner: {
           select: {
@@ -164,6 +186,9 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
       }
     })
   ])
+
+  const roomIds = rows.map((r) => r.id)
+  const historicalByRoom = await historicalMemberCountsForRoomIds(roomIds)
 
   response.success(
     ctx,
@@ -181,11 +206,30 @@ router.post(roomOpsWebApi('/list'), async (ctx) => {
         createdAt: formatTime(r.createdAt),
         owner: r.owner,
         memberCount: r._count.members,
-        matchCount: r._count.Match
+        historicalMemberCount: historicalByRoom.get(r.id) ?? 0,
+        matchCount: r._count.Match,
+        deletedAt: formatTime(r.deletedAt)
       })),
       total
     )
   )
+})
+
+router.post(roomOpsWebApi('/detail'), async (ctx) => {
+  if ((await assertWebAdmin(ctx)) == null) return
+
+  const { roomId } = (ctx.request.body ?? {}) as { roomId?: number }
+  if (roomId == null || !Number.isInteger(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'roomId 参数错误')
+    return
+  }
+
+  const payload = await buildRoomOpsDetailPayload(roomId)
+  if (!payload) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
+    return
+  }
+  response.success(ctx, payload)
 })
 
 router.post(dashboardWebApi('/summary'), async (ctx) => {
