@@ -299,7 +299,7 @@ router.post(matchApi('/overview'), async (ctx) => {
 })
 
 /**
- * 查询对局详情（当前用户必须参与过该对局）
+ * 查询对局详情（当前用户必须参与过该对局；**含进行中**，他人手牌与牌力见 {@link projectSettleRecordsForMatchDetail}）。
  */
 router.post(matchApi('/detail'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
@@ -311,7 +311,7 @@ router.post(matchApi('/detail'), async (ctx) => {
   }
 
   const matchInfo = await match.findUnique({
-    where: { id: matchId, endedAt: { not: null } },
+    where: { id: matchId },
     include: {
       room: true,
       playerMatchRecords: {
@@ -392,7 +392,8 @@ router.post(matchApi('/detail'), async (ctx) => {
   } = matchInfo
 
   const settleRecords = projectSettleRecordsForMatchDetail(playerMatchRecords, {
-    viewerUserId
+    viewerUserId,
+    matchEnded: endedAt != null
   })
 
   const actionRecords = records.map(
