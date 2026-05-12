@@ -71,7 +71,7 @@ socket.on('message', (payload) => {
 
   switch (type) {
     case 'client-room-member-joined':
-      // 有人加入；HTTP `POST .../room/members` 单条还含 isOnline / isWaitingRoomOnline
+      // 有人加入；HTTP `POST .../room/members` 单条含 isWaitingRoomOnline
       // { userId, name, avatarUrl, avatarKey, joinedAt, isOwner }
       setMemberList((prev) => [...prev, data])
       break
@@ -139,9 +139,9 @@ socket.on('message', (payload) => {
 
 **客户端**
 
-1. **先 REST 再信 WS**：用 **`POST /api/client/room/members`**（`roomId` 必填），`data` 为成员数组；成员项含 **`isOnline`**（waiting 或 game 任一 WS）、**`isWaitingRoomOnline`**（与 `waiting-room-member-presence` 同源快照）。房间摘要用 **`.../room/detail`**。拉完再建 `/waiting-room` WS，之后靠 `presence` 做增量即可。
+1. **先 REST 再信 WS**：用 **`POST /api/client/room/members`**（`roomId` 必填），`data` 为成员数组；成员项含 **`isWaitingRoomOnline`**（与 `waiting-room-member-presence` 同源快照）。房间摘要用 **`.../room/detail`**。拉完再建 `/waiting-room` WS，之后靠 `presence` 做增量即可。
 2. **再建立 `/waiting-room`**（或依赖 Socket.IO 自动重连后仍在本房间 `roomId` 上订阅）。连上后会收到 `initial connect`；其它成员会收到该用户的 `waiting-room-member-presence` 且 `state: 'online'`（若满足「该用户在本房仅这一条连接」）。
-3. **UI 区分**：`member-left` → 从列表删掉；`presence` 且 `online: false` → 仅显示「离线」等，**不**删人；`online: true` → 取消离线态。
+3. **UI 区分**：`member-left` → 从列表删掉；`presence` 且 `state: 'offline'` → 仅显示「离线」等，**不**删人；`state: 'online'`/`'pending'` → 取消离线态。
 
 **服务端**
 

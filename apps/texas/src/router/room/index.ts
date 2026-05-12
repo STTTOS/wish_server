@@ -300,8 +300,8 @@ router.post(roomApiClient('/detail'), async (ctx) => {
 
 /**
  * 客户端：查询房间成员列表。
- * 每项含 `isOnline`（waiting-room 或 game 任一 WS 在线）与 `isWaitingRoomOnline`
- * （仅 waiting-room；与 `waiting-room-member-presence` 同源）。未连等待室 WS 时后者为 `false`。
+ * 每项含 `isWaitingRoomOnline`（仅 waiting-room；与 `waiting-room-member-presence` 同源）。
+ * 未连等待室 WS 时后者为 `false`。
  * Body: `roomId`（必填）。房间摘要请用 `.../room/detail`。
  */
 router.post(roomApiClient('/members'), async (ctx) => {

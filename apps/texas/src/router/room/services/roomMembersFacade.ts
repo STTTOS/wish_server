@@ -17,8 +17,6 @@ export type RoomMemberClientRow = {
   tableBackgroundKey: string
   joinedAt: string
   isOwner: boolean
-  /** 是否在等待房或游戏房任一 WS 通道在线（快照）。 */
-  isOnline: boolean
   /**
    * 是否在 `/waiting-room` 本房已连接；与 WS `waiting-room-member-presence` 的 `state` 同源。
    * HTTP 拉成员时为当场快照，断线后客户端应依赖 presence 或再次请求 members。
@@ -33,7 +31,7 @@ export type GetRoomMembersResult = ApiResult<{
 }>
 
 /**
- * Facade：拉取「房间成员 + WS 在线态」的唯一入口。
+ * Facade：拉取「房间成员 + waiting-room 在线快照 + 座位状态」的统一入口。
  */
 export class RoomMembersFacade {
   constructor(private readonly gateway: WaitingRoomGateway) {}
@@ -53,7 +51,7 @@ export class RoomMembersFacade {
     roomId: number,
     ownerId: number
   ): Promise<RoomMemberClientRow[]> {
-    const { waiting, game } = this.gateway.getPresence(roomId)
+    const { waiting } = this.gateway.getPresence(roomId)
     const texas = gameRuntimeRegistry.getTexas(String(roomId))
     const rows = await roomMember.findMany({
       where: { roomId },
@@ -73,7 +71,6 @@ export class RoomMembersFacade {
     })
     return rows.map(({ joinedAt, user: u }) => {
       const onWaiting = waiting.has(u.id)
-      const onGame = game.has(u.id)
       const runtimeSeatStatus =
         texas?.room.getPlayerSeatStatusById(u.id) ?? null
       const gameSeatStatus: 'on_set' | 'hang' =
@@ -87,7 +84,6 @@ export class RoomMembersFacade {
         tableBackgroundKey: u.tableBackgroundKey,
         joinedAt: dayjs(joinedAt).format(timeFormat),
         isOwner: ownerId === u.id,
-        isOnline: onWaiting || onGame,
         isWaitingRoomOnline: onWaiting,
         gameSeatStatus
       }
