@@ -122,13 +122,14 @@ socket.on('message', (payload) => {
 
 以下事件均在 **`/waiting-room`** 上通过 **`message`** 推送（payload `{ type, data }`）。文档前文的 `client-room-*` 为旧称，实现侧类型名为 `waiting-room-*`。
 
-| type                                                                                    | 说明                                                         | data                                                                                                                                                   |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `waiting-room-member-joined`                                                            | 有人通过 HTTP 加入房间                                       | `userId, name, avatarUrl, avatarKey, joinedAt, isOwner`（无在线字段；全量请拉 `POST .../room/members`）                                                |
-| `waiting-room-member-left`                                                              | 有人**退出房间**（HTTP quit / 踢人），DB 已无该成员          | `{ userId }`，应从本地成员列表**移除**                                                                                                                 |
-| `waiting-room-member-presence`                                                          | **仅 WS 层**：杀进程、断网、切后台断连等；**成员仍在房间内** | `{ userId, online: boolean }`：`false` 表示暂无本房间的 waiting-room 连接；`true` 表示该用户在本房间**重新连上** waiting-room（含重开 App 后首次连上） |
-| `waiting-room-owner-changed`                                                            | 房主变更                                                     | `{ oldOwnerId, newOwnerId }`                                                                                                                           |
-| `game-entering` / `game-entering-progress` / `game-entering-failed` / `game-entered` 等 | 开局流程                                                     | 见对局相关文档                                                                                                                                         |
+| type                                                                                    | 说明                                                         | data                                                                                                    |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `waiting-room-member-joined`                                                            | 有人通过 HTTP 加入房间                                       | `userId, name, avatarUrl, avatarKey, joinedAt, isOwner`（无在线字段；全量请拉 `POST .../room/members`） |
+| `waiting-room-member-left`                                                              | 有人**退出房间**（HTTP quit / 踢人），DB 已无该成员          | `{ userId }`，应从本地成员列表**移除**                                                                  |
+| `waiting-room-member-presence`                                                          | **仅 WS 层**：杀进程、断网、切后台断连等；**成员仍在房间内** | `{ userId, state, seq? }`：`state='pending'` 表示离线宽限期；当前 App 可按在线展示                      |
+| `waiting-room-presence-snapshot`                                                        | 连接后单播的在线态基线                                       | `{ roomId, seq, members[] }`，成员项含 `userId/state`，建议先应用快照再吃增量                           |
+| `waiting-room-owner-changed`                                                            | 房主变更                                                     | `{ oldOwnerId, newOwnerId }`                                                                            |
+| `game-entering` / `game-entering-progress` / `game-entering-failed` / `game-entered` 等 | 开局流程                                                     | 见对局相关文档                                                                                          |
 
 **多终端**：同一 `userId` 在**同一房间**下若仍有其它终端保持 `/waiting-room` 连接，则**不会**因其中一条断开而收到 `online: false`，避免误报。
 
@@ -139,7 +140,7 @@ socket.on('message', (payload) => {
 **客户端**
 
 1. **先 REST 再信 WS**：用 **`POST /api/client/room/members`**（`roomId` 必填），`data` 为成员数组；成员项含 **`isOnline`**（waiting 或 game 任一 WS）、**`isWaitingRoomOnline`**（与 `waiting-room-member-presence` 同源快照）。房间摘要用 **`.../room/detail`**。拉完再建 `/waiting-room` WS，之后靠 `presence` 做增量即可。
-2. **再建立 `/waiting-room`**（或依赖 Socket.IO 自动重连后仍在本房间 `roomId` 上订阅）。连上后会收到 `initial connect`；其它成员会收到该用户的 `waiting-room-member-presence` 且 `online: true`（若满足「该用户在本房仅这一条连接」）。
+2. **再建立 `/waiting-room`**（或依赖 Socket.IO 自动重连后仍在本房间 `roomId` 上订阅）。连上后会收到 `initial connect`；其它成员会收到该用户的 `waiting-room-member-presence` 且 `state: 'online'`（若满足「该用户在本房仅这一条连接」）。
 3. **UI 区分**：`member-left` → 从列表删掉；`presence` 且 `online: false` → 仅显示「离线」等，**不**删人；`online: true` → 取消离线态。
 
 **服务端**

@@ -1,4 +1,8 @@
-import type { WsMessage, RoomWsMessage } from '@wishufree/texas-ws-contract'
+import type {
+  WsMessage,
+  RoomWsMessage,
+  WsWaitingRoomPresenceSnapshotData
+} from '@wishufree/texas-ws-contract'
 
 import { Server, Socket, Namespace } from 'socket.io'
 
@@ -34,6 +38,8 @@ import {
   getWsGameRoomReplayEpochFromHandshake
 } from '../utils/wsAuth'
 
+const WAITING_ROOM_PRESENCE_OFFLINE_GRACE_MS = 3000
+
 class SocketServer {
   #io: Server
   #gameNs: Namespace
@@ -45,6 +51,12 @@ class SocketServer {
   #gameEnteringTrackers = new GameEnteringTracker()
   #roomCleanupManager: RoomCleanupManager
   #waitingRoomPresenceOfflineAnnounced = new Set<string>()
+  #waitingRoomPendingUsers = new Set<string>()
+  #waitingRoomPendingOfflineTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+  #waitingRoomPresenceSeqByRoom = new Map<string, number>()
 
   constructor() {
     this.#io = new Server(server, {
@@ -362,19 +374,24 @@ class SocketServer {
       const userId = socket.data.userId as number
       if (typeof userId === 'number') {
         const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
-        if (this.#waitingRoomPresenceOfflineAnnounced.has(presenceKey)) {
-          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+        const shouldAnnounceOnline =
+          this.#waitingRoomPresenceOfflineAnnounced.has(presenceKey) ||
+          this.#waitingRoomPendingUsers.has(presenceKey)
+        if (shouldAnnounceOnline) {
+          this.#clearWaitingRoomPendingState(presenceKey)
+          const didBroadcast = this.#broadcastWaitingRoomPresence(
             roomKey,
             roomId,
             userId,
             socket.id,
-            true
+            'online'
           )
           if (didBroadcast) {
             this.#waitingRoomPresenceOfflineAnnounced.delete(presenceKey)
           }
         }
       }
+      void this.#emitWaitingRoomPresenceSnapshot(socket, roomId)
 
       socket.on('disconnect', (reason) => {
         logger.info(
@@ -449,23 +466,134 @@ class SocketServer {
     return `${roomKey}:${userId}`
   }
 
+  #nextWaitingRoomPresenceSeq(roomKey: string) {
+    const next = (this.#waitingRoomPresenceSeqByRoom.get(roomKey) ?? 0) + 1
+    this.#waitingRoomPresenceSeqByRoom.set(roomKey, next)
+    return next
+  }
+
+  #clearWaitingRoomPendingTimer(presenceKey: string) {
+    const timer = this.#waitingRoomPendingOfflineTimers.get(presenceKey)
+    if (!timer) return
+    clearTimeout(timer)
+    this.#waitingRoomPendingOfflineTimers.delete(presenceKey)
+  }
+
+  #clearWaitingRoomPendingState(presenceKey: string) {
+    this.#clearWaitingRoomPendingTimer(presenceKey)
+    this.#waitingRoomPendingUsers.delete(presenceKey)
+  }
+
+  #isWaitingRoomUserConnected(roomKey: string, userId: number) {
+    return this.#getSocketsInWaitingRoom(roomKey).some(
+      (s) => (s.data.userId as number) === userId
+    )
+  }
+
+  #scheduleFinalizeWaitingRoomOffline(
+    roomKey: string,
+    roomId: number,
+    userId: number
+  ) {
+    const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+    this.#clearWaitingRoomPendingTimer(presenceKey)
+    const timer = setTimeout(() => {
+      void this.#finalizeWaitingRoomOffline(roomKey, roomId, userId)
+    }, WAITING_ROOM_PRESENCE_OFFLINE_GRACE_MS)
+    this.#waitingRoomPendingOfflineTimers.set(presenceKey, timer)
+  }
+
+  async #finalizeWaitingRoomOffline(
+    roomKey: string,
+    roomId: number,
+    userId: number
+  ) {
+    const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+    this.#waitingRoomPendingOfflineTimers.delete(presenceKey)
+    try {
+      const member = await prisma.roomMember.findUnique({
+        where: { roomId_userId: { roomId, userId } },
+        select: { userId: true }
+      })
+      if (member == null || this.#isWaitingRoomUserConnected(roomKey, userId)) {
+        this.#clearWaitingRoomPendingState(presenceKey)
+        return
+      }
+      this.#waitingRoomPendingUsers.delete(presenceKey)
+      const didBroadcast = this.#broadcastWaitingRoomPresence(
+        roomKey,
+        roomId,
+        userId,
+        '',
+        'offline'
+      )
+      if (didBroadcast) {
+        this.#waitingRoomPresenceOfflineAnnounced.add(presenceKey)
+      }
+    } catch (e) {
+      logger.error(
+        `[waiting-room] finalize offline failed roomId=${roomId} userId=${userId}`,
+        e
+      )
+      this.#clearWaitingRoomPendingState(presenceKey)
+    }
+  }
+
+  async #emitWaitingRoomPresenceSnapshot(socket: Socket, roomId: number) {
+    const roomKey = String(roomId)
+    try {
+      const members = await prisma.roomMember.findMany({
+        where: { roomId },
+        select: { userId: true }
+      })
+      const onlineIds = this.getWaitingRoomOnlineUserIds(roomId)
+      const payload: WsWaitingRoomPresenceSnapshotData = {
+        roomId,
+        seq: this.#waitingRoomPresenceSeqByRoom.get(roomKey) ?? 0,
+        members: members.map(({ userId }) => {
+          const online = onlineIds.has(userId)
+          const pending =
+            !online &&
+            this.#waitingRoomPendingUsers.has(
+              this.#waitingRoomPresenceKey(roomKey, userId)
+            )
+          let state: 'online' | 'offline' | 'pending' = 'offline'
+          if (online) state = 'online'
+          else if (pending) state = 'pending'
+          return { userId, state }
+        })
+      }
+      const msg: RoomWsMessage<'waiting-room-presence-snapshot'> = {
+        type: 'waiting-room-presence-snapshot',
+        data: payload
+      }
+      socket.emit('message', msg)
+    } catch (e) {
+      logger.error(
+        `[waiting-room] emit presence snapshot failed roomId=${roomId}, socketId=${socket.id}`,
+        e
+      )
+    }
+  }
+
   /**
    * 多终端时：仅当该用户在房间内已无其它 waiting-room 连接时广播，避免误报掉线/上线。
    */
-  #maybeBroadcastWaitingRoomPresence(
+  #broadcastWaitingRoomPresence(
     roomKey: string,
     roomIdNumber: number,
     userId: number,
     socketId: string,
-    online: boolean
+    state: 'online' | 'offline' | 'pending'
   ): boolean {
     const peers = this.#getSocketsInWaitingRoom(roomKey).filter(
       (s) => (s.data.userId as number) === userId && s.id !== socketId
     )
     if (peers.length > 0) return false
+    const seq = this.#nextWaitingRoomPresenceSeq(roomKey)
     const msg: RoomWsMessage<'waiting-room-member-presence'> = {
       type: 'waiting-room-member-presence',
-      data: { userId, online }
+      data: { userId, state, seq }
     }
     this.broadcastWaitingRoom(roomIdNumber, msg)
     return true
@@ -490,16 +618,20 @@ class SocketServer {
           select: { userId: true }
         })
         if (member != null) {
-          const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+          const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+          const didBroadcast = this.#broadcastWaitingRoomPresence(
             roomKey,
             roomIdNumber,
             userId,
             socket.id,
-            false
+            'pending'
           )
           if (didBroadcast) {
-            this.#waitingRoomPresenceOfflineAnnounced.add(
-              this.#waitingRoomPresenceKey(roomKey, userId)
+            this.#waitingRoomPendingUsers.add(presenceKey)
+            this.#scheduleFinalizeWaitingRoomOffline(
+              roomKey,
+              roomIdNumber,
+              userId
             )
           }
         }
@@ -508,16 +640,20 @@ class SocketServer {
           `[waiting-room] member lookup before presence broadcast failed roomId=${roomIdNumber} userId=${userId}`,
           e
         )
-        const didBroadcast = this.#maybeBroadcastWaitingRoomPresence(
+        const presenceKey = this.#waitingRoomPresenceKey(roomKey, userId)
+        const didBroadcast = this.#broadcastWaitingRoomPresence(
           roomKey,
           roomIdNumber,
           userId,
           socket.id,
-          false
+          'pending'
         )
         if (didBroadcast) {
-          this.#waitingRoomPresenceOfflineAnnounced.add(
-            this.#waitingRoomPresenceKey(roomKey, userId)
+          this.#waitingRoomPendingUsers.add(presenceKey)
+          this.#scheduleFinalizeWaitingRoomOffline(
+            roomKey,
+            roomIdNumber,
+            userId
           )
         }
       }

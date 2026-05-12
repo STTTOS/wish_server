@@ -20,7 +20,7 @@ export type RoomMemberClientRow = {
   /** 是否在等待房或游戏房任一 WS 通道在线（快照）。 */
   isOnline: boolean
   /**
-   * 是否在 `/waiting-room` 本房已连接；与 WS `waiting-room-member-presence` 的 `online` 同源。
+   * 是否在 `/waiting-room` 本房已连接；与 WS `waiting-room-member-presence` 的 `state` 同源。
    * HTTP 拉成员时为当场快照，断线后客户端应依赖 presence 或再次请求 members。
    */
   isWaitingRoomOnline: boolean

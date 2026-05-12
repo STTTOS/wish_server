@@ -334,7 +334,20 @@ export type WsWaitingRoomMemberLeftData = {
 
 export type WsWaitingRoomMemberPresenceData = {
   userId: number
-  online: boolean
+  /** presence 语义态，便于客户端做三态处理。 */
+  state: 'online' | 'offline' | 'pending'
+  /** 房间内 presence 事件序号（单调递增）。 */
+  seq?: number
+}
+
+export type WsWaitingRoomPresenceSnapshotData = {
+  roomId: number
+  /** 快照对应的最新 presence 事件序号。 */
+  seq: number
+  members: Array<{
+    userId: number
+    state: 'online' | 'offline' | 'pending'
+  }>
 }
 
 export type WsWaitingRoomOwnerChangedData = {
@@ -383,6 +396,7 @@ export type RoomWsEventDataMap = {
   'waiting-room-member-joined': WsWaitingRoomMemberJoinedData
   'waiting-room-member-left': WsWaitingRoomMemberLeftData
   'waiting-room-member-presence': WsWaitingRoomMemberPresenceData
+  'waiting-room-presence-snapshot': WsWaitingRoomPresenceSnapshotData
   'waiting-room-owner-changed': WsWaitingRoomOwnerChangedData
   'room-list-member-count-changed': WsRoomListMemberCountChangedData
   'room-list-play-session-changed': WsRoomListPlaySessionChangedData
