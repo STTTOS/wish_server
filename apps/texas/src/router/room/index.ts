@@ -22,7 +22,7 @@ import {
 
 const roomApiClient = combinePath(apiPrefixClient)('/room')
 
-const roomMembersFacade = new RoomMembersFacade(new WaitingRoomGateway(ws))
+const roomMembersFacade = new RoomMembersFacade()
 const roomCreateFacade = new RoomCreateFacade(new WaitingRoomGateway(ws))
 const roomJoinFacade = new RoomJoinFacade(new WaitingRoomGateway(ws))
 const joinGameUseCaseForEnter = new JoinGameUseCase()
@@ -300,8 +300,7 @@ router.post(roomApiClient('/detail'), async (ctx) => {
 
 /**
  * 客户端：查询房间成员列表。
- * 每项含 `isWaitingRoomOnline`（仅 waiting-room；与 `waiting-room-member-presence` 同源）。
- * 未连等待室 WS 时后者为 `false`。
+ * 仅返回成员基础资料；等待室在线态请以 waiting-room presence（snapshot + delta）为准。
  * Body: `roomId`（必填）。房间摘要请用 `.../room/detail`。
  */
 router.post(roomApiClient('/members'), async (ctx) => {
