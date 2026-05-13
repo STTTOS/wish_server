@@ -233,7 +233,10 @@ router.post(userClientApi('/setName'), async (ctx) => {
   try {
     const updatedUser = await user.update({
       where: { id: userId },
-      data: { name }
+      data: {
+        name,
+        hasSetName: true
+      }
     })
     response.success(ctx, omit(['password'], updatedUser), '昵称设置成功')
   } catch (error) {

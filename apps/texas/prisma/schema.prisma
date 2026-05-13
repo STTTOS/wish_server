@@ -22,6 +22,8 @@ model User {
   weChatId           String?
   // 游戏昵称, 需要唯一, 设置为非必填, 在注册时给一个随机的名字, 降低注册门槛
   name               String  @unique
+  // 是否已主动设置过昵称（首改标记）
+  hasSetName         Boolean @default(false)
   // 新增用户名和密码字段
   username           String  @unique
   // 是否管理员
