@@ -11,7 +11,7 @@ import { getToken } from '../../utils/login'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
-import { user, userSettings, assetUsageEvent } from '../../models'
+import prisma, { user, userSettings, assetUsageEvent } from '../../models'
 import {
   setLoginSession,
   getLoginSession,
@@ -36,6 +36,78 @@ const DEFAULT_PRIVACY_SETTINGS = {
   showHistoryRecords: true,
   showRecordOverview: true,
   autoCallOnOffline: false
+}
+const RENAME_CARD_CODE = 'rename_card'
+const RENAME_CARD_NAME = '改名卡'
+const RENAME_CARD_DEFAULT_QUANTITY = 5
+const FORBIDDEN_NICKNAMES = new Set([
+  '你',
+  '我',
+  '他',
+  '谁',
+  '爸',
+  '妈',
+  '爸爸',
+  '妈妈'
+])
+
+type ItemCatalogEntry = {
+  code: string
+  name: string
+  description: string | null
+  stackable: boolean
+  config: Prisma.JsonValue | null
+  quantity: number
+}
+
+function normalizeNickname(name: unknown): string {
+  return typeof name === 'string' ? name.trim() : ''
+}
+
+function isForbiddenNickname(name: string): boolean {
+  return FORBIDDEN_NICKNAMES.has(name)
+}
+
+async function ensureRenameCardDefinition(db: {
+  itemDefinition: Prisma.TransactionClient['itemDefinition']
+}): Promise<{ id: number }> {
+  return db.itemDefinition.upsert({
+    where: { code: RENAME_CARD_CODE },
+    create: {
+      code: RENAME_CARD_CODE,
+      name: RENAME_CARD_NAME,
+      description: null,
+      stackable: true,
+      config: { kind: 'rename_card' },
+      sortOrder: 100,
+      isActive: true
+    },
+    update: {
+      isActive: true
+    },
+    select: { id: true }
+  })
+}
+
+async function grantDefaultRenameCards(
+  tx: Prisma.TransactionClient,
+  userId: number
+) {
+  const item = await ensureRenameCardDefinition(tx)
+  await tx.userItemBalance.upsert({
+    where: {
+      userId_itemId: {
+        userId,
+        itemId: item.id
+      }
+    },
+    create: {
+      userId,
+      itemId: item.id,
+      quantity: RENAME_CARD_DEFAULT_QUANTITY
+    },
+    update: {}
+  })
 }
 
 /**
@@ -85,17 +157,21 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
     )}`
     // 注册
     try {
-      const target = await user.create({
-        data: {
-          name: ramdomName,
-          username,
-          password,
-          balance: 0,
-          settings: {
-            create: {}
+      const target = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            name: ramdomName,
+            username,
+            password,
+            balance: 0,
+            settings: {
+              create: {}
+            }
+            // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
           }
-          // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
-        }
+        })
+        await grantDefaultRenameCards(tx, created.id)
+        return created
       })
       setLoginSession(target.id!, sessionId, 'client')
       response.success(
@@ -224,9 +300,15 @@ router.post(userClientApi('/logout'), async (ctx) => {
 
 // 此接口会被middleware接管, 必定有用户信息
 router.post(userClientApi('/setName'), async (ctx) => {
-  const { name }: { name: Prisma.UserCreateInput['name'] } = ctx.request.body
-  if (!name) {
+  const normalizedName = normalizeNickname(
+    (ctx.request.body as { name?: unknown } | undefined)?.name
+  )
+  if (!normalizedName) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '名称不可为空')
+    return
+  }
+  if (isForbiddenNickname(normalizedName)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
     return
   }
 
@@ -236,7 +318,7 @@ router.post(userClientApi('/setName'), async (ctx) => {
     const updatedUser = await user.update({
       where: { id: userId },
       data: {
-        name,
+        name: normalizedName,
         hasSetName: true
       }
     })
@@ -254,6 +336,176 @@ router.post(userClientApi('/setName'), async (ctx) => {
       }
     }
 
+    throw error
+  }
+})
+
+/** 读取当前用户持有道具（仅返回数量 > 0，用于「藏品-道具」tab） */
+router.post(userClientApi('/items'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  // 兜底确保目录中存在改名卡（避免迁移遗漏导致空列表）
+  await ensureRenameCardDefinition(prisma)
+  const balances = await prisma.userItemBalance.findMany({
+    where: {
+      userId,
+      quantity: { gt: 0 },
+      item: { isActive: true }
+    },
+    orderBy: [{ item: { sortOrder: 'asc' } }, { itemId: 'asc' }],
+    select: {
+      quantity: true,
+      item: {
+        select: {
+          code: true,
+          name: true,
+          description: true,
+          stackable: true,
+          config: true
+        }
+      }
+    }
+  })
+  if (balances.length === 0) {
+    response.success(ctx, [] as ItemCatalogEntry[])
+    return
+  }
+  const list: ItemCatalogEntry[] = balances.map((row) => ({
+    code: row.item.code,
+    name: row.item.name,
+    description: row.item.description,
+    stackable: row.item.stackable,
+    config: row.item.config,
+    quantity: row.quantity
+  }))
+  response.success(ctx, list)
+})
+
+/** 使用改名卡并改昵称（不记录曾用名，仅直接更新 User.name） */
+router.post(userClientApi('/renameWithCard'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const normalizedName = normalizeNickname(
+    (ctx.request.body as { name?: unknown } | undefined)?.name
+  )
+  if (!normalizedName) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '名称不可为空')
+    return
+  }
+  if (isForbiddenNickname(normalizedName)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
+    return
+  }
+
+  const current = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      avatarKey: true,
+      pokerBackgroundKey: true,
+      tableBackgroundKey: true,
+      username: true,
+      createdAt: true
+    }
+  })
+  if (!current) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  if (current.name === normalizedName) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '与现有昵称一致')
+    return
+  }
+
+  const renameRefId = uuidv4()
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await ensureRenameCardDefinition(tx)
+      const consumeResult = await tx.userItemBalance.updateMany({
+        where: {
+          userId,
+          itemId: item.id,
+          quantity: { gte: 1 }
+        },
+        data: {
+          quantity: { decrement: 1 }
+        }
+      })
+      if (consumeResult.count === 0) {
+        throw new Error('RENAME_CARD_INSUFFICIENT')
+      }
+      const balance = await tx.userItemBalance.findUnique({
+        where: {
+          userId_itemId: {
+            userId,
+            itemId: item.id
+          }
+        },
+        select: { quantity: true }
+      })
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: {
+          name: normalizedName,
+          hasSetName: true
+        },
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          avatarKey: true,
+          pokerBackgroundKey: true,
+          tableBackgroundKey: true,
+          username: true,
+          createdAt: true
+        }
+      })
+      await tx.userItemLedger.create({
+        data: {
+          userId,
+          itemId: item.id,
+          delta: -1,
+          balanceAfter: balance?.quantity ?? 0,
+          reason: 'rename_consume',
+          refType: 'rename_nickname',
+          refId: renameRefId
+        }
+      })
+      return {
+        user: {
+          ...updatedUser,
+          createdAt: dayjs(updatedUser.createdAt).format(timeFormat)
+        },
+        remainingRenameCards: balance?.quantity ?? 0
+      }
+    })
+    response.success(ctx, result, '改名成功')
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'RENAME_CARD_INSUFFICIENT'
+    ) {
+      response.error(ctx, HTTP_STATUS.BAD_REQUEST, '改名卡不足')
+      return
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        response.error(ctx, HTTP_STATUS.CONFLICT, '用户昵称已存在')
+        return
+      }
+      if (error.code === 'P2025') {
+        response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+        return
+      }
+    }
     throw error
   }
 })
