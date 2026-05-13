@@ -310,6 +310,17 @@ export type WsEventType = keyof WsEventDataMap
 export type WsMessage<T extends WsEventType = WsEventType> = {
   type: T
   data: WsEventDataMap[T]
+  /**
+   * `/game` 全房广播序号（仅 replayable 事件携带）：
+   * - 同一 `replayEpoch` 内单调递增；
+   * - 可用于客户端幂等去重（忽略 `seq <= lastHandledSeq`）；
+   * - room-list / waiting-room 事件通常不带该字段。
+   */
+  seq?: number
+  /**
+   * `/game` replay 世代标识（进程重启后变化），用于和 `seq` 组合判断序列是否可比较。
+   */
+  replayEpoch?: string
 }
 
 /**

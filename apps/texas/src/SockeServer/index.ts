@@ -786,6 +786,25 @@ class SocketServer {
    * @description 向 /game 房间内所有端广播
    * @param options.skipReplay 为 true 时仅 emit、不写入全房 replay 环形缓冲（与私牌单播同理；如内置语音）。
    */
+  #withGameRoomSeqMeta(
+    data: Parameters<Socket['send']>[0],
+    seq: number
+  ): Parameters<Socket['send']>[0] {
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      !('type' in data) ||
+      typeof (data as { type?: unknown }).type !== 'string'
+    ) {
+      return data
+    }
+    return {
+      ...(data as Record<string, unknown>),
+      seq,
+      replayEpoch: getGameRoomReplayEpoch()
+    }
+  }
+
   broadcastGameRoom(
     roomId: string,
     data: Parameters<Socket['send']>[0],
@@ -797,10 +816,13 @@ class SocketServer {
         roomId
       )}, data: ${JSON.stringify(data)}`
     )
-    if (!options?.skipReplay) {
-      recordGameRoomBroadcast(roomId, data)
+    if (options?.skipReplay) {
+      this.#gameNs.to(roomId).emit('message', data)
+      return
     }
-    this.#gameNs.to(roomId).emit('message', data)
+    const seq = recordGameRoomBroadcast(roomId, data)
+    const payload = this.#withGameRoomSeqMeta(data, seq)
+    this.#gameNs.to(roomId).emit('message', payload)
   }
 
   /**
@@ -819,11 +841,12 @@ class SocketServer {
         data
       )}`
     )
-    recordGameRoomBroadcast(roomId, data)
+    const seq = recordGameRoomBroadcast(roomId, data)
+    const payload = this.#withGameRoomSeqMeta(data, seq)
     for (const socket of this.#getSocketsInGameRoom(roomId)) {
       const uid = socket.data.userId as number | undefined
       if (uid === excludedUserId) continue
-      this.#gameNs.to(socket.id).emit('message', data)
+      this.#gameNs.to(socket.id).emit('message', payload)
     }
   }
 

@@ -4,8 +4,10 @@
  * ## 存的是什么
  *
  * 按 **房间维度 `roomKey`（一般为 `String(roomId)`）** 各维护一条**有上限的队列**：
- * 每次 {@link SocketServer.broadcastGameRoom} 即将 `emit('message', payload)` 时，把 **同一份 payload**
- *（通常为 `{ type, data }`，与客户端收到的 `message` 事件 body 一致）记入缓冲，并分配单调递增的 **`seq`**。
+ * 每次 {@link SocketServer.broadcastGameRoom} 广播 replayable 事件时，
+ * 将业务 payload（通常为 `{ type, data }`）记入缓冲，并分配单调递增的 **`seq`**。
+ * 客户端实时流中收到的同条消息可能附带额外 `seq/replayEpoch` 元字段用于幂等，
+ * 回放时仍以 `events[].seq + events[].payload` 组合为准。
  * 客户端重连 `/game` 时带 `auth.gameRoomSinceSeq`，服务端用 {@link replayGameRoomSince} 取出 **`seq > sinceSeq`**
  * 的条目打成 `game-room-replay` 下发。
  *
