@@ -2,8 +2,8 @@ import dayjs from 'dayjs'
 
 import router from '../instance'
 import response from '../../utils/response'
-import { announcement } from '../../models'
 import { assertWebAdmin } from '../webAuth'
+import { user, announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { isValidSemverCoreString } from '../../utils/semverCompare'
@@ -45,6 +45,36 @@ router.post(systemApiWeb('/maintenance/status'), async (ctx) => {
 router.post(systemApiClient('/maintenance/status'), async (ctx) => {
   const enabled = await isMaintenanceEnabled()
   response.success(ctx, { enabled }, '查询成功')
+})
+
+// 客户端：进入游戏前置检查（维护态 + 昵称设置态）
+router.post(systemApiClient('/game/entry-check'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+
+  const [maintenanceEnabled, currentUser] = await Promise.all([
+    isMaintenanceEnabled(),
+    user.findUnique({
+      where: { id: userId },
+      select: { hasSetName: true }
+    })
+  ])
+  if (!currentUser) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+
+  response.success(
+    ctx,
+    {
+      maintenanceEnabled,
+      hasSetName: currentUser.hasSetName
+    },
+    '查询成功'
+  )
 })
 
 // 客户端：获取当前维护公告（仅返回一条，按 priority desc、publishAt desc）

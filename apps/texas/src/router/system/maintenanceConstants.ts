@@ -11,6 +11,7 @@ export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
   '/api/client/user/logout',
   '/api/client/user/info',
   '/api/client/system/maintenance/status',
+  '/api/client/system/game/entry-check',
   ...CLIENT_VERSION_CHECK_WHITELIST_PATHS,
   '/api/web/system/maintenance/status',
   '/api/web/system/maintenance/set',

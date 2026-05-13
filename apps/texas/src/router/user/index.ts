@@ -68,7 +68,8 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
             sessionId,
             id: target.id
           }),
-          type: 'login'
+          type: 'login',
+          hasSetName: target.hasSetName
         },
         '登录成功'
       )
@@ -104,7 +105,8 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
             sessionId,
             id: target.id!
           }),
-          type: 'register'
+          type: 'register',
+          hasSetName: target.hasSetName
         },
         '注册成功'
       )
