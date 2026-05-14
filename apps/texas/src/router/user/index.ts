@@ -45,6 +45,12 @@ const DEFAULT_PRIVACY_SETTINGS = {
 const RENAME_CARD_CODE = 'rename_card'
 const RENAME_CARD_NAME = '改名卡'
 const RENAME_CARD_DEFAULT_QUANTITY = 5
+const RENAME_CARD_WELCOME_MAIL_BIZ_TYPE = 'welcome_grant'
+const RENAME_CARD_WELCOME_MAIL_BIZ_REF_ID = 'rename_card_x5_v1'
+const RENAME_CARD_WELCOME_MAIL_TITLE = '系统邮件'
+const RENAME_CARD_WELCOME_MAIL_SUMMARY = '改名卡补给 x5'
+const RENAME_CARD_WELCOME_MAIL_BODY =
+  '为了获得更好的游戏体验，我们为你准备了改名卡 5 张。点击领取后可在藏品-道具中使用。'
 const MAIL_DEFAULT_PAGE_SIZE = 20
 const MAIL_MAX_PAGE_SIZE = 100
 const FORBIDDEN_NICKNAMES = new Set([
@@ -154,24 +160,31 @@ async function ensureRenameCardDefinition(db: {
   })
 }
 
-async function grantDefaultRenameCards(
+async function grantWelcomeRenameCardMail(
   tx: Prisma.TransactionClient,
   userId: number
 ) {
-  const item = await ensureRenameCardDefinition(tx)
-  await tx.userItemBalance.upsert({
-    where: {
-      userId_itemId: {
-        userId,
-        itemId: item.id
-      }
-    },
-    create: {
+  await ensureRenameCardDefinition(tx)
+  await tx.userMail.create({
+    data: {
       userId,
-      itemId: item.id,
-      quantity: RENAME_CARD_DEFAULT_QUANTITY
-    },
-    update: {}
+      title: RENAME_CARD_WELCOME_MAIL_TITLE,
+      summary: RENAME_CARD_WELCOME_MAIL_SUMMARY,
+      body: RENAME_CARD_WELCOME_MAIL_BODY,
+      status: 'unclaimed',
+      bizType: RENAME_CARD_WELCOME_MAIL_BIZ_TYPE,
+      bizRefId: RENAME_CARD_WELCOME_MAIL_BIZ_REF_ID,
+      claimableAt: new Date(),
+      expireAt: dayjs().add(30, 'day').toDate(),
+      attachments: {
+        create: {
+          itemCode: RENAME_CARD_CODE,
+          quantity: RENAME_CARD_DEFAULT_QUANTITY,
+          assetType: 'item',
+          assetKey: RENAME_CARD_CODE
+        }
+      }
+    }
   })
 }
 
@@ -235,7 +248,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
             // avatarKey 使用 schema 默认 cartoon/default；avatarUrl 可选
           }
         })
-        await grantDefaultRenameCards(tx, created.id)
+        await grantWelcomeRenameCardMail(tx, created.id)
         return created
       })
       setLoginSession(target.id!, sessionId, 'client')
@@ -380,6 +393,19 @@ router.post(userClientApi('/setName'), async (ctx) => {
   const userId = ctx.state.user!.id
 
   try {
+    const currentUser = await user.findUnique({
+      where: { id: userId },
+      select: { id: true, hasSetName: true }
+    })
+    if (!currentUser) {
+      response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+      return
+    }
+    if (currentUser.hasSetName) {
+      response.error(ctx, HTTP_STATUS.FORBIDDEN, '昵称已设置，请使用改名卡')
+      return
+    }
+
     const updatedUser = await user.update({
       where: { id: userId },
       data: {

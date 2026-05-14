@@ -63,8 +63,4 @@ ALTER TABLE `user_item_ledger` ADD CONSTRAINT `user_item_ledger_itemId_fkey` FOR
 INSERT INTO `item_definition` (`code`, `name`, `description`, `stackable`, `config`, `sortOrder`, `isActive`)
 VALUES ('rename_card', '改名卡', '使用后更改游戏内昵称，在牌桌与好友列表中展示。', true, JSON_OBJECT('kind', 'rename_card'), 100, true);
 
--- 存量用户默认发放改名卡余额（每用户一行）
-INSERT INTO `user_item_balance` (`userId`, `itemId`, `quantity`)
-SELECT `u`.`id`, `i`.`id`, 5
-FROM `User` AS `u`
-INNER JOIN `item_definition` AS `i` ON `i`.`code` = 'rename_card';
+-- 改名卡补给改为邮件系统发放（见后续邮件系统迁移/运维 SQL）
