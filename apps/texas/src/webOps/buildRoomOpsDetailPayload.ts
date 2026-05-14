@@ -184,7 +184,11 @@ export async function buildRoomOpsDetailPayload(
       totalBetAmount: betByUser.get(u.id) ?? 0,
       totalTopUpAmount: topUpByUser.get(u.id) ?? 0
     }))
-    .sort((a, b) => Math.abs(b.totalWager) - Math.abs(a.totalWager))
+    .sort((a, b) => {
+      const dw = b.totalWager - a.totalWager
+      if (dw !== 0) return dw
+      return b.totalBetAmount - a.totalBetAmount
+    })
 
   return {
     room: {
