@@ -25,6 +25,7 @@ import maintenanceGuard from './middleware/maintenanceGuard'
 import { respondFromApiResult } from './utils/respondFromApiResult'
 import clientAppVersionGuard from './middleware/clientAppVersionGuard'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
+import { startAchievementMailCompensationJob } from './services/mailReward'
 
 async function recoverRoomsWithoutRuntimeOnBoot() {
   /**
@@ -176,6 +177,7 @@ app.use(router.routes())
 server.listen(port, async () => {
   logger.info('server startup', `http://localhost:${port}`)
   await recoverRoomsWithoutRuntimeOnBoot()
+  startAchievementMailCompensationJob()
 
   // const texas = initialGame({
   //   maximumCountOfPlayers: 3,

@@ -17,6 +17,7 @@ import { CUSTOM_27O_REWARD_TIERS } from '../../../../constants/game'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
+import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import {
   clearPlayerTurnTimeout,
@@ -492,6 +493,12 @@ async function handleHandEnded(
             },
             data: settleFields
           })
+          await ensureAchievementMailsByRank(
+            tx,
+            userId,
+            pl.rankCategory ?? null,
+            isFold
+          )
         } catch (err) {
           if (
             err instanceof Prisma.PrismaClientKnownRequestError &&

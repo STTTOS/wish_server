@@ -48,6 +48,7 @@ model User {
   dailyFortunes     UserDailyFortune[]
   itemBalances      UserItemBalance[]
   itemLedgers       UserItemLedger[]
+  mails             UserMail[]
 }
 
 /// 道具目录（系统级）：一行代表一种道具（如 `rename_card`）
@@ -56,6 +57,7 @@ model ItemDefinition {
   code      String  @unique @db.VarChar(64)
   name      String  @db.VarChar(64)
   description String? @db.VarChar(300)
+  kind      ItemKind @default(consumable)
   stackable Boolean @default(true)
   config    Json?
   sortOrder Int     @default(0)
@@ -67,6 +69,11 @@ model ItemDefinition {
   ledgers  UserItemLedger[]
 
   @@map("item_definition")
+}
+
+enum ItemKind {
+  consumable
+  entitlement
 }
 
 /// 用户道具余额（用户 × 道具 唯一）
@@ -537,4 +544,51 @@ model AssetUsageEvent {
   @@index([assetType, assetId, serverTs])
   @@index([userId, serverTs])
   @@map("asset_usage_event")
+}
+
+enum UserMailStatus {
+  unclaimed
+  claimed
+}
+
+/// 用户邮件（带可领取奖励）
+model UserMail {
+  id        Int            @id @default(autoincrement())
+  userId    Int
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String         @db.VarChar(120)
+  summary   String         @db.VarChar(300)
+  body      String         @db.Text
+  status    UserMailStatus @default(unclaimed)
+  bizType   String?        @db.VarChar(64)
+  bizRefId  String?        @db.VarChar(128)
+  claimableAt DateTime     @default(now())
+  expireAt  DateTime
+  claimedAt DateTime?
+  deletedAt DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @default(now())
+
+  attachments UserMailAttachment[]
+
+  @@unique([userId, bizType, bizRefId])
+  @@index([userId, status, createdAt])
+  @@index([userId, expireAt])
+  @@map("user_mail")
+}
+
+/// 邮件奖励附件（当前用于道具/外观解锁）
+model UserMailAttachment {
+  id       Int      @id @default(autoincrement())
+  mailId   Int
+  mail     UserMail @relation(fields: [mailId], references: [id], onDelete: Cascade)
+  itemCode String   @db.VarChar(64)
+  quantity Int      @default(1)
+  assetType String? @db.VarChar(32)
+  assetKey  String? @db.VarChar(128)
+  createdAt DateTime @default(now())
+
+  @@index([mailId])
+  @@index([itemCode])
+  @@map("user_mail_attachment")
 }

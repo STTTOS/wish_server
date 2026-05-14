@@ -6,11 +6,11 @@ import { omit } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { Prisma, AssetUsageType } from '@prisma/texas-client'
 
-import response from '../../utils/response'
 import { getToken } from '../../utils/login'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import response, { withList } from '../../utils/response'
 import prisma, { user, userSettings, assetUsageEvent } from '../../models'
 import {
   setLoginSession,
@@ -23,6 +23,11 @@ import {
   apiPrefixClient,
   tokenValidatedTime
 } from '../../config'
+import {
+  grantMailAttachments,
+  canUsePokerBackgroundKey,
+  listOwnedPokerBackgroundKeys
+} from '../../services/mailReward'
 import {
   isAllowedClientAssetUsage,
   isAllowedProfileAvatarKey,
@@ -40,6 +45,8 @@ const DEFAULT_PRIVACY_SETTINGS = {
 const RENAME_CARD_CODE = 'rename_card'
 const RENAME_CARD_NAME = '改名卡'
 const RENAME_CARD_DEFAULT_QUANTITY = 5
+const MAIL_DEFAULT_PAGE_SIZE = 20
+const MAIL_MAX_PAGE_SIZE = 100
 const FORBIDDEN_NICKNAMES = new Set([
   '你',
   '我',
@@ -60,12 +67,68 @@ type ItemCatalogEntry = {
   quantity: number
 }
 
+type MailAttachmentDTO = {
+  id: number
+  itemCode: string
+  quantity: number
+  assetType: string | null
+  assetKey: string | null
+}
+
+type UserMailListEntryDTO = {
+  id: number
+  title: string
+  summary: string
+  body: string
+  status: 'unclaimed' | 'claimed'
+  createdAt: string
+  expireAt: string
+  claimedAt: string | null
+  attachments: MailAttachmentDTO[]
+}
+
 function normalizeNickname(name: unknown): string {
   return typeof name === 'string' ? name.trim() : ''
 }
 
 function isForbiddenNickname(name: string): boolean {
   return FORBIDDEN_NICKNAMES.has(name)
+}
+
+function toMailEntryDTO(row: {
+  id: number
+  title: string
+  summary: string
+  body: string
+  status: 'unclaimed' | 'claimed'
+  createdAt: Date
+  expireAt: Date
+  claimedAt: Date | null
+  attachments: Array<{
+    id: number
+    itemCode: string
+    quantity: number
+    assetType: string | null
+    assetKey: string | null
+  }>
+}): UserMailListEntryDTO {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    body: row.body,
+    status: row.status,
+    createdAt: dayjs(row.createdAt).format(timeFormat),
+    expireAt: dayjs(row.expireAt).format(timeFormat),
+    claimedAt: row.claimedAt ? dayjs(row.claimedAt).format(timeFormat) : null,
+    attachments: row.attachments.map((a) => ({
+      id: a.id,
+      itemCode: a.itemCode,
+      quantity: a.quantity,
+      assetType: a.assetType,
+      assetKey: a.assetKey
+    }))
+  }
 }
 
 async function ensureRenameCardDefinition(db: {
@@ -77,12 +140,14 @@ async function ensureRenameCardDefinition(db: {
       code: RENAME_CARD_CODE,
       name: RENAME_CARD_NAME,
       description: null,
+      kind: 'consumable',
       stackable: true,
       config: { kind: 'rename_card' },
       sortOrder: 100,
       isActive: true
     },
     update: {
+      kind: 'consumable',
       isActive: true
     },
     select: { id: true }
@@ -353,7 +418,7 @@ router.post(userClientApi('/items'), async (ctx) => {
     where: {
       userId,
       quantity: { gt: 0 },
-      item: { isActive: true }
+      item: { isActive: true, kind: 'consumable' }
     },
     orderBy: [{ item: { sortOrder: 'asc' } }, { itemId: 'asc' }],
     select: {
@@ -547,9 +612,14 @@ async function fetchUserInfo(ctx: ParameterizedContext<DefaultState>) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
   } else {
     const { createdAt, ...rest } = userInfo
+    const ownedPokerBackgroundKeys = await listOwnedPokerBackgroundKeys(
+      prisma,
+      userId
+    )
     response.success(ctx, {
       createdAt: dayjs(createdAt).format(timeFormat),
-      ...rest
+      ...rest,
+      ownedPokerBackgroundKeys
     })
   }
 }
@@ -592,9 +662,14 @@ router.post(userClientApi('/profile'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
     return
   }
+  const ownedPokerBackgroundKeys = await listOwnedPokerBackgroundKeys(
+    prisma,
+    Number(userId)
+  )
   response.success(ctx, {
     ...profile,
-    createdAt: dayjs(profile.createdAt).format(timeFormat)
+    createdAt: dayjs(profile.createdAt).format(timeFormat),
+    ownedPokerBackgroundKeys
   })
 })
 
@@ -629,6 +704,11 @@ router.post(userClientApi('/setPokerBackground'), async (ctx) => {
       HTTP_STATUS.BAD_REQUEST,
       'pokerBackgroundKey 不在允许列表'
     )
+    return
+  }
+  const canUse = await canUsePokerBackgroundKey(prisma, userId, key)
+  if (!canUse) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '该卡面尚未解锁')
     return
   }
 
@@ -743,6 +823,204 @@ router.post(userClientApi('/setAvatar'), async (ctx) => {
     }
     throw error
   }
+})
+
+/** 邮件列表（仅返回未过期、未删除邮件） */
+router.post(userClientApi('/mail/list'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const {
+    current = 1,
+    pageSize = MAIL_DEFAULT_PAGE_SIZE
+  }: { current?: number; pageSize?: number } = ctx.request.body ?? {}
+  const currentNorm = Math.max(1, Math.floor(Number(current) || 1))
+  const pageSizeNorm = Math.max(
+    1,
+    Math.min(
+      MAIL_MAX_PAGE_SIZE,
+      Math.floor(Number(pageSize) || MAIL_DEFAULT_PAGE_SIZE)
+    )
+  )
+  const now = new Date()
+  const where = {
+    userId,
+    deletedAt: null,
+    expireAt: { gt: now }
+  } as const
+  const [total, rows] = await Promise.all([
+    prisma.userMail.count({ where }),
+    prisma.userMail.findMany({
+      where,
+      include: {
+        attachments: {
+          select: {
+            id: true,
+            itemCode: true,
+            quantity: true,
+            assetType: true,
+            assetKey: true
+          }
+        }
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (currentNorm - 1) * pageSizeNorm,
+      take: pageSizeNorm
+    })
+  ])
+  response.success(
+    ctx,
+    withList(
+      rows.map((row) => toMailEntryDTO(row)),
+      total
+    ),
+    '查询成功'
+  )
+})
+
+/** 邮件详情（仅返回未过期、未删除邮件） */
+router.post(userClientApi('/mail/detail'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { mailId }: { mailId?: number } = ctx.request.body ?? {}
+  if (!mailId || Number(mailId) <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 mailId')
+    return
+  }
+  const row = await prisma.userMail.findFirst({
+    where: {
+      id: Number(mailId),
+      userId,
+      deletedAt: null,
+      expireAt: { gt: new Date() }
+    },
+    include: {
+      attachments: {
+        select: {
+          id: true,
+          itemCode: true,
+          quantity: true,
+          assetType: true,
+          assetKey: true
+        }
+      }
+    }
+  })
+  if (!row) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '邮件不存在或已过期')
+    return
+  }
+  response.success(ctx, toMailEntryDTO(row), '查询成功')
+})
+
+/** 未领取邮件数量（仅统计未过期、未删除） */
+router.post(userClientApi('/mail/unclaimedCount'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const count = await prisma.userMail.count({
+    where: {
+      userId,
+      status: 'unclaimed',
+      deletedAt: null,
+      expireAt: { gt: new Date() }
+    }
+  })
+  response.success(ctx, { count }, '查询成功')
+})
+
+/** 领取邮件奖励 */
+router.post(userClientApi('/mail/claim'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { mailId }: { mailId?: number } = ctx.request.body ?? {}
+  if (!mailId || Number(mailId) <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 mailId')
+    return
+  }
+  const now = new Date()
+  try {
+    await prisma.$transaction(async (tx) => {
+      const mail = await tx.userMail.findUnique({
+        where: { id: Number(mailId) },
+        select: {
+          id: true,
+          userId: true,
+          status: true,
+          deletedAt: true,
+          expireAt: true
+        }
+      })
+      if (!mail || mail.userId !== userId || mail.deletedAt != null) {
+        throw new Error('MAIL_NOT_FOUND')
+      }
+      if (mail.expireAt.getTime() <= now.getTime()) {
+        throw new Error('MAIL_EXPIRED')
+      }
+      if (mail.status !== 'unclaimed') {
+        throw new Error('MAIL_ALREADY_CLAIMED')
+      }
+      const claimed = await tx.userMail.updateMany({
+        where: {
+          id: Number(mailId),
+          userId,
+          status: 'unclaimed',
+          deletedAt: null,
+          expireAt: { gt: now }
+        },
+        data: {
+          status: 'claimed',
+          claimedAt: now
+        }
+      })
+      if (claimed.count === 0) {
+        throw new Error('MAIL_CLAIM_CONFLICT')
+      }
+      await grantMailAttachments(tx, userId, Number(mailId))
+    })
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'MAIL_NOT_FOUND') {
+        response.error(ctx, HTTP_STATUS.NOT_FOUND, '邮件不存在')
+        return
+      }
+      if (error.message === 'MAIL_EXPIRED') {
+        response.error(ctx, HTTP_STATUS.BAD_REQUEST, '邮件已过期')
+        return
+      }
+      if (
+        error.message === 'MAIL_ALREADY_CLAIMED' ||
+        error.message === 'MAIL_CLAIM_CONFLICT'
+      ) {
+        response.error(ctx, HTTP_STATUS.BAD_REQUEST, '邮件已领取')
+        return
+      }
+      if (error.message.startsWith('MAIL_ATTACHMENT_ITEM_NOT_FOUND:')) {
+        response.error(ctx, HTTP_STATUS.CONFLICT, '邮件附件配置异常')
+        return
+      }
+    }
+    throw error
+  }
+  response.success(ctx, null, '领取成功')
+})
+
+/** 删除已领取邮件（软删除） */
+router.post(userClientApi('/mail/delete'), async (ctx) => {
+  const userId = ctx.state.user!.id
+  const { mailId }: { mailId?: number } = ctx.request.body ?? {}
+  if (!mailId || Number(mailId) <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 mailId')
+    return
+  }
+  const deleted = await prisma.userMail.updateMany({
+    where: {
+      id: Number(mailId),
+      userId,
+      status: 'claimed',
+      deletedAt: null
+    },
+    data: { deletedAt: new Date() }
+  })
+  if (deleted.count === 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '仅已领取邮件可删除')
+    return
+  }
+  response.success(ctx, null, '删除成功')
 })
 
 // 查询用户设置

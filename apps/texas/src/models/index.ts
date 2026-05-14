@@ -21,7 +21,9 @@ export const {
   userDailyFortune,
   itemDefinition,
   userItemBalance,
-  userItemLedger
+  userItemLedger,
+  userMail,
+  userMailAttachment
 } = prisma
 
 export default prisma
