@@ -14,6 +14,10 @@ import response, { withList } from '../../utils/response'
 import prisma, { user, userSettings, assetUsageEvent } from '../../models'
 import { getNicknameDisplayLengthError } from '../../utils/nicknameDisplayLength'
 import {
+  getNicknameCharsetError,
+  canonicalizeNicknameInput
+} from '../../utils/nicknameCharset'
+import {
   setLoginSession,
   getLoginSession,
   clearLoginSession
@@ -95,7 +99,8 @@ type UserMailListEntryDTO = {
 }
 
 function normalizeNickname(name: unknown): string {
-  return typeof name === 'string' ? name.trim() : ''
+  if (typeof name !== 'string') return ''
+  return canonicalizeNicknameInput(name)
 }
 
 function isForbiddenNickname(name: string): boolean {
@@ -390,6 +395,11 @@ router.post(userClientApi('/setName'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
     return
   }
+  const charsetMsg = getNicknameCharsetError(normalizedName)
+  if (charsetMsg) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, charsetMsg)
+    return
+  }
   const lengthMsg = getNicknameDisplayLengthError(normalizedName)
   if (lengthMsg) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, lengthMsg)
@@ -497,6 +507,11 @@ router.post(userClientApi('/renameWithCard'), async (ctx) => {
   }
   if (isForbiddenNickname(normalizedName)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
+    return
+  }
+  const charsetMsgRename = getNicknameCharsetError(normalizedName)
+  if (charsetMsgRename) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, charsetMsgRename)
     return
   }
   const lengthMsgRename = getNicknameDisplayLengthError(normalizedName)
