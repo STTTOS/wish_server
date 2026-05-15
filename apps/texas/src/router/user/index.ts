@@ -12,6 +12,7 @@ import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import prisma, { user, userSettings, assetUsageEvent } from '../../models'
+import { getNicknameDisplayLengthError } from '../../utils/nicknameDisplayLength'
 import {
   setLoginSession,
   getLoginSession,
@@ -389,6 +390,11 @@ router.post(userClientApi('/setName'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
     return
   }
+  const lengthMsg = getNicknameDisplayLengthError(normalizedName)
+  if (lengthMsg) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, lengthMsg)
+    return
+  }
 
   const userId = ctx.state.user!.id
 
@@ -491,6 +497,11 @@ router.post(userClientApi('/renameWithCard'), async (ctx) => {
   }
   if (isForbiddenNickname(normalizedName)) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '昵称不合规')
+    return
+  }
+  const lengthMsgRename = getNicknameDisplayLengthError(normalizedName)
+  if (lengthMsgRename) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, lengthMsgRename)
     return
   }
 
