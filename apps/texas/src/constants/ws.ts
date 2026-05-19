@@ -18,6 +18,11 @@ export const WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS = 10_000
 export const WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS = 90_000
 
 /**
+ * /game 在座玩家断线后，延迟确认离线再写入 `offlineUserIds` 并广播（减轻切 App 误断闪离线）。
+ */
+export const GAME_ROOM_OFFLINE_PRESENCE_GRACE_MS = 8_000
+
+/**
  * /game 全员断线后延迟 purge 对局并拆 runtime（留短窗口防 disconnect 乱序与重连）。
  */
 export const GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS = 20_000

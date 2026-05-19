@@ -21,11 +21,6 @@ import {
   MAINTENANCE_MESSAGE
 } from '../router/system/maintenanceConstants'
 import {
-  SOCKET_IO_PING_TIMEOUT_MS,
-  SOCKET_IO_PING_INTERVAL_MS,
-  WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
-} from '../constants/ws'
-import {
   replayGameRoomSince,
   getLatestGameRoomSeq,
   getGameRoomReplayEpoch,
@@ -37,6 +32,12 @@ import {
   getWsGameRoomSinceSeqFromHandshake,
   getWsGameRoomReplayEpochFromHandshake
 } from '../utils/wsAuth'
+import {
+  SOCKET_IO_PING_TIMEOUT_MS,
+  SOCKET_IO_PING_INTERVAL_MS,
+  GAME_ROOM_OFFLINE_PRESENCE_GRACE_MS,
+  WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS
+} from '../constants/ws'
 
 const WAITING_ROOM_PRESENCE_OFFLINE_GRACE_MS = 3000
 
@@ -53,6 +54,10 @@ class SocketServer {
   #waitingRoomPresenceOfflineAnnounced = new Set<string>()
   #waitingRoomPendingUsers = new Set<string>()
   #waitingRoomPendingOfflineTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+  #gameRoomPendingOfflineTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
   >()
@@ -690,6 +695,64 @@ class SocketServer {
     ).length
   }
 
+  #gameRoomPresenceKey(roomKey: string, userId: number) {
+    return `${roomKey}:${userId}`
+  }
+
+  #clearGameRoomPendingOfflineTimer(presenceKey: string) {
+    const timer = this.#gameRoomPendingOfflineTimers.get(presenceKey)
+    if (!timer) return
+    clearTimeout(timer)
+    this.#gameRoomPendingOfflineTimers.delete(presenceKey)
+  }
+
+  #cancelGameRoomPendingOffline(channel: string, userId: number) {
+    this.#clearGameRoomPendingOfflineTimer(
+      this.#gameRoomPresenceKey(channel, userId)
+    )
+  }
+
+  #scheduleFinalizeGameRoomOffline(channel: string, userId: number) {
+    const presenceKey = this.#gameRoomPresenceKey(channel, userId)
+    this.#clearGameRoomPendingOfflineTimer(presenceKey)
+    const timer = setTimeout(() => {
+      this.#finalizeGameRoomOffline(channel, userId)
+    }, GAME_ROOM_OFFLINE_PRESENCE_GRACE_MS)
+    this.#gameRoomPendingOfflineTimers.set(presenceKey, timer)
+  }
+
+  #finalizeGameRoomOffline(channel: string, userId: number) {
+    const presenceKey = this.#gameRoomPresenceKey(channel, userId)
+    this.#gameRoomPendingOfflineTimers.delete(presenceKey)
+
+    const texas = gameRuntimeRegistry.getTexas(channel)
+    if (!texas) return
+    if (gameRuntimeRegistry.hasQueuedLeave(channel, userId)) return
+    if (texas.room.getPlayerSeatStatusById(userId) !== 'on-set') return
+
+    const hasLiveSocket = this.#getSocketsInGameRoom(channel).some(
+      (s) => (s.data.userId as number) === userId
+    )
+    if (hasLiveSocket) return
+
+    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
+    gameRuntimeRegistry.markUserOffline(channel, userId)
+    if (!wasOffline) {
+      this.broadcastGameRoom(
+        channel,
+        {
+          type: 'player-status-change',
+          data: {
+            roomId: Number(channel),
+            userId,
+            status: 'offline' as const
+          }
+        },
+        { skipReplay: true }
+      )
+    }
+  }
+
   /**
    * 在座且本房仍有该用户的 /game 连接时：写入在线态，并在刚从离线恢复时补发 `online`。
    * `connection` 与「hang → on-set」后的补同步共用（见 {@link resyncGameRoomSeatPresence}）。
@@ -704,6 +767,7 @@ class SocketServer {
       gameRuntimeRegistry.clearConnectionTracking(channel, userId)
       return
     }
+    this.#cancelGameRoomPendingOffline(channel, userId)
     const hasLiveSocket = this.#getSocketsInGameRoom(channel).some(
       (s) => (s.data.userId as number) === userId
     )
@@ -749,7 +813,8 @@ class SocketServer {
    *（排除已中途退出/非在座）。
    * 设计约束：
    * - 中途退出（queued leave）或非在座（含观战）不推送离线事件。
-   * - 多终端 / 重连重叠：仅当该用户在本房已无其它 /game 连接时才标记离线并广播。
+   * - 多终端 / 重连重叠：仅当该用户在本房已无其它 /game 连接时才进入离线宽限。
+   * - {@link GAME_ROOM_OFFLINE_PRESENCE_GRACE_MS} 内重连则不 mark、不广播 offline。
    * - 离线事件仅服务于当局 seat 托管和 UI 呈现，避免语义污染。
    */
   #handleGameRoomDisconnect(
@@ -762,27 +827,17 @@ class SocketServer {
     const isQueuedLeave = gameRuntimeRegistry.hasQueuedLeave(channel, userId)
     const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
     if (isQueuedLeave || !isOnSeat) {
+      this.#cancelGameRoomPendingOffline(channel, userId)
       gameRuntimeRegistry.clearConnectionTracking(channel, userId)
       this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
       return
     }
     if (this.#countPeerGameSockets(channel, userId, droppedSocketId) > 0) {
+      this.#cancelGameRoomPendingOffline(channel, userId)
       this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
       return
     }
-    const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
-    gameRuntimeRegistry.markUserOffline(channel, userId)
-    if (!wasOffline) {
-      this.broadcastGameRoom(
-        channel,
-        {
-          type: 'player-status-change',
-          data: { roomId: Number(channel), userId, status: 'offline' as const }
-        },
-        { skipReplay: true }
-      )
-    }
-
+    this.#scheduleFinalizeGameRoomOffline(channel, userId)
     this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
   }
 
