@@ -365,6 +365,7 @@ class SocketServer {
       const roomId = socket.data.roomId as number
       const roomKey = String(roomId)
 
+      this.#roomCleanupManager.cancelScheduledWaitingRoomCleanup(roomKey)
       socket.join(roomKey)
       socket.send({ type: 'initial connect', data: null })
       this.#notifyWaitingRoomEnteringWaiters(roomKey)
@@ -658,7 +659,7 @@ class SocketServer {
         }
       }
     }
-    void this.#roomCleanupManager.tryCleanupWaitingRoomIfAllOffline(roomKey)
+    this.#roomCleanupManager.scheduleTryCleanupWaitingRoomIfAllOffline(roomKey)
     this.#notifyWaitingRoomEnteringWaiters(roomKey)
   }
 

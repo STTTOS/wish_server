@@ -68,6 +68,150 @@ test('tryCleanupWaitingRoomIfAllOffline soft deletes room when all waiting-room 
   }
 })
 
+test('scheduleTryCleanupWaitingRoomIfAllOffline does not soft-delete before delay', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let deletedNotified: number | null = null
+  const manager = new RoomCleanupManager({
+    getWaitingRoomSocketCount: () => 0,
+    onWaitingRoomDeleted: (roomId) => {
+      deletedNotified = roomId
+    },
+    waitingRoomEmptyCleanupDelayMs: 1000
+  })
+
+  const roomModelAny = roomModel as unknown as {
+    findUnique: (args: unknown) => Promise<{
+      deletedAt: Date | null
+      gameStatus: 'waiting'
+    } | null>
+  }
+  const prismaAny = prisma as unknown as {
+    $transaction: (cb: (tx: any) => Promise<void>) => Promise<void>
+  }
+  const runtimeAny = gameRuntimeRegistry as unknown as {
+    hasTexas: (roomId: string) => boolean
+  }
+
+  const originFindUnique = roomModelAny.findUnique
+  const originTransaction = prismaAny.$transaction
+  const originHasTexas = runtimeAny.hasTexas
+
+  let updateCalled = 0
+  const flushAsync = () =>
+    new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
+  try {
+    roomModelAny.findUnique = async () => ({
+      deletedAt: null,
+      gameStatus: 'waiting'
+    })
+    prismaAny.$transaction = async (cb) => {
+      await cb({
+        room: {
+          update: async () => {
+            updateCalled += 1
+            return {}
+          }
+        },
+        roomMember: { deleteMany: async () => ({ count: 0 }) }
+      })
+    }
+    runtimeAny.hasTexas = () => false
+
+    manager.scheduleTryCleanupWaitingRoomIfAllOffline('102')
+    t.mock.timers.tick(500)
+    await flushAsync()
+    assert.equal(deletedNotified, null)
+    assert.equal(updateCalled, 0)
+
+    t.mock.timers.tick(600)
+    await flushAsync()
+    assert.equal(deletedNotified, 102)
+  } finally {
+    roomModelAny.findUnique = originFindUnique
+    prismaAny.$transaction = originTransaction
+    runtimeAny.hasTexas = originHasTexas
+    t.mock.timers.reset()
+  }
+})
+
+test('cancelScheduledWaitingRoomCleanup prevents delayed soft-delete', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let deletedNotified: number | null = null
+  const manager = new RoomCleanupManager({
+    getWaitingRoomSocketCount: () => 0,
+    onWaitingRoomDeleted: (roomId) => {
+      deletedNotified = roomId
+    },
+    waitingRoomEmptyCleanupDelayMs: 1000
+  })
+
+  const roomModelAny = roomModel as unknown as {
+    findUnique: (args: unknown) => Promise<{
+      deletedAt: Date | null
+      gameStatus: 'waiting'
+    } | null>
+  }
+  const originFindUnique = roomModelAny.findUnique
+  try {
+    roomModelAny.findUnique = async () => ({
+      deletedAt: null,
+      gameStatus: 'waiting'
+    })
+
+    manager.scheduleTryCleanupWaitingRoomIfAllOffline('103')
+    manager.cancelScheduledWaitingRoomCleanup('103')
+    t.mock.timers.tick(2000)
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
+    assert.equal(deletedNotified, null)
+  } finally {
+    roomModelAny.findUnique = originFindUnique
+    t.mock.timers.reset()
+  }
+})
+
+test('scheduleTryCleanupWaitingRoomIfAllOffline cancels timer when socket reconnects', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let deletedNotified: number | null = null
+  let socketCount = 0
+  const manager = new RoomCleanupManager({
+    getWaitingRoomSocketCount: () => socketCount,
+    onWaitingRoomDeleted: (roomId) => {
+      deletedNotified = roomId
+    },
+    waitingRoomEmptyCleanupDelayMs: 1000
+  })
+
+  const roomModelAny = roomModel as unknown as {
+    findUnique: (args: unknown) => Promise<{
+      deletedAt: Date | null
+      gameStatus: 'waiting'
+    } | null>
+  }
+  const originFindUnique = roomModelAny.findUnique
+  try {
+    roomModelAny.findUnique = async () => ({
+      deletedAt: null,
+      gameStatus: 'waiting'
+    })
+
+    manager.scheduleTryCleanupWaitingRoomIfAllOffline('104')
+    socketCount = 1
+    manager.scheduleTryCleanupWaitingRoomIfAllOffline('104')
+    t.mock.timers.tick(2000)
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
+    assert.equal(deletedNotified, null)
+  } finally {
+    roomModelAny.findUnique = originFindUnique
+    t.mock.timers.reset()
+  }
+})
+
 test('tryCleanupWaitingRoomIfAllOffline does nothing when socketCount > 0', async () => {
   const manager = new RoomCleanupManager({
     getWaitingRoomSocketCount: () => 1,

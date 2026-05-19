@@ -1,5 +1,6 @@
 import { logger } from '../logger'
 import prisma, { room as roomModel } from '../models'
+import { WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS } from '../constants/ws'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import {
   cancelNextHandCountdown,
@@ -13,18 +14,61 @@ type RoomCleanupManagerDeps = {
    * `{ type: 'room-list-room-deleted', data: { roomId } }`，与 HTTP 退出最后一人一致。
    */
   onWaitingRoomDeleted: (roomId: number) => void
+  /** 测试可缩短；默认 {@link WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS} */
+  waitingRoomEmptyCleanupDelayMs?: number
 }
 
 /**
  * 统一处理 waiting-room 与 game-room 的离线清理策略。
  */
 export class RoomCleanupManager {
+  #scheduledWaitingRoomCleanupTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
+
   constructor(private readonly deps: RoomCleanupManagerDeps) {}
+
+  #waitingRoomEmptyCleanupDelayMs(): number {
+    return (
+      this.deps.waitingRoomEmptyCleanupDelayMs ??
+      WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS
+    )
+  }
+
+  /**
+   * 取消已排队的 waiting-room 全员离线软删（重连 / 仍有人在线时调用）。
+   */
+  cancelScheduledWaitingRoomCleanup(roomId: string) {
+    const timer = this.#scheduledWaitingRoomCleanupTimers.get(roomId)
+    if (timer == null) return
+    clearTimeout(timer)
+    this.#scheduledWaitingRoomCleanupTimers.delete(roomId)
+  }
+
+  /**
+   * waiting-room 当前无连接时，延迟尝试软删（避免切后台断线立刻清房）。
+   */
+  scheduleTryCleanupWaitingRoomIfAllOffline(roomId: string) {
+    if (this.deps.getWaitingRoomSocketCount(roomId) > 0) {
+      this.cancelScheduledWaitingRoomCleanup(roomId)
+      return
+    }
+    this.cancelScheduledWaitingRoomCleanup(roomId)
+    const delayMs = this.#waitingRoomEmptyCleanupDelayMs()
+    const timer = setTimeout(() => {
+      this.#scheduledWaitingRoomCleanupTimers.delete(roomId)
+      void this.tryCleanupWaitingRoomIfAllOffline(roomId)
+    }, delayMs)
+    this.#scheduledWaitingRoomCleanupTimers.set(roomId, timer)
+    logger.info(
+      `[waiting-room-cleanup] scheduled soft-delete check roomId=${roomId} in ${delayMs}ms`
+    )
+  }
 
   /**
    * waiting-room 全离线时，按状态规则尝试软删房间。
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async tryCleanupWaitingRoomIfAllOffline(roomId: string) {
     logger.info(
       `[room-cleanup] tryCleanupWaitingRoomIfAllOffline, roomId=${roomId}`,
@@ -81,7 +125,7 @@ export class RoomCleanupManager {
       safeClearCountdown()
       gameRuntimeRegistry.destroyRuntime(roomId)
       await this.#resetRoomGameStatusToWaiting(roomIdNumber)
-      await this.tryCleanupWaitingRoomIfAllOffline(roomId)
+      this.scheduleTryCleanupWaitingRoomIfAllOffline(roomId)
       return
     }
 
@@ -92,7 +136,7 @@ export class RoomCleanupManager {
     gameRuntimeRegistry.destroyRuntime(roomId)
     logger.info(`[room-cleanup] all offline, removed room ${roomId}`)
     await this.#resetRoomGameStatusToWaiting(roomIdNumber)
-    await this.tryCleanupWaitingRoomIfAllOffline(roomId)
+    this.scheduleTryCleanupWaitingRoomIfAllOffline(roomId)
   }
 
   /**

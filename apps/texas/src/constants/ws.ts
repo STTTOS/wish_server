@@ -10,3 +10,9 @@ export const SOCKET_IO_PING_TIMEOUT_MS = 24_000
 export const SOCKET_IO_PING_INTERVAL_MS = 12_000
 
 export const WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS = 10_000
+
+/**
+ * waiting-room 全员断线后延迟软删（覆盖切后台发邀请码等短暂离线）。
+ * 应 ≥ 客户端重连退避窗口（pingTimeout + 若干轮 reconnectionDelayMax）。
+ */
+export const WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS = 90_000
