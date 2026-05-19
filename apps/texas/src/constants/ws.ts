@@ -16,3 +16,7 @@ export const WAIT_FOR_GAME_USERS_CONNECTED_TIMEOUT_MS = 10_000
  * 应 ≥ 客户端重连退避窗口（pingTimeout + 若干轮 reconnectionDelayMax）。
  */
 export const WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS = 90_000
+
+/** 与 waiting-room 相同：对局全员离线后延迟销毁 runtime，避免杀进程/切后台立刻清局 */
+export const GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS =
+  WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS

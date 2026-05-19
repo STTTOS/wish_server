@@ -212,6 +212,101 @@ test('scheduleTryCleanupWaitingRoomIfAllOffline cancels timer when socket reconn
   }
 })
 
+test('scheduleTryCleanupGameRoomIfAllOffline delays runtime teardown', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let destroyCalled = 0
+  const manager = new RoomCleanupManager({
+    getWaitingRoomSocketCount: () => 0,
+    onWaitingRoomDeleted: () => void 0,
+    gameRoomOfflineCleanupDelayMs: 1000
+  })
+
+  const runtimeAny = gameRuntimeRegistry as unknown as {
+    getTexas: (roomId: string) => { room: { getAllPlayers: () => unknown[] } }
+    areAllTrackedPlayersOffline: (roomId: string) => boolean
+    destroyRuntime: (roomId: string) => void
+    hasTexas: (roomId: string) => boolean
+  }
+  const roomModelAny = roomModel as unknown as {
+    update: (args: unknown) => Promise<unknown>
+  }
+  const originGetTexas = runtimeAny.getTexas
+  const originAllOffline = runtimeAny.areAllTrackedPlayersOffline
+  const originDestroy = runtimeAny.destroyRuntime
+  const originHasTexas = runtimeAny.hasTexas
+  const originRoomUpdate = roomModelAny.update
+
+  try {
+    runtimeAny.getTexas = () => ({
+      room: { getAllPlayers: () => [{ id: 1 }] }
+    })
+    runtimeAny.areAllTrackedPlayersOffline = () => true
+    runtimeAny.destroyRuntime = () => {
+      destroyCalled += 1
+    }
+    runtimeAny.hasTexas = () => true
+    roomModelAny.update = async () => ({})
+
+    manager.scheduleTryCleanupGameRoomIfAllOffline('200')
+    t.mock.timers.tick(500)
+    assert.equal(destroyCalled, 0)
+    t.mock.timers.tick(600)
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
+    assert.equal(destroyCalled, 1)
+  } finally {
+    runtimeAny.getTexas = originGetTexas
+    runtimeAny.areAllTrackedPlayersOffline = originAllOffline
+    runtimeAny.destroyRuntime = originDestroy
+    runtimeAny.hasTexas = originHasTexas
+    roomModelAny.update = originRoomUpdate
+    t.mock.timers.reset()
+  }
+})
+
+test('cancelScheduledGameRoomCleanup prevents delayed runtime teardown', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let destroyCalled = 0
+  const manager = new RoomCleanupManager({
+    getWaitingRoomSocketCount: () => 0,
+    onWaitingRoomDeleted: () => void 0,
+    gameRoomOfflineCleanupDelayMs: 1000
+  })
+
+  const runtimeAny = gameRuntimeRegistry as unknown as {
+    getTexas: (roomId: string) => { room: { getAllPlayers: () => unknown[] } }
+    areAllTrackedPlayersOffline: (roomId: string) => boolean
+    destroyRuntime: (roomId: string) => void
+  }
+  const originGetTexas = runtimeAny.getTexas
+  const originAllOffline = runtimeAny.areAllTrackedPlayersOffline
+  const originDestroy = runtimeAny.destroyRuntime
+
+  try {
+    runtimeAny.getTexas = () => ({
+      room: { getAllPlayers: () => [{ id: 1 }] }
+    })
+    runtimeAny.areAllTrackedPlayersOffline = () => true
+    runtimeAny.destroyRuntime = () => {
+      destroyCalled += 1
+    }
+
+    manager.scheduleTryCleanupGameRoomIfAllOffline('201')
+    manager.cancelScheduledGameRoomCleanup('201')
+    t.mock.timers.tick(2000)
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve)
+    })
+    assert.equal(destroyCalled, 0)
+  } finally {
+    runtimeAny.getTexas = originGetTexas
+    runtimeAny.areAllTrackedPlayersOffline = originAllOffline
+    runtimeAny.destroyRuntime = originDestroy
+    t.mock.timers.reset()
+  }
+})
+
 test('tryCleanupWaitingRoomIfAllOffline does nothing when socketCount > 0', async () => {
   const manager = new RoomCleanupManager({
     getWaitingRoomSocketCount: () => 1,

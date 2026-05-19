@@ -1,11 +1,14 @@
 import { logger } from '../logger'
 import prisma, { room as roomModel } from '../models'
-import { WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS } from '../constants/ws'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import {
   cancelNextHandCountdown,
   unregisterNextHandHooks
 } from '../gameRuntime/nextHandCountdown'
+import {
+  GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS,
+  WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS
+} from '../constants/ws'
 
 type RoomCleanupManagerDeps = {
   getWaitingRoomSocketCount: (roomId: string) => number
@@ -16,6 +19,8 @@ type RoomCleanupManagerDeps = {
   onWaitingRoomDeleted: (roomId: number) => void
   /** 测试可缩短；默认 {@link WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS} */
   waitingRoomEmptyCleanupDelayMs?: number
+  /** 测试可缩短；默认 {@link GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS} */
+  gameRoomOfflineCleanupDelayMs?: number
 }
 
 /**
@@ -26,6 +31,10 @@ export class RoomCleanupManager {
     string,
     ReturnType<typeof setTimeout>
   >()
+  #scheduledGameRoomCleanupTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >()
 
   constructor(private readonly deps: RoomCleanupManagerDeps) {}
 
@@ -33,6 +42,39 @@ export class RoomCleanupManager {
     return (
       this.deps.waitingRoomEmptyCleanupDelayMs ??
       WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS
+    )
+  }
+
+  #gameRoomOfflineCleanupDelayMs(): number {
+    return (
+      this.deps.gameRoomOfflineCleanupDelayMs ??
+      GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS
+    )
+  }
+
+  /**
+   * 取消已排队的 game-room 全员离线清理（重连时调用）。
+   */
+  cancelScheduledGameRoomCleanup(roomId: string) {
+    const timer = this.#scheduledGameRoomCleanupTimers.get(roomId)
+    if (timer == null) return
+    clearTimeout(timer)
+    this.#scheduledGameRoomCleanupTimers.delete(roomId)
+  }
+
+  /**
+   * 对局 tracked 玩家全离线时，延迟销毁 runtime（避免杀进程立刻把 gameStatus 打回 waiting）。
+   */
+  scheduleTryCleanupGameRoomIfAllOffline(roomId: string) {
+    this.cancelScheduledGameRoomCleanup(roomId)
+    const delayMs = this.#gameRoomOfflineCleanupDelayMs()
+    const timer = setTimeout(() => {
+      this.#scheduledGameRoomCleanupTimers.delete(roomId)
+      void this.tryCleanupRoomIfAllOffline(roomId)
+    }, delayMs)
+    this.#scheduledGameRoomCleanupTimers.set(roomId, timer)
+    logger.info(
+      `[game-room-cleanup] scheduled runtime teardown roomId=${roomId} in ${delayMs}ms`
     )
   }
 

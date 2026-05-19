@@ -192,6 +192,7 @@ class SocketServer {
       const roomKey = String(roomId)
       const userRoomKey = this.#getGameUserRoomKey(userId)
 
+      this.#roomCleanupManager.cancelScheduledGameRoomCleanup(roomKey)
       socket.join(roomKey)
       socket.join(userRoomKey)
       socket.send({ type: 'initial connect', data: null })
@@ -760,11 +761,11 @@ class SocketServer {
     const isOnSeat = texas.room.getPlayerSeatStatusById(userId) === 'on-set'
     if (isQueuedLeave || !isOnSeat) {
       gameRuntimeRegistry.clearConnectionTracking(channel, userId)
-      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
       return
     }
     if (this.#countPeerGameSockets(channel, userId, droppedSocketId) > 0) {
-      void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+      this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
       return
     }
     const wasOffline = gameRuntimeRegistry.isUserOffline(channel, userId)
@@ -780,7 +781,7 @@ class SocketServer {
       )
     }
 
-    void this.#roomCleanupManager.tryCleanupRoomIfAllOffline(channel)
+    this.#roomCleanupManager.scheduleTryCleanupGameRoomIfAllOffline(channel)
   }
 
   /**
