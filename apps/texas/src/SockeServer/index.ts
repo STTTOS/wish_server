@@ -80,6 +80,8 @@ class SocketServer {
     this.#roomCleanupManager = new RoomCleanupManager({
       getWaitingRoomSocketCount: (roomId) =>
         this.#getSocketsInWaitingRoom(roomId).length,
+      getGameRoomSocketCount: (roomId) =>
+        this.#getSocketsInGameRoom(roomId).length,
       onWaitingRoomDeleted: (roomId) => {
         this.broadcastRoomList({
           type: 'room-list-room-deleted',

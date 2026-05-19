@@ -6,12 +6,13 @@ import {
   unregisterNextHandHooks
 } from '../gameRuntime/nextHandCountdown'
 import {
-  GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS,
-  WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS
+  WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS,
+  GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS
 } from '../constants/ws'
 
 type RoomCleanupManagerDeps = {
   getWaitingRoomSocketCount: (roomId: string) => number
+  getGameRoomSocketCount: (roomId: string) => number
   /**
    * waiting-room 全离线软删房间成功后调用：须向 `/room-list` 推送
    * `{ type: 'room-list-room-deleted', data: { roomId } }`，与 HTTP 退出最后一人一致。
@@ -19,8 +20,8 @@ type RoomCleanupManagerDeps = {
   onWaitingRoomDeleted: (roomId: number) => void
   /** 测试可缩短；默认 {@link WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS} */
   waitingRoomEmptyCleanupDelayMs?: number
-  /** 测试可缩短；默认 {@link GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS} */
-  gameRoomOfflineCleanupDelayMs?: number
+  /** 测试可缩短；默认 {@link GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS} */
+  gameRoomAllOfflineTeardownDelayMs?: number
 }
 
 /**
@@ -45,10 +46,10 @@ export class RoomCleanupManager {
     )
   }
 
-  #gameRoomOfflineCleanupDelayMs(): number {
+  #gameRoomAllOfflineTeardownDelayMs(): number {
     return (
-      this.deps.gameRoomOfflineCleanupDelayMs ??
-      GAME_ROOM_OFFLINE_CLEANUP_DELAY_MS
+      this.deps.gameRoomAllOfflineTeardownDelayMs ??
+      GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS
     )
   }
 
@@ -63,18 +64,23 @@ export class RoomCleanupManager {
   }
 
   /**
-   * 对局 tracked 玩家全离线时，延迟销毁 runtime（避免杀进程立刻把 gameStatus 打回 waiting）。
+   * /game 当前无连接时，延迟 {@link GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS} 后 purge 对局并拆 runtime。
+   * 仍有人连 /game 时不排队；重连时须 {@link cancelScheduledGameRoomCleanup}。
    */
   scheduleTryCleanupGameRoomIfAllOffline(roomId: string) {
+    if (this.deps.getGameRoomSocketCount(roomId) > 0) {
+      this.cancelScheduledGameRoomCleanup(roomId)
+      return
+    }
     this.cancelScheduledGameRoomCleanup(roomId)
-    const delayMs = this.#gameRoomOfflineCleanupDelayMs()
+    const delayMs = this.#gameRoomAllOfflineTeardownDelayMs()
     const timer = setTimeout(() => {
       this.#scheduledGameRoomCleanupTimers.delete(roomId)
       void this.tryCleanupRoomIfAllOffline(roomId)
     }, delayMs)
     this.#scheduledGameRoomCleanupTimers.set(roomId, timer)
     logger.info(
-      `[game-room-cleanup] scheduled runtime teardown roomId=${roomId} in ${delayMs}ms`
+      `[game-room-cleanup] scheduled runtime teardown roomId=${roomId} in ${delayMs}ms (no /game sockets)`
     )
   }
 
@@ -90,14 +96,18 @@ export class RoomCleanupManager {
 
   /**
    * waiting-room 当前无连接时，延迟尝试软删（避免切后台断线立刻清房）。
+   * @param delayMs 默认 {@link WAITING_ROOM_EMPTY_CLEANUP_DELAY_MS}；对局拆桌后联动可用 {@link GAME_ROOM_ALL_OFFLINE_TEARDOWN_DELAY_MS}。
    */
-  scheduleTryCleanupWaitingRoomIfAllOffline(roomId: string) {
+  scheduleTryCleanupWaitingRoomIfAllOffline(
+    roomId: string,
+    options?: { delayMs?: number }
+  ) {
     if (this.deps.getWaitingRoomSocketCount(roomId) > 0) {
       this.cancelScheduledWaitingRoomCleanup(roomId)
       return
     }
     this.cancelScheduledWaitingRoomCleanup(roomId)
-    const delayMs = this.#waitingRoomEmptyCleanupDelayMs()
+    const delayMs = options?.delayMs ?? this.#waitingRoomEmptyCleanupDelayMs()
     const timer = setTimeout(() => {
       this.#scheduledWaitingRoomCleanupTimers.delete(roomId)
       void this.tryCleanupWaitingRoomIfAllOffline(roomId)
@@ -144,10 +154,17 @@ export class RoomCleanupManager {
     }
   }
 
+  #shouldTeardownGameRuntime(roomId: string, playerCount: number): boolean {
+    if (playerCount === 0) return true
+    return this.deps.getGameRoomSocketCount(roomId) === 0
+  }
+
   /**
-   * game-room 全离线时，清理倒计时/运行时并按需联动 waiting-room 清理。
+   * /game 全离线且倒计时到期：purge 对局、拆 runtime，并尽量软删房间。
    */
   async tryCleanupRoomIfAllOffline(roomId: string) {
+    if (this.deps.getGameRoomSocketCount(roomId) > 0) return
+
     const texas = gameRuntimeRegistry.getTexas(roomId)
     if (!texas) return
 
@@ -163,22 +180,33 @@ export class RoomCleanupManager {
       }
     }
 
-    if (players.length === 0) {
-      safeClearCountdown()
-      gameRuntimeRegistry.destroyRuntime(roomId)
-      await this.#resetRoomGameStatusToWaiting(roomIdNumber)
-      this.scheduleTryCleanupWaitingRoomIfAllOffline(roomId)
-      return
-    }
+    if (!this.#shouldTeardownGameRuntime(roomId, players.length)) return
 
-    const allOffline = gameRuntimeRegistry.areAllTrackedPlayersOffline(roomId)
-    if (!allOffline) return
+    if (roomIdNumber) {
+      const { abandonInProgressMatchOnTeardown } = await import(
+        '../router/game/services/abandonInProgressMatch'
+      )
+      await abandonInProgressMatchOnTeardown(roomIdNumber, roomId)
+    }
 
     safeClearCountdown()
     gameRuntimeRegistry.destroyRuntime(roomId)
-    logger.info(`[room-cleanup] all offline, removed room ${roomId}`)
+    logger.info(`[room-cleanup] teardown runtime room ${roomId}`)
     await this.#resetRoomGameStatusToWaiting(roomIdNumber)
-    this.scheduleTryCleanupWaitingRoomIfAllOffline(roomId)
+    await this.#finalizeRoomAfterGameTeardown(roomId)
+  }
+
+  /**
+   * 对局已 purge + runtime 已销毁：waiting-room 无人则立即软删；否则短延迟再试。
+   */
+  async #finalizeRoomAfterGameTeardown(roomId: string) {
+    if (this.deps.getWaitingRoomSocketCount(roomId) === 0) {
+      await this.tryCleanupWaitingRoomIfAllOffline(roomId)
+      return
+    }
+    this.scheduleTryCleanupWaitingRoomIfAllOffline(roomId, {
+      delayMs: this.#gameRoomAllOfflineTeardownDelayMs()
+    })
   }
 
   /**

@@ -1,14 +1,7 @@
 import type { MatchRollbackManager } from './types'
 
 import { logger } from '../../../logger'
-import {
-  match,
-  betRecord,
-  roomChipTopUp,
-  matchDomainEvent,
-  playerMatchRecord,
-  matchStageTimeRecord
-} from '../../../models'
+import { purgeMatchRecords } from './purgeMatchRecords'
 
 /**
  * 负责「引擎致命错误」下本手作废：
@@ -35,22 +28,7 @@ export function createMatchRollbackManager(params: {
     invalidatedMatchIds.add(matchIdToInvalidate)
 
     try {
-      await roomChipTopUp.deleteMany({
-        where: { afterMatchId: matchIdToInvalidate }
-      })
-      await Promise.all([
-        matchDomainEvent.deleteMany({
-          where: { matchId: matchIdToInvalidate }
-        }),
-        matchStageTimeRecord.deleteMany({
-          where: { matchId: matchIdToInvalidate }
-        }),
-        betRecord.deleteMany({ where: { matchId: matchIdToInvalidate } }),
-        playerMatchRecord.deleteMany({
-          where: { matchId: matchIdToInvalidate }
-        })
-      ])
-      await match.delete({ where: { id: matchIdToInvalidate } })
+      await purgeMatchRecords(matchIdToInvalidate)
       runtime.currentMatchId = null
     } catch (rollbackErr) {
       logger.error('[match-invalidated] rollback failed', rollbackErr)
