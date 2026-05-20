@@ -124,7 +124,10 @@ export const CLIENT_BUILT_IN_VOICE_NAMES = [
   'dasima_heihei',
   'urge_someone_to_reveal_their_hand',
   'there_is_nothing_wrong_with_the_cards',
-  'dasima_am_i_strong'
+  'dasima_am_i_strong',
+  'ni_kan_wo_lai_bu_lai',
+  'sun_xiao_chuan_ni_hou_shen_me',
+  'yaoshuige_heihei'
 ] as const
 
 export const CLIENT_PROFILE_AVATAR_KEYS = [
