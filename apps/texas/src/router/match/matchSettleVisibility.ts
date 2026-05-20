@@ -70,6 +70,47 @@ export function isNoShowdownSingleWinnerFromParticipants(
   return totalPlayers >= 1 && foldedCount === totalPlayers - 1
 }
 
+/** 他人查看目标用户历史战绩列表时，是否应对旁观者隐藏底牌与牌力 */
+export function shouldHideTargetHandFromHistoryViewer(args: {
+  viewingSelf: boolean
+  targetIsFold: boolean
+  isNoShowdownSingleWinner: boolean
+}): boolean {
+  if (args.viewingSelf) return false
+  return args.targetIsFold || args.isNoShowdownSingleWinner
+}
+
+/** 客户端 `match/list` 中目标用户单行（他人视角）底牌与牌力投影 */
+export function projectTargetUserHistoryListFields<
+  H,
+  C extends string | null
+>(args: {
+  viewingSelf: boolean
+  isFold: boolean
+  isNoShowdownSingleWinner: boolean
+  handPokes: H
+  rankCategory: C
+}): { handPokes: H | []; rankCategory: C | null } {
+  const hideHoleCardsFromViewer = shouldHideTargetHandFromHistoryViewer({
+    viewingSelf: args.viewingSelf,
+    targetIsFold: args.isFold,
+    isNoShowdownSingleWinner: args.isNoShowdownSingleWinner
+  })
+  const visible = settleRecordVisibleFields({
+    isSelf: !hideHoleCardsFromViewer,
+    isFold: args.isFold,
+    hideHoleCardsFromViewer,
+    handPokes: args.handPokes,
+    rankCategory: args.rankCategory,
+    rankStrength: 0,
+    rankSignature: null
+  })
+  return {
+    handPokes: visible.handPokes,
+    rankCategory: visible.rankCategory
+  }
+}
+
 export type PlayerMatchRecordForSettleProjection = {
   id: number
   userId?: number

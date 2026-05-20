@@ -27,7 +27,9 @@ import {
 import {
   settleRecordVisibleFields,
   sortSettleRecordsByOutcome,
-  projectSettleRecordsForMatchDetail
+  projectSettleRecordsForMatchDetail,
+  projectTargetUserHistoryListFields,
+  isNoShowdownSingleWinnerFromParticipants
 } from './matchSettleVisibility'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
@@ -66,6 +68,28 @@ async function ensureTargetUserExists(targetUserId: number): Promise<boolean> {
     select: { id: true }
   })
   return exists != null
+}
+
+async function loadNoShowdownSingleWinnerByMatchId(
+  matchIds: number[]
+): Promise<Map<number, boolean>> {
+  const result = new Map<number, boolean>()
+  if (matchIds.length === 0) return result
+
+  const rows = await playerMatchRecord.findMany({
+    where: { matchId: { in: matchIds } },
+    select: { matchId: true, isFold: true }
+  })
+  const byMatchId = new Map<number, { isFold: boolean }[]>()
+  for (const row of rows) {
+    const list = byMatchId.get(row.matchId) ?? []
+    list.push({ isFold: row.isFold })
+    byMatchId.set(row.matchId, list)
+  }
+  for (const [matchId, participants] of byMatchId) {
+    result.set(matchId, isNoShowdownSingleWinnerFromParticipants(participants))
+  }
+  return result
 }
 
 /**
@@ -161,6 +185,12 @@ router.post(matchApi('/list'), async (ctx) => {
     })
   ])
 
+  const viewingSelf = targetUserId === viewerUserId
+  const matchIds = [...new Set(records.map((r) => r.match.id))]
+  const noShowdownSingleWinnerByMatchId = viewingSelf
+    ? new Map<number, boolean>()
+    : await loadNoShowdownSingleWinnerByMatchId(matchIds)
+
   const listForResponse = records.map(({ match, ...restRecord }) => {
     const {
       id: matchId,
@@ -170,15 +200,27 @@ router.post(matchApi('/list'), async (ctx) => {
       endedAt,
       ...restMatch
     } = match
+
+    const visibleFields = projectTargetUserHistoryListFields({
+      viewingSelf,
+      isFold: restRecord.isFold,
+      isNoShowdownSingleWinner:
+        noShowdownSingleWinnerByMatchId.get(matchId) ?? false,
+      handPokes: restRecord.handPokes,
+      rankCategory: restRecord.rankCategory
+    })
+
     return {
       ...restRecord,
+      handPokes: visibleFields.handPokes,
+      rankCategory: visibleFields.rankCategory,
       ...restMatch,
       matchId,
       roomCode: activeCode ?? '',
       initialChips,
       tableType: match.room.tableType,
       sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
-      replaySupported: targetUserId === viewerUserId && _count.domainEvents > 0,
+      replaySupported: viewingSelf && _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
     }
