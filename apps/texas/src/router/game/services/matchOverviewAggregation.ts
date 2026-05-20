@@ -17,6 +17,7 @@ type UserAgg = {
  *
  * `wagerList.totalWager`：本房 `PlayerMatchRecord.wager` 按人累加（零和），再取整归零；
  * 不用「余额 − 补码 − initialChips」——玩家离桌再进会多次带入，与单段起始筹码对不齐。
+ * `wagerList` 按 `totalWager` 降序（净赢在上、净输在下）；同额按 `userId` 升序稳定排序。
  * `billList` 由该净额清账。补码字段仅作展示，客户端可自行算「相对钱包」等衍生指标。
  */
 export async function fetchMatchOverviewForRoom(
@@ -96,7 +97,11 @@ export async function fetchMatchOverviewForRoom(
         chipTopUpAmount: extra.chipTopUpAmount
       }
     })
-    .sort((a, b) => a.userId - b.userId)
+    .sort((a, b) => {
+      const dw = b.totalWager - a.totalWager
+      if (dw !== 0) return dw
+      return a.userId - b.userId
+    })
 
   const billList = buildBillListFromNetByUser(normalized)
   const playerProfiles = userIds

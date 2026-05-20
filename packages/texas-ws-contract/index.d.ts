@@ -82,6 +82,7 @@ export type WsMatchOverviewBillItem = {
 
 export type WsMatchOverview = {
   billList: WsMatchOverviewBillItem[]
+  /** 按 `totalWager` 降序：净赢在上、净输在下；同额顺序由服务端稳定排序。 */
   wagerList: WsMatchOverviewWagerItem[]
   playerProfiles: WsPlayerProfileItem[]
 }
