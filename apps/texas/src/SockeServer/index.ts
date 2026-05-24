@@ -962,6 +962,33 @@ class SocketServer {
     })
   }
 
+  /**
+   * 按 viewer 定制 payload，但共用一条 replay 缓冲与同一 `seq`（如 `game-end` 掩码 settleList）。
+   * `replayEnvelope` 写入环形缓冲（应脱敏，如去掉他人 handPokes）；各端 emit 时附带相同 seq/replayEpoch。
+   */
+  broadcastGameEachWithReplay(
+    roomId: string,
+    replayEnvelope: Parameters<Socket['send']>[0],
+    callback: (userId: number) => Parameters<Socket['send']>[0]
+  ) {
+    logger.info(
+      `broadcastGameEachWithReplay, ${this.#getUserIdsInGameRoom(roomId)}`
+    )
+    const seq = recordGameRoomBroadcast(roomId, replayEnvelope)
+    this.#getSocketsInGameRoom(roomId).forEach((socket) => {
+      const userId = socket.data.userId as number | undefined
+      if (typeof userId !== 'number') {
+        logger.warn(
+          `[broadcastGameEachWithReplay] skip socket without userId, roomId=${roomId}, socketId=${socket.id}`
+        )
+        return
+      }
+      const perViewer = callback(userId)
+      const payload = this.#withGameRoomSeqMeta(perViewer, seq)
+      this.#gameNs.to(socket.id).emit('message', payload)
+    })
+  }
+
   // remove(roomId: string, userId: number) {
   //   const userRoomKey = this.#getGameUserRoomKey(userId)
   //   this.#gameNs.in(userRoomKey).socketsLeave(roomId)

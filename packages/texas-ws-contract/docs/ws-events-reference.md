@@ -10,8 +10,18 @@
 type WsMessage<T extends WsEventType = WsEventType> = {
   type: T
   data: WsEventDataMap[T]
+  /** 仅 `/game` replayable 全房广播携带；单调递增，与 `game-room-replay.events[].seq` 同口径 */
+  seq?: number
+  /** 进程内 replay 世代；与 HTTP `latestWsReplayEpoch`、握手 `gameRoomReplayEpoch` 对齐 */
+  replayEpoch?: string
 }
 ```
+
+**Layer-1 约定（App + Server）**
+
+- 经 `broadcastGameRoom` / `broadcastGameEachWithReplay` 发出的状态流事件（如 `game-stage-changed`、`game-end`）**必须**带顶层 `seq` + `replayEpoch`。
+- 单播（`player-hand-dealt` 等）与 `skipReplay: true` 事件**不带** seq；断线后靠 HTTP 快照补全。
+- 客户端以 HTTP `latestWsSeq` 为游标种子，忽略 `seq <= lastHandledSeq` 的重复投递。
 
 ## 共享类型说明
 

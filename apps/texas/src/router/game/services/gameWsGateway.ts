@@ -106,12 +106,25 @@ export class GameWsGateway {
 
   /**
    * 结算广播：同一事件类型，按连接用户掩码 payload（如弃牌者仅本人可见 handPokes）。
+   * 共用一条 replay 缓冲 + 同一 `seq`，缓冲内为脱敏 settleList（无 handPokes）。
    */
   notifyGameEndPerViewer(
     roomKey: string,
     buildData: (viewerUserId: number) => WsMessage<'game-end'>['data']
   ) {
-    ws.broadcastGameEach(roomKey, (viewerUserId) => ({
+    const replayViewerUserId = -1
+    const replayData = buildData(replayViewerUserId)
+    const replayEnvelope: WsMessage<'game-end'> = {
+      type: 'game-end',
+      data: {
+        ...replayData,
+        settleList: replayData.settleList.map((row) => ({
+          ...row,
+          handPokes: []
+        }))
+      }
+    }
+    ws.broadcastGameEachWithReplay(roomKey, replayEnvelope, (viewerUserId) => ({
       type: 'game-end' as const,
       data: buildData(viewerUserId)
     }))
