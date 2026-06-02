@@ -188,6 +188,11 @@ model Announcement {
   publishAt DateTime
   expireAt  DateTime?
 
+  /// null = 无下限；与 maxClientVersion 组成闭区间 [min, max]
+  minClientVersion String? @db.VarChar(16)
+  /// null = 无上限
+  maxClientVersion String? @db.VarChar(16)
+
   createdAt DateTime           @default(now())
   updatedAt DateTime           @default(now())
   deletedAt DateTime?

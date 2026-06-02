@@ -14,9 +14,50 @@ import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { announcement, announcementRead } from '../../models'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
+import {
+  matchesAnnouncementClientVersion,
+  parseAnnouncementClientVersionRange
+} from '../../utils/announcementClientVersion'
 
 const announcementApiClient = combinePath(apiPrefixClient)('/announcement')
 const announcementApiWeb = combinePath(apiPrefixWeb)('/announcement')
+
+const announcementVersionSelect = {
+  minClientVersion: true,
+  maxClientVersion: true
+} as const
+
+const readClientVersionFromBody = (body: unknown): string | undefined => {
+  if (body == null || typeof body !== 'object' || Array.isArray(body)) {
+    return undefined
+  }
+  const raw = (body as Record<string, unknown>).version
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    return raw.trim()
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return String(raw)
+  }
+  return undefined
+}
+
+const filterAnnouncementsByClientVersion = <
+  T extends { minClientVersion: string | null; maxClientVersion: string | null }
+>(
+  list: T[],
+  clientVersion?: string
+): T[] => {
+  if (clientVersion == null) return list
+  return list.filter((item) =>
+    matchesAnnouncementClientVersion(
+      {
+        minClientVersion: item.minClientVersion,
+        maxClientVersion: item.maxClientVersion
+      },
+      clientVersion
+    )
+  )
+}
 const parseToDate = (value: unknown, fieldName: string) => {
   if (value === null || value === undefined) return null
   if (value instanceof Date) return value
@@ -70,7 +111,8 @@ const parsePriority = (value: unknown): number => {
 async function handleValidAnnouncementsList(
   ctx: ParameterizedContext<DefaultState>,
   userId?: number,
-  onlyUnread = false
+  onlyUnread = false,
+  clientVersion?: string
 ) {
   const nowDate = new Date()
   const readWhere = userId ? { userId } : undefined
@@ -96,6 +138,7 @@ async function handleValidAnnouncementsList(
       expireAt: true,
       createdAt: true,
       updatedAt: true,
+      ...announcementVersionSelect,
       reads: readWhere
         ? {
             where: readWhere,
@@ -107,9 +150,16 @@ async function handleValidAnnouncementsList(
     orderBy: [{ priority: 'desc' }, { publishAt: 'desc' }]
   })
 
+  const versionFilteredList = filterAnnouncementsByClientVersion(
+    list,
+    clientVersion
+  )
+
   const filteredList = onlyUnread
-    ? list.filter((item) => !item.reads || item.reads.length === 0)
-    : list
+    ? versionFilteredList.filter(
+        (item) => !item.reads || item.reads.length === 0
+      )
+    : versionFilteredList
 
   const formattedList = filteredList.map(
     ({ publishAt, expireAt, createdAt, updatedAt, reads, ...rest }) => ({
@@ -128,11 +178,14 @@ async function handleValidAnnouncementsList(
 // 客户端：查询当前有效的所有公告, 需要返回是否已读
 router.post(announcementApiClient('/validList'), async (ctx) => {
   const userId = ctx.state.user!.id
-  const { onlyUnread = false } = (ctx.request.body ?? {}) as {
+  const body = (ctx.request.body ?? {}) as {
     onlyUnread?: boolean
+    version?: unknown
   }
+  const { onlyUnread = false } = body
+  const clientVersion = readClientVersionFromBody(body)
 
-  await handleValidAnnouncementsList(ctx, userId, onlyUnread)
+  await handleValidAnnouncementsList(ctx, userId, onlyUnread, clientVersion)
 })
 
 // Web 端（用户）：查询当前有效的所有公告，返回与 client/validList 一致
@@ -165,6 +218,7 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
   }
 
   const nowDate = new Date()
+  const clientVersion = readClientVersionFromBody(ctx.request.body)
   const exists = await announcement.findFirst({
     where: {
       id: announcementIdNum,
@@ -173,9 +227,13 @@ router.post(announcementApiClient('/markRead'), async (ctx) => {
       publishAt: { lte: nowDate },
       OR: [{ expireAt: null }, { expireAt: { gte: nowDate } }]
     },
-    select: { id: true }
+    select: { id: true, ...announcementVersionSelect }
   })
-  if (!exists) {
+  if (
+    !exists ||
+    (clientVersion != null &&
+      !matchesAnnouncementClientVersion(exists, clientVersion))
+  ) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在或已失效')
     return
   }
@@ -227,6 +285,7 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
   const dedupedIds = Array.from(idSet)
 
   const nowDate = new Date()
+  const clientVersion = readClientVersionFromBody(ctx.request.body)
   const validAnnouncements = await announcement.findMany({
     where: {
       id: { in: dedupedIds },
@@ -235,9 +294,12 @@ router.post(announcementApiClient('/markReadBatch'), async (ctx) => {
       publishAt: { lte: nowDate },
       OR: [{ expireAt: null }, { expireAt: { gte: nowDate } }]
     },
-    select: { id: true }
+    select: { id: true, ...announcementVersionSelect }
   })
-  const validIds = validAnnouncements.map((item) => item.id)
+  const validIds = filterAnnouncementsByClientVersion(
+    validAnnouncements,
+    clientVersion
+  ).map((item) => item.id)
   if (validIds.length === 0) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '公告不存在或已失效')
     return
@@ -394,7 +456,8 @@ router.post(announcementApiWeb('/list'), async (ctx) => {
         expireAt: true,
         createdAt: true,
         updatedAt: true,
-        deletedAt: true
+        deletedAt: true,
+        ...announcementVersionSelect
       },
       orderBy: [{ status: 'asc' }, { priority: 'desc' }, { createdAt: 'desc' }],
       skip: (page - 1) * pageSize,
@@ -484,7 +547,9 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
     expireAt,
     priority,
     actionText,
-    actionUrl
+    actionUrl,
+    minClientVersion,
+    maxClientVersion
   } = (ctx.request.body ?? {}) as Record<string, unknown>
 
   if ([id, title, summary, content, publishAt].some((value) => !value)) {
@@ -553,6 +618,17 @@ router.post(announcementApiWeb('/update'), async (ctx) => {
   data.publishAt = publishAtDate
   data.expireAt = { set: expireAtDate }
 
+  const versionParsed = parseAnnouncementClientVersionRange(
+    minClientVersion,
+    maxClientVersion
+  )
+  if (!versionParsed.ok) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, versionParsed.error)
+    return
+  }
+  data.minClientVersion = versionParsed.range.minClientVersion
+  data.maxClientVersion = versionParsed.range.maxClientVersion
+
   const exists = await announcement.findFirst({
     where: { id: idNum, deletedAt: null },
     select: { id: true }
@@ -591,7 +667,9 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     priority,
     status,
     publishAt,
-    expireAt
+    expireAt,
+    minClientVersion,
+    maxClientVersion
   } = ctx.request.body ?? {}
 
   // type 需要是 Prisma 枚举值，运行时无法完全校验，至少保证必填字段存在
@@ -654,6 +732,15 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
     return
   }
 
+  const versionParsed = parseAnnouncementClientVersionRange(
+    minClientVersion,
+    maxClientVersion
+  )
+  if (!versionParsed.ok) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, versionParsed.error)
+    return
+  }
+
   const created = await announcement.create({
     data: {
       title: titleText,
@@ -671,7 +758,9 @@ router.post(announcementApiWeb('/create'), async (ctx) => {
       priority: priorityValue,
       status: createStatus,
       publishAt: publishAtDate,
-      expireAt: expireAtDate
+      expireAt: expireAtDate,
+      minClientVersion: versionParsed.range.minClientVersion,
+      maxClientVersion: versionParsed.range.maxClientVersion
     }
   })
 
