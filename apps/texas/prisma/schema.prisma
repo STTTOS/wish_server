@@ -162,6 +162,7 @@ enum AnnouncementType {
   activity
   update
   maintenance
+  notice
 }
 
 enum AnnouncementStatus {
