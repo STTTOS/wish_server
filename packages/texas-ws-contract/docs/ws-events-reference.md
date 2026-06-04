@@ -179,7 +179,22 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 {
   matchId: number
   stage: StageEnum
+  advanceKind: 'betting_round_complete' | 'runout_reveal'
   pokesToReveal: Poke[]
+}
+```
+
+### `runout-hands-revealed`
+
+用途：全员全下等触发跑马路时，对仍在摊牌中的玩家**立即**亮底牌（与最后一次 `player-action-taken` 同批解释，**不**受 `pendingFlowOps` 进街 pacing 影响）。每手至多一次；不含 rank，客户端可用 core 按公牌+手牌自算。
+
+```ts
+{
+  matchId: number
+  revealedHands: Array<{
+    userId: number
+    handPokes: Poke[]
+  }>
 }
 ```
 
@@ -200,6 +215,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
     /** 与 handPokes 一致：看他人且（对方弃牌 或 未摊牌）时不出现 */
     rankStrength?: number
     rankCategory?: RankCategory
+    rankSignature?: string
   }>
   pokesToReveal: Poke[]
   lastActionStage: StageEnum   // 最后一轮可操作下注结束时的阶段（引擎 currentStage）
@@ -363,6 +379,7 @@ type WsEventType =
   | 'player-action-required'
   | 'player-action-taken'
   | 'game-stage-changed'
+  | 'runout-hands-revealed'
   | 'game-end'
   | 'player-chip-top-up'
   | 'players-posted-big-blind'

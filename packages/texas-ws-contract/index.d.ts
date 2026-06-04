@@ -67,6 +67,15 @@ export type WsGameStageChangedData = {
   pokesToReveal: Poke[]
 }
 
+/** 进入跑马路时对仍在摊牌中的玩家同步亮底牌（每手至多一次；不受进街 pacing 影响）。 */
+export type WsRunoutHandsRevealedData = {
+  matchId: number
+  revealedHands: Array<{
+    userId: number
+    handPokes: Poke[]
+  }>
+}
+
 export type WsMatchOverviewWagerItem = {
   userId: number
   totalWager: number
@@ -110,6 +119,8 @@ export type WsGameEndSettleItem = {
   handPokes: Poke[]
   rankCategory?: RankCategory
   rankStrength?: number
+  /** 与 handPokes 一致：看他人且（对方弃牌 或 未摊牌）时不出现 */
+  rankSignature?: RankSignature
 }
 
 export type WsGameEndData = {
@@ -293,6 +304,7 @@ export type WsEventDataMap = {
   'player-action-required': WsPlayerActionRequiredData
   'player-action-taken': WsPlayerActionTakenData
   'game-stage-changed': WsGameStageChangedData
+  'runout-hands-revealed': WsRunoutHandsRevealedData
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
   'player-built-in-voice': WsPlayerBuiltInVoiceData

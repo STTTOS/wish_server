@@ -71,6 +71,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'game-stage-changed', data })
   }
 
+  notifyRunoutHandsRevealed(
+    roomKey: string,
+    data: WsMessage<'runout-hands-revealed'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'runout-hands-revealed', data })
+  }
+
   notifyGameStart(roomKey: string, data: WsMessage<'game-start'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }

@@ -288,6 +288,13 @@ function rankSignatureForDb(player: Player): string | null {
   return JSON.stringify(sig)
 }
 
+function rankSignatureForWs(player: Player): RankSignature | undefined {
+  const sig = player.rankSignature
+  if (sig == null) return undefined
+  if (typeof sig === 'string') return sig as RankSignature
+  return undefined
+}
+
 async function flushEventsAfterSettle(ctx: TexasEventContext): Promise<void> {
   for (;;) {
     const batch = ctx.texas.drainDomainEvents()
@@ -438,11 +445,13 @@ async function handleHandEnded(
           ...(hideHoleFromViewer
             ? {
                 rankStrength: 0,
-                rankCategory: undefined
+                rankCategory: undefined,
+                rankSignature: undefined
               }
             : {
                 rankStrength: pl.rankStrength,
-                rankCategory: pl.rankCategory
+                rankCategory: pl.rankCategory,
+                rankSignature: rankSignatureForWs(pl)
               })
         }
       })
@@ -825,6 +834,15 @@ async function processTexasDomainEvent(
         totalBetAmount: player.totalBetAmount,
         currentStageBetAmount: player.currentStageTotalAmount,
         balance: player.balance
+      })
+      return
+    }
+    case 'RunoutHandsRevealed': {
+      const matchId = getRuntime().currentMatchId
+      if (matchId == null) return
+      wsGateway.notifyRunoutHandsRevealed(roomKey, {
+        matchId,
+        revealedHands: e.payload.revealedHands
       })
       return
     }
