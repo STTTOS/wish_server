@@ -1,5 +1,6 @@
 import type { Texas } from 'texas-poker-core'
 import type { StartRoomInfo, MatchRollbackManager } from './types'
+import type { WsRunoutHandsRevealedData } from '@wishufree/texas-ws-contract'
 
 import { logger } from '../../../logger'
 import { clearGameRoomWsReplay } from '../../../SockeServer/gameRoomWsReplayBuffer'
@@ -37,6 +38,8 @@ export type GameRuntime = {
   pendingNextHandManualTopUpUserIds: Set<number>
   /** `game-table-roster` 单调版本，与全房 WS `seq` 独立，仅用于名单快照对账。 */
   rosterSeq: number
+  /** 本手跑马路已亮底牌；HTTP 快照与 WS replay 对齐，新手 `RolesAssigned` 时清空。 */
+  runoutHandsRevealed: WsRunoutHandsRevealedData | null
 }
 
 /**
@@ -146,6 +149,23 @@ export class GameRuntimeRegistry {
     if (!runtime) return 0
     runtime.rosterSeq = (runtime.rosterSeq ?? 0) + 1
     return runtime.rosterSeq
+  }
+
+  setRunoutHandsRevealed(
+    roomKey: string,
+    data: WsRunoutHandsRevealedData | null
+  ): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.runoutHandsRevealed = data
+  }
+
+  getRunoutHandsRevealed(roomKey: string): WsRunoutHandsRevealedData | null {
+    return this.#runtimes.get(roomKey)?.runoutHandsRevealed ?? null
+  }
+
+  clearRunoutHandsRevealed(roomKey: string): void {
+    this.setRunoutHandsRevealed(roomKey, null)
   }
 
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {

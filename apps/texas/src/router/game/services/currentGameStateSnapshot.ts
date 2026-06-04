@@ -1,8 +1,10 @@
 import type { Texas, Stage, HandLifecycle } from 'texas-poker-core'
 import type {
+  WsGameEndData,
   WsGameTableRosterData,
   WsGameTableRosterSeat,
-  WsGameTableRosterWatcher
+  WsGameTableRosterWatcher,
+  WsRunoutHandsRevealedData
 } from '@wishufree/texas-ws-contract'
 
 import { type RankCategory } from 'texas-poker-core'
@@ -10,6 +12,7 @@ import { type RankCategory } from 'texas-poker-core'
 import prisma from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
+import { buildLastGameEndForViewer } from './lastGameEndSnapshot'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
@@ -70,6 +73,10 @@ export type FetchCurrentGameStatePayload = {
     roomDefaultBuyIn: number
     autoTopUpEnabled: boolean
   }
+  /** 局间：与 WS `game-end` 同形，按请求用户掩码 settleList */
+  lastGameEnd: WsGameEndData | null
+  /** 本手跑马路已亮底牌（不含请求用户本人）；`in_hand` 且已触发 runout 时有值 */
+  runoutHandsRevealed: WsRunoutHandsRevealedData | null
 }
 
 async function loadUserProfilesByIds(userIds: number[]): Promise<
@@ -245,6 +252,33 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const runtime = gameRuntimeRegistry.getOrThrow(roomKey)
   const roomDefaultBuyIn = Math.max(0, Number(runtime.roomInfo.initialChips))
 
+  let lastGameEnd: WsGameEndData | null = null
+  let runoutHandsRevealed: WsRunoutHandsRevealedData | null = null
+
+  if (currentMatchId != null) {
+    if (handLifecycle === 'in_hand') {
+      const cached = gameRuntimeRegistry.getRunoutHandsRevealed(roomKey)
+      if (cached != null && cached.matchId === currentMatchId) {
+        runoutHandsRevealed = {
+          matchId: cached.matchId,
+          revealedHands: (cached.revealedHands ?? []).filter(
+            (row) => row.userId !== userId
+          )
+        }
+      }
+    } else if (
+      handLifecycle === 'between_hands' ||
+      handLifecycle === 'idle' ||
+      roomGameStatus === 'between_hands'
+    ) {
+      lastGameEnd = await buildLastGameEndForViewer({
+        roomId,
+        matchId: currentMatchId,
+        viewerUserId: userId
+      })
+    }
+  }
+
   return {
     roomGameStatus,
     seats,
@@ -266,6 +300,8 @@ export async function buildFetchCurrentGameStatePayload(input: {
     myTopUpState: {
       roomDefaultBuyIn,
       autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
-    }
+    },
+    lastGameEnd,
+    runoutHandsRevealed
   }
 }

@@ -318,6 +318,8 @@ async function handleHandEnded(
 
   clearPlayerTurnTimeout(roomKey)
 
+  gameRuntimeRegistry.clearRunoutHandsRevealed(roomKey)
+
   try {
     const gameEndAt = new Date()
     const currentMatchId = getRuntime().currentMatchId
@@ -629,6 +631,7 @@ async function processTexasDomainEvent(
 
   switch (e.type) {
     case 'RolesAssigned': {
+      gameRuntimeRegistry.clearRunoutHandsRevealed(roomKey)
       getRuntime().matchStartedAt = Date.now()
       const currentMatchId = getRuntime().currentMatchId
       if (currentMatchId == null) {
@@ -840,10 +843,12 @@ async function processTexasDomainEvent(
     case 'RunoutHandsRevealed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
-      wsGateway.notifyRunoutHandsRevealed(roomKey, {
+      const payload = {
         matchId,
         revealedHands: e.payload.revealedHands
-      })
+      }
+      gameRuntimeRegistry.setRunoutHandsRevealed(roomKey, payload)
+      wsGateway.notifyRunoutHandsRevealed(roomKey, payload)
       return
     }
     case 'StageAdvanced': {

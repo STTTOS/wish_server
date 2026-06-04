@@ -18,6 +18,11 @@
  * - {@link SocketServer.broadcastGameEachWithReplay}：按 viewer 定制 payload，但**共用一条** replay 记录与同一 `seq`（如 `game-end`）。
  * - 全房广播若带 **`skipReplay`**（如 `player-built-in-voice` 内置语音）同样**不入缓冲**，断线重连不补发。
  *
+ * 典型入缓冲事件（经 `broadcastGameRoom`）：`player-roles-assigned`、`game-start`、
+ * `game-blinds-posted`、`player-action-required`、`player-action-taken`、`game-stage-changed`、
+ * **`runout-hands-revealed`**、`game-end`、`next-hand-countdown-started`、
+ * `next-hand-countdown-cancelled` 等。
+ *
  * ## 关键步骤（与 SockeServer 的配合）
  *
  * 1. **写入**：`broadcastGameRoom` 内先 {@link recordGameRoomBroadcast}，再 `emit`（保证「先记后发」）。

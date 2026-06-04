@@ -30,7 +30,7 @@
 | **`game-room-replay`**                           | 可不实现客户端分支（`sinceSeq=0` 时通常无包或仅有元数据）。       | **必须**：按 `events[].seq` 顺序应用 `payload`（与同房间历史 `message` 同形）。 |
 | **`truncated: true`**                            | 可忽略或按「再拉一次快照」处理。                                  | **必须**：再拉快照，并用新响应里的 `latestWsSeq` 重置游标。                     |
 
-服务端仅对 **`broadcastGameRoom`** 发出的全房广播做缓冲；**`broadcastGameToUser` / `broadcastGameEach`** 不入缓冲（例如按人手牌），断线期间的这类信息**不能**仅靠 replay 补全，仍依赖快照或既有单播策略。
+服务端仅对 **`broadcastGameRoom`** 发出的全房广播做缓冲（含 **`runout-hands-revealed`**、**`game-end`** 等）；**`broadcastGameToUser` / `broadcastGameEach`** 不入缓冲（例如按人手牌），断线期间的这类信息**不能**仅靠 replay 补全，仍依赖快照或既有单播策略。局间 **`lastGameEnd`** 与跑马路 **`runoutHandsRevealed`** 亦写入 HTTP 快照，避免 `truncated` 或漏 seq 时 UI 空白。
 
 ---
 
@@ -44,6 +44,8 @@
 
    - 调用 **`POST …/game/fetchCurrentGameState`**（需登录，且用户为该房 `RoomMember`，对局运行时存在）。
    - 用响应体渲染：**在坐、观战、`matchInfo`、`activePlayerInfo` 等**。
+   - 局间结算 UI：响应中的 **`lastGameEnd`**（与 WS `game-end` 同形，按请求用户掩码 `settleList`）。
+   - 跑马路途中重连：响应中的 **`runoutHandsRevealed`**（对手已亮底牌；不含本人）。
    - 保存响应中的 **`latestWsSeq`**（用于下一步，可选但推荐）。
 
 2. **WebSocket `/game`**

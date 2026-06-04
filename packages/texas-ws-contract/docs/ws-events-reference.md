@@ -334,9 +334,11 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 }
 ```
 
-- **HTTP 快照**（`POST .../game/fetchCurrentGameState`）仍是权威状态；响应内带 **`latestWsSeq`**，表示当前全房广播游标。
+- **HTTP 快照**（`POST .../game/fetchCurrentGameState`）仍是权威状态；响应内带 **`latestWsSeq`**，表示当前全房广播游标。另含：
+  - **`lastGameEnd`**：局间（`between_hands` / `idle`）时与 WS **`game-end`** 同形，按请求用户掩码 `settleList`（含 `bestRankSignature`、自愿亮牌后的手牌等）。
+  - **`runoutHandsRevealed`**：本手 **`in_hand`** 且已触发跑马路时有值，与 WS **`runout-hands-revealed`** 同形（不含请求用户本人底牌）。
 - **WS 补发**：连接 `/game` 时在 **`auth.gameRoomSinceSeq`** 传入客户端「最后已处理的全房广播序号」（未收到过则 `0`）。连上后除 `initial connect` 外，可能收到一条 **`game-room-replay`**：
-  - `events`：每条为 `{ seq, payload }`，`payload` 与同房间历史 `message` 事件 body 相同（一般为 `{ type, data }`），按 `seq` 顺序重放即可。
+  - `events`：每条为 `{ seq, payload }`，`payload` 与同房间历史 `message` 事件 body 相同（一般为 `{ type, data }`），按 `seq` 顺序重放即可。缓冲含 **`runout-hands-revealed`** 等全房广播。
   - **`truncated: true`**：`afterSeq < latestSeq` 但环形缓冲里已无中间消息（断线过久或消息过多被挤出）；须先拉 HTTP 快照对齐，再把本地游标设为返回的 `latestSeq`。
 - **未入缓冲的消息**：`broadcastGameToUser`（如 `player-hand-dealt`）、`broadcastGameEach` 等**不会**进入环形缓冲，仍依赖快照或既有单播逻辑。
 
@@ -349,7 +351,7 @@ sequenceDiagram
   participant WS as Server /game
 
   App->>HTTP: POST /game/fetchCurrentGameState
-  HTTP-->>App: currentState + latestWsSeq
+  HTTP-->>App: currentState + lastGameEnd/runoutHandsRevealed + latestWsSeq
   Note over App: 先用 currentState 恢复当前牌局 UI
 
   App->>WS: connect /game(auth.roomId, auth.gameRoomSinceSeq=latestWsSeq)
