@@ -87,6 +87,7 @@ async function loadUserProfilesByIds(userIds: number[]): Promise<
       name: string
       avatarUrl: string | null
       avatarKey: string
+      pokerBackgroundKey: string
     }
   >
 > {
@@ -98,7 +99,13 @@ async function loadUserProfilesByIds(userIds: number[]): Promise<
   }
   const rows = await prisma.user.findMany({
     where: { id: { in: unique } },
-    select: { id: true, name: true, avatarUrl: true, avatarKey: true }
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      avatarKey: true,
+      pokerBackgroundKey: true
+    }
   })
   return new Map(
     rows.map((u) => [
@@ -107,7 +114,8 @@ async function loadUserProfilesByIds(userIds: number[]): Promise<
         userId: u.id,
         name: u.name || `玩家${u.id}`,
         avatarUrl: u.avatarUrl ?? null,
-        avatarKey: u.avatarKey || 'cartoon/default'
+        avatarKey: u.avatarKey || 'cartoon/default',
+        pokerBackgroundKey: u.pokerBackgroundKey || 'default'
       }
     ])
   )
@@ -121,6 +129,7 @@ function fallbackProfile(
       name: string
       avatarUrl: string | null
       avatarKey: string
+      pokerBackgroundKey: string
     }
   >,
   userId: number,
@@ -131,7 +140,8 @@ function fallbackProfile(
       userId,
       name: nameFromEngine || `玩家${userId}`,
       avatarUrl: null as string | null,
-      avatarKey: 'cartoon/default'
+      avatarKey: 'cartoon/default',
+      pokerBackgroundKey: 'default'
     }
   )
 }

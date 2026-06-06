@@ -11,7 +11,8 @@ import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
-import prisma, { user, userSettings, assetUsageEvent } from '../../models'
+import prisma, { user, userSettings } from '../../models'
+import { recordAssetUsageOnSet } from '../../services/recordAssetUsageOnSet'
 import { getNicknameDisplayLengthError } from '../../utils/nicknameDisplayLength'
 import {
   getNicknameCharsetError,
@@ -764,10 +765,25 @@ router.post(userClientApi('/setPokerBackground'), async (ctx) => {
     return
   }
 
+  const current = await user.findUnique({
+    where: { id: userId },
+    select: { pokerBackgroundKey: true }
+  })
+  if (!current) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+
   try {
     await user.update({
       where: { id: userId },
       data: { pokerBackgroundKey: key }
+    })
+    await recordAssetUsageOnSet(prisma, {
+      userId,
+      assetType: AssetUsageType.poker_back,
+      assetId: key,
+      previousAssetId: current.pokerBackgroundKey
     })
     response.success(ctx, null, '卡面更新成功')
   } catch (error) {
@@ -816,10 +832,25 @@ router.post(userClientApi('/setTableBackground'), async (ctx) => {
     return
   }
 
+  const current = await user.findUnique({
+    where: { id: userId },
+    select: { tableBackgroundKey: true }
+  })
+  if (!current) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+
   try {
     await user.update({
       where: { id: userId },
       data: { tableBackgroundKey: key }
+    })
+    await recordAssetUsageOnSet(prisma, {
+      userId,
+      assetType: AssetUsageType.table_bg,
+      assetId: key,
+      previousAssetId: current.tableBackgroundKey
     })
     response.success(ctx, null, '牌桌背景更新成功')
   } catch (error) {
@@ -1187,7 +1218,8 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
 })
 
 /**
- * 客户端资源使用打点（卡背 / 牌桌）。须登录；与藏品/改卡面能力一致。
+ * 客户端资源使用打点（卡背 / 牌桌）。须登录。
+ * 计数已迁至 setPokerBackground / setTableBackground；本接口对旧包空操作返回成功，避免双写且不打断主流程。
  * body: { assetType: 'poker_back' | 'table_bg', assetId: string, platform?: string }
  */
 router.post(userClientApi('/asset-usage'), async (ctx) => {
@@ -1202,7 +1234,7 @@ router.post(userClientApi('/asset-usage'), async (ctx) => {
     assetId?: string
     platform?: string
   }
-  const { assetType, assetId, platform } = body
+  const { assetType, assetId } = body
   if (assetType !== 'poker_back' && assetType !== 'table_bg') {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'assetType 无效')
     return
@@ -1215,24 +1247,6 @@ router.post(userClientApi('/asset-usage'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'assetId 不在允许列表')
     return
   }
-  const platformNorm =
-    typeof platform === 'string' && platform.trim().length > 0
-      ? platform.trim().slice(0, 16)
-      : null
-
-  const enumType: AssetUsageType =
-    assetType === 'poker_back'
-      ? AssetUsageType.poker_back
-      : AssetUsageType.table_bg
-
-  await assetUsageEvent.create({
-    data: {
-      userId,
-      assetType: enumType,
-      assetId: assetId.trim(),
-      platform: platformNorm
-    }
-  })
 
   response.success(ctx, null)
 })

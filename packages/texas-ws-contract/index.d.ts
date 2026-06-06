@@ -101,6 +101,8 @@ export type WsPlayerProfileItem = {
   name: string
   avatarUrl: string | null
   avatarKey: string
+  /** 与 `User.pokerBackgroundKey`、结算 `game-end.settleList` 同源 */
+  pokerBackgroundKey: string
 }
 
 export type WsGameEndSettleItem = {
