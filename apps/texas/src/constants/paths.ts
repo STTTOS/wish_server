@@ -15,6 +15,9 @@ export const ADMIN_ONLY_PATHS = [
   '/api/web/system/maintenance/set',
   '/api/web/system/client-version/detail',
   '/api/web/system/client-version/set',
+  '/api/web/system/infra/ssl/upload',
+  '/api/web/system/infra/nginx/test',
+  '/api/web/system/infra/nginx/apply',
   '/api/web/match/hand-poke-audit/list',
   '/api/web/match/hand-poke-audit/detail'
 ] as const
