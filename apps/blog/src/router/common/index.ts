@@ -212,7 +212,7 @@ router.post(
   }
 )
 
-// 批量上传图片（Gallery 分块调用，每批最多 10 张）
+// 批量上传图片（Gallery 分块调用，每批最多 4 张）
 router.post(
   commonApi('/upload_images'),
   koaBody(getKoaBodyConfig('origin', IMAGE_UPLOAD_BATCH_PARSE_LIMIT_MB)),

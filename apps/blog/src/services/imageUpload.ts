@@ -11,8 +11,8 @@ import uploadFileToCos from '../utils/uploadFileToCos'
 import { mapWithConcurrency } from '../utils/runWithConcurrency'
 import { cosDomain, fileNameSpliter, imageCompressRatio } from '../config'
 
-export const IMAGE_UPLOAD_BATCH_MAX = 10
-export const IMAGE_UPLOAD_PROCESS_CONCURRENCY = 4
+export const IMAGE_UPLOAD_BATCH_MAX = 4
+export const IMAGE_UPLOAD_PROCESS_CONCURRENCY = 2
 /** 单张图片大小上限（MB） */
 export const IMAGE_UPLOAD_MAX_FILE_SIZE_MB = 30
 /**
