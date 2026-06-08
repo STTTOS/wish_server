@@ -1,4 +1,5 @@
 import router from './instance'
+import { logger } from '../logger'
 import response from '../utils/response'
 import { apiPrefixWeb } from '../config'
 import { assertWebAdmin } from './webAuth'
@@ -50,6 +51,7 @@ const handleSslCertOpsError = (
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, error.message)
     return
   }
+  logger.error('[infra] unexpected error', error)
   response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '操作失败')
 }
 

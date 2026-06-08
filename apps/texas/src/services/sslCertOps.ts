@@ -7,7 +7,11 @@ import { logger } from '../logger'
 
 const execFileAsync = promisify(execFile)
 
-const NGINX_DIR = process.env.SSL_NGINX_DIR || '/etc/nginx'
+const PROD_NGINX_DIR = '/etc/nginx'
+const LOCAL_NGINX_DIR = join(__dirname, '../../static/ssl-nginx')
+
+const NGINX_DIR =
+  process.env.NODE_ENV === 'production' ? PROD_NGINX_DIR : LOCAL_NGINX_DIR
 const NGINX_BIN = process.env.NGINX_BIN || 'nginx'
 const ALLOWED_EXTENSIONS = new Set(['.key', '.crt', '.pem'])
 const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
@@ -23,6 +27,14 @@ export class SslCertOpsError extends Error {
     super(message)
     this.name = 'SslCertOpsError'
   }
+}
+
+const toSslCertOpsError = (error: unknown, action: string): SslCertOpsError => {
+  if (error instanceof SslCertOpsError) return error
+  const err = error as NodeJS.ErrnoException | undefined
+  const code = err?.code ? ` (${err.code})` : ''
+  const detail = err?.message || '未知错误'
+  return new SslCertOpsError(`${action}失败: ${detail}${code}`)
 }
 
 const validateFilename = (filename: string): string => {
@@ -69,25 +81,33 @@ export const uploadSslFiles = async (files: UploadedSslFile[]) => {
     throw new SslCertOpsError('请至少上传一个 .key 或 .crt 文件')
   }
 
-  await mkdir(NGINX_DIR, { recursive: true })
+  try {
+    await mkdir(NGINX_DIR, { recursive: true })
+  } catch (error) {
+    throw toSslCertOpsError(error, `无法创建证书目录 ${NGINX_DIR}`)
+  }
 
   const written: string[] = []
-  for (const file of files) {
-    const name = validateFilename(file.originalFilename || '')
-    const ext = extname(name).toLowerCase()
+  try {
+    for (const file of files) {
+      const name = validateFilename(file.originalFilename || '')
+      const ext = extname(name).toLowerCase()
 
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      throw new SslCertOpsError(`${name} 超过 2MB 大小限制`)
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new SslCertOpsError(`${name} 超过 2MB 大小限制`)
+      }
+
+      await validatePemContent(file.filepath, ext)
+
+      const dest = join(NGINX_DIR, name)
+      await copyFile(file.filepath, dest)
+      await chmod(dest, ext === '.key' ? 0o600 : 0o644)
+
+      written.push(dest)
+      await cleanupTempFile(file.filepath)
     }
-
-    await validatePemContent(file.filepath, ext)
-
-    const dest = join(NGINX_DIR, name)
-    await copyFile(file.filepath, dest)
-    await chmod(dest, ext === '.key' ? 0o600 : 0o644)
-
-    written.push(dest)
-    await cleanupTempFile(file.filepath)
+  } catch (error) {
+    throw toSslCertOpsError(error, `无法写入证书目录 ${NGINX_DIR}`)
   }
 
   logger.info(`[ssl-cert] uploaded ${written.length} file(s) to ${NGINX_DIR}`)
