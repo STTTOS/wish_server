@@ -42,6 +42,7 @@ export const apiNeededToAuth = [
 
   '/api/common/upload_file',
   '/api/common/upload_image',
+  '/api/common/upload_images',
   '/api/common/upload_persistent',
   '/api/common//upload_temp_file',
   '/api/common/deploy_blog_frontend',

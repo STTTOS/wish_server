@@ -66,13 +66,20 @@ app.use(
 // Custom 401 handling
 app.use(customHandle401)
 
+// 请求日志尽早挂载，避免被 requireAuth 提前 return 时漏记
+app.use(loggerMiddleware)
+
+// JSON / urlencoded 全局解析；multipart 仅由路由级 koaBody 处理，避免重复解析
+app.use(
+  koaBody({
+    multipart: false,
+    json: true,
+    urlencoded: true
+  })
+)
+
 // 权限校验中间件, 非管理员403跳转
 app.use(requireAuthMiddleware)
-
-// 解析请求体
-app.use(koaBody())
-
-app.use(loggerMiddleware)
 
 //路由中间件
 app.use(router.routes())

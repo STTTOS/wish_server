@@ -1,5 +1,4 @@
 import fs from 'fs'
-import { v4 } from 'uuid'
 import sharp from 'sharp'
 import dayjs from 'dayjs'
 import cron from 'node-cron'
@@ -7,8 +6,8 @@ import { constants } from 'fs'
 import koaBody from 'koa-body'
 import Router from 'koa-router'
 import { compose } from 'ramda'
+import { join, basename } from 'path'
 import { ParameterizedContext } from 'koa'
-import { join, extname, basename } from 'path'
 import { stat, access, readFile, writeFile } from 'fs/promises'
 
 import { user } from '@/models'
@@ -16,30 +15,24 @@ import router from '../instance'
 import { logger } from '../../logger'
 import imageEncrypt from '@/utils/cryptor'
 import response from '../../utils/response'
+import { getAllFiles } from '../../utils/file'
 import combinePath from '../../utils/combinePath'
+import { apiPrefix, cosDomain } from '../../config'
 import { decrypt, encrypt } from '@/utils/jwtCryptor'
 import uploadFileToCos from '../../utils/uploadFileToCos'
-import { getAllFiles, getFileName } from '../../utils/file'
 import {
-  apiPrefix,
-  cosDomain,
-  fileNameSpliter,
-  imageCompressRatio
-} from '../../config'
+  processOneImage,
+  assignOriginUploadPath,
+  IMAGE_UPLOAD_BATCH_MAX,
+  type UploadedImageFile,
+  hashAndKeepOriginalName,
+  processImagesBatchWithSizeFilter,
+  IMAGE_UPLOAD_BATCH_PARSE_LIMIT_MB
+} from '../../services/imageUpload'
 
 const commonApi = combinePath(apiPrefix)('/common')
 
-const covertCosToSafeUrl = (url: string, compressed = true) =>
-  `https://${cosDomain}/images/${
-    compressed ? 'compressed' : 'origin'
-  }/${basename(url)}`
-
-interface Args {
-  newFilename: string
-  originalFilename: string | null
-  filepath: string
-  size: number
-}
+type Args = UploadedImageFile
 
 const removeBlanks = (input: string) => input.replaceAll(/\s/g, '')
 const mapFileNameToURI =
@@ -47,10 +40,10 @@ const mapFileNameToURI =
   (file: Args) =>
     join('/static', directory, removeBlanks(file.newFilename))
 
-export const hashAndKeepOriginalName = ({ originalFilename }: Args) =>
-  `${getFileName(
-    originalFilename || 'file_unknown'
-  )}${fileNameSpliter}${v4()}${extname(originalFilename || '')}`
+const collectUploadedImages = (files: Args | Args[] | undefined): Args[] => {
+  if (!files) return []
+  return Array.isArray(files) ? files : [files]
+}
 
 const getKoaBodyConfig = (
   directoryName: string,
@@ -65,13 +58,7 @@ const getKoaBodyConfig = (
       // 保留文件扩展名
       keepExtensions: true,
       onFileBegin(_, file) {
-        const newFileName = compose(removeBlanks, hashAndKeepOriginalName)(file)
-
-        file.filepath = join(
-          __dirname,
-          join('../../../static/', directoryName, newFileName)
-        )
-        file.newFilename = newFileName
+        assignOriginUploadPath(directoryName)(file)
       }
     }
   }
@@ -210,54 +197,41 @@ router.post(
   }
 )
 
-// 上传图片
-// 直接使用cos存储
+// 上传图片（单张）
 router.post(
   commonApi('/upload_image'),
   koaBody(getKoaBodyConfig('origin', 30)),
   async (ctx) => {
-    const file = ctx.request.files?.file as unknown as Args
+    const [file] = collectUploadedImages(
+      ctx.request.files?.file as Args | Args[] | undefined
+    )
     if (!file) throw new Error('空文件!')
 
-    const compressFilePath = join(
-      __dirname,
-      '../../../static/',
-      file.newFilename
-    )
+    const data = await processOneImage(file)
+    response.success(ctx, data)
+  }
+)
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    // const originWith = (await sharp(file.filepath).metadata()).width
-    logger.info('upload_image:', 'start sharp image')
-    // 压缩图片
-    await sharp(file.filepath)
-      .rotate()
-      // .resize(originWith && Math.floor(originWith * imageCompressRatio))
-      .jpeg({ quality: imageCompressRatio * 100 })
-      .toFile(compressFilePath)
+// 批量上传图片（Gallery 分块调用，每批最多 10 张）
+router.post(
+  commonApi('/upload_images'),
+  koaBody(getKoaBodyConfig('origin', IMAGE_UPLOAD_BATCH_PARSE_LIMIT_MB)),
+  async (ctx) => {
+    const files = collectUploadedImages(
+      ctx.request.files?.file as Args | Args[] | undefined
+    )
+    if (files.length === 0) throw new Error('空文件!')
+    if (files.length > IMAGE_UPLOAD_BATCH_MAX) {
+      throw new Error(`单次最多上传 ${IMAGE_UPLOAD_BATCH_MAX} 张图片`)
+    }
 
-    const start = new Date()
-    logger.info('upload_image:', 'image sharped, upload to cos...')
-    // 将图片 上传到cos
-    const originalUrl = await uploadFileToCos(
-      'images/origin',
-      file.newFilename,
-      file.filepath
-    )
-    const url = await uploadFileToCos(
-      'images/compressed',
-      file.newFilename,
-      compressFilePath
-    )
-    logger.info(
-      'upload_image:',
-      'image uploaded to cos, cost ',
-      dayjs().diff(start, 'second'),
-      's'
-    )
-    response.success(ctx, {
-      url: covertCosToSafeUrl(url),
-      originalUrl: covertCosToSafeUrl(originalUrl, false)
-    })
+    const { items, failures } = await processImagesBatchWithSizeFilter(files)
+    if (items.length === 0) {
+      const detail = failures.map((f) => f.filename || '未知文件').join(', ')
+      throw new Error(`图片上传失败: ${detail}`)
+    }
+
+    response.success(ctx, { items, failures })
   }
 )
 
