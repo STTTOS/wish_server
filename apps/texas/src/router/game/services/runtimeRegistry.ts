@@ -111,7 +111,7 @@ export class GameRuntimeRegistry {
         } else if (roomMemberUserIds.has(userId)) {
           // 已回房：保留环上实体，仅清除本手离场标记（见循环末尾 delete）
         } else {
-          runtime.texas.room.removeById(userId)
+          runtime.texas.removePlayerByIdAsSystem(userId)
           removedFromRingUserIds.push(userId)
         }
       } catch (e) {

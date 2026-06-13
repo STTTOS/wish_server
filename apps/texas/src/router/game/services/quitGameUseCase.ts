@@ -313,7 +313,7 @@ export class QuitGameUseCase {
       try {
         gameRuntimeRegistry.removePendingPostBigBlind(roomKey, userId)
         if (!txRes.deferTexasSeatRemoval && texas.room.has(userId)) {
-          texas.room.removeById(userId)
+          texas.removePlayerByIdAsSystem(userId)
         }
       } catch (e) {
         logger.error('[quitGame] texas room remove/setOwner failed', e)
@@ -359,13 +359,25 @@ export class QuitGameUseCase {
     if (txRes.deletedRoom) {
       this.wsGateway.broadcastRoomListRoomDeleted(roomId)
     } else {
+      this.wsGateway.broadcastWaitingRoomMemberLeft(roomId, {
+        userId,
+        reason: 'quit'
+      })
       this.wsGateway.broadcastRoomListMemberCountChanged({
         roomId,
         memberCount: txRes.restCount
       })
     }
 
-    if (!txRes.deletedRoom && gameRuntimeRegistry.hasTexas(roomKey)) {
+    /**
+     * 本手在座离场（defer）：不推 `game-table-roster`，牌桌人数与摘环一致，手末 `HandEnded` 再更新。
+     * 他人以 `player-left-game` 感知 `leavePending`；局间退出则立即推 roster。
+     */
+    if (
+      !txRes.deletedRoom &&
+      !txRes.deferTexasSeatRemoval &&
+      gameRuntimeRegistry.hasTexas(roomKey)
+    ) {
       await this.wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
     }
 

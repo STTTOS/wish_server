@@ -1,4 +1,4 @@
-import type { Texas, Stage, HandLifecycle } from 'texas-poker-core'
+import type { Texas, Stage, Player, HandLifecycle } from 'texas-poker-core'
 import type {
   WsGameEndData,
   WsGameTableRosterData,
@@ -121,6 +121,30 @@ async function loadUserProfilesByIds(userIds: number[]): Promise<
   )
 }
 
+async function loadRoomMemberUserIds(roomId: number): Promise<Set<number>> {
+  const rows = await prisma.roomMember.findMany({
+    where: { roomId },
+    select: { userId: true }
+  })
+  return new Set(rows.map((row) => row.userId))
+}
+
+/** 与 Core `on-set` 对齐；本手中途离场者在摘环前仍计入 `seats`（配合 `leavePending`）。 */
+function resolveRosterSeatPlayers(texas: Texas): Player[] {
+  return texas.room.getPlayersBySeatStatus('on-set')
+}
+
+/** 观战席仅展示仍在房间成员表中的玩家；已 HTTP 退出的 `hang` 残留不计入观战人数。 */
+function resolveRosterWatcherPlayers(input: {
+  texas: Texas
+  roomMemberUserIds: ReadonlySet<number>
+}): Player[] {
+  const { texas, roomMemberUserIds } = input
+  return texas.room
+    .getPlayersBySeatStatus('hang')
+    .filter((player) => roomMemberUserIds.has(player.getUserInfo().id))
+}
+
 function fallbackProfile(
   profileById: Map<
     number,
@@ -156,8 +180,9 @@ export async function buildGameTableRosterData(input: {
   rosterSeq: number
 }): Promise<WsGameTableRosterData> {
   const { texas, roomId, roomKey, rosterSeq } = input
-  const seatPlayers = texas.dealer.getPlayersByActionSequence()
-  const hangPlayers = texas.room.getPlayersBySeatStatus('hang')
+  const roomMemberUserIds = await loadRoomMemberUserIds(roomId)
+  const seatPlayers = resolveRosterSeatPlayers(texas)
+  const hangPlayers = resolveRosterWatcherPlayers({ texas, roomMemberUserIds })
   const ids: number[] = []
   for (const p of seatPlayers) ids.push(p.getUserInfo().id)
   for (const p of hangPlayers) ids.push(p.getUserInfo().id)
@@ -199,17 +224,23 @@ export async function buildFetchCurrentGameStatePayload(input: {
   const handLifecycle = texas.controller.status
   const inHand = handLifecycle === 'in_hand'
 
-  const seatPlayers = texas.dealer.getPlayersByActionSequence()
-  const hangPlayers = texas.room.getPlayersBySeatStatus('hang')
+  const roomMemberUserIds = await loadRoomMemberUserIds(roomId)
+  const seatPlayers = resolveRosterSeatPlayers(texas)
+  const hangPlayers = resolveRosterWatcherPlayers({ texas, roomMemberUserIds })
+  const actionIndexByUserId = new Map(
+    texas.dealer
+      .getPlayersByActionSequence()
+      .map((player, actionIndex) => [player.getUserInfo().id, actionIndex])
+  )
 
-  const seats = seatPlayers.map((player, actionIndex) => {
+  const seats = seatPlayers.map((player) => {
     const st = player.getStatus()
     const uid = player.getUserInfo().id
     return {
       userInfo: player.getUserInfo(),
       leavePending: gameRuntimeRegistry.hasQueuedLeave(roomKey, uid),
       role: player.getRole(),
-      actionIndex,
+      actionIndex: actionIndexByUserId.get(uid) ?? 0,
       isFold: st === 'out',
       isAllIn: st === 'allIn',
       balance: player.balance,

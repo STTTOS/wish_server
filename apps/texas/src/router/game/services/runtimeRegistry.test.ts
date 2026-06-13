@@ -87,9 +87,10 @@ test('flushDeferredTexasSeatRemovals removes queued user ids', () => {
   const seatedUserIds = new Set([1, 2])
   const fakeTexas = {
     reset: () => undefined,
+    removePlayerByIdAsSystem: (userId: number) =>
+      void seatedUserIds.delete(userId),
     room: {
-      has: (userId: number) => seatedUserIds.has(userId),
-      removeById: (userId: number) => void seatedUserIds.delete(userId)
+      has: (userId: number) => seatedUserIds.has(userId)
     }
   } as unknown as Texas
 
@@ -122,9 +123,10 @@ test('flushDeferredTexasSeatRemovals keeps ring seat when room member exists', (
   const seatedUserIds = new Set([1, 2])
   const fakeTexas = {
     reset: () => undefined,
+    removePlayerByIdAsSystem: (userId: number) =>
+      void seatedUserIds.delete(userId),
     room: {
-      has: (userId: number) => seatedUserIds.has(userId),
-      removeById: (userId: number) => void seatedUserIds.delete(userId)
+      has: (userId: number) => seatedUserIds.has(userId)
     }
   } as unknown as Texas
 
