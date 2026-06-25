@@ -370,14 +370,11 @@ export class QuitGameUseCase {
     }
 
     /**
-     * 本手在座离场（defer）：不推 `game-table-roster`，牌桌人数与摘环一致，手末 `HandEnded` 再更新。
-     * 他人以 `player-left-game` 感知 `leavePending`；局间退出则立即推 roster。
+     * 全房 `game-table-roster` 为名单权威：
+     * - 局间退出：已摘环，名单不含离场者；
+     * - 本手 defer：仍在 `seats` 且 `leavePending`，绝不应落入 `watchers`。
      */
-    if (
-      !txRes.deletedRoom &&
-      !txRes.deferTexasSeatRemoval &&
-      gameRuntimeRegistry.hasTexas(roomKey)
-    ) {
+    if (!txRes.deletedRoom && gameRuntimeRegistry.hasTexas(roomKey)) {
       await this.wsGateway.notifyGameTableRosterFromRuntime(roomKey, roomId)
     }
 
