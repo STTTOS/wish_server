@@ -51,10 +51,9 @@ export class GameConnectionWaiterStore {
     return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         const list = this.#waiters.get(roomId) ?? []
-        this.#waiters.set(
-          roomId,
-          list.filter((w) => w.resolve !== resolve)
-        )
+        const remaining = list.filter((w) => w.resolve !== resolve)
+        if (remaining.length === 0) this.#waiters.delete(roomId)
+        else this.#waiters.set(roomId, remaining)
         reject(
           new Error(
             `waitForGameUsersConnected timeout, roomId=${roomId}, expected=${JSON.stringify(

@@ -684,6 +684,42 @@ class SocketServer {
       .filter((userId) => !!userId) as number[]
   }
 
+  #clearSetKeysWithRoomPrefix(store: Set<string>, roomKey: string): void {
+    const prefix = `${roomKey}:`
+    for (const key of store) {
+      if (key.startsWith(prefix)) store.delete(key)
+    }
+  }
+
+  /**
+   * 房间 runtime 销毁时清理本进程内与该房相关的 presence / 离线宽限本地态，
+   * 避免多房创建销毁后 Map 与定时器残留。
+   */
+  purgeRoomLocalState(roomKey: string) {
+    this.#waitingRoomPresenceSeqByRoom.delete(roomKey)
+    this.#roomCleanupManager.cancelScheduledGameRoomCleanup(roomKey)
+    this.#roomCleanupManager.cancelScheduledWaitingRoomCleanup(roomKey)
+    this.#gameEnteringTrackers.delete(Number(roomKey))
+
+    for (const key of [...this.#waitingRoomPresenceOfflineAnnounced]) {
+      if (key.startsWith(`${roomKey}:`)) {
+        this.#waitingRoomPresenceOfflineAnnounced.delete(key)
+      }
+    }
+
+    this.#clearSetKeysWithRoomPrefix(this.#waitingRoomPendingUsers, roomKey)
+    for (const [key, timer] of this.#waitingRoomPendingOfflineTimers) {
+      if (!key.startsWith(`${roomKey}:`)) continue
+      clearTimeout(timer)
+      this.#waitingRoomPendingOfflineTimers.delete(key)
+    }
+    for (const [key, timer] of this.#gameRoomPendingOfflineTimers) {
+      if (!key.startsWith(`${roomKey}:`)) continue
+      clearTimeout(timer)
+      this.#gameRoomPendingOfflineTimers.delete(key)
+    }
+  }
+
   /** 同一用户在本房是否仍有其它 /game 连接（用于重连重叠时避免误报离线）。 */
   #countPeerGameSockets(
     roomId: string,

@@ -5,6 +5,35 @@ import { BUILT_IN_VOICE_ROOM_EMIT_MIN_INTERVAL_MS } from '../builtInVoiceConstan
 
 const roomLastEmitAt = new Map<number, number>()
 const roomEmitChains = new Map<number, Promise<void>>()
+const builtInVoiceUserLastAt = new Map<string, number>()
+
+function builtInVoiceUserKey(roomId: number, userId: number): string {
+  return `${roomId}:${userId}`
+}
+
+export function recordBuiltInVoiceUserEmit(
+  roomId: number,
+  userId: number
+): void {
+  builtInVoiceUserLastAt.set(builtInVoiceUserKey(roomId, userId), Date.now())
+}
+
+export function getBuiltInVoiceUserLastEmitAt(
+  roomId: number,
+  userId: number
+): number {
+  return builtInVoiceUserLastAt.get(builtInVoiceUserKey(roomId, userId)) ?? 0
+}
+
+/** 房间 runtime 销毁时释放内置语音队列与冷却记录。 */
+export function clearBuiltInVoiceRoomState(roomId: number): void {
+  roomLastEmitAt.delete(roomId)
+  roomEmitChains.delete(roomId)
+  const prefix = `${roomId}:`
+  for (const key of builtInVoiceUserLastAt.keys()) {
+    if (key.startsWith(prefix)) builtInVoiceUserLastAt.delete(key)
+  }
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

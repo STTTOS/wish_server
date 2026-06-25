@@ -3,7 +3,16 @@ import type { StartRoomInfo, MatchRollbackManager } from './types'
 import type { WsRunoutHandsRevealedData } from '@wishufree/texas-ws-contract'
 
 import { logger } from '../../../logger'
+import { clearRoomEventDrainLock } from './texasDomain/roomEventDrainLock'
 import { clearGameRoomWsReplay } from '../../../SockeServer/gameRoomWsReplayBuffer'
+
+type RuntimeDestroyListener = (roomKey: string, roomId: number) => void
+const runtimeDestroyListeners: RuntimeDestroyListener[] = []
+
+/** 注册房间 runtime 销毁时的附加清理（如 SocketServer 本地态）。 */
+export function onRuntimeDestroy(listener: RuntimeDestroyListener): void {
+  runtimeDestroyListeners.push(listener)
+}
 
 export type GameRuntime = {
   roomKey: string
@@ -222,6 +231,8 @@ export class GameRuntimeRegistry {
     /** 用于离桌/观战/中途退出场景，避免残留离线痕迹污染下一手判断。 */
     runtime.offlineUserIds.delete(userId)
     runtime.offlineHandCountByUserId.delete(userId)
+    runtime.autoTopUpEnabledByUserId.delete(userId)
+    runtime.pendingNextHandManualTopUpUserIds.delete(userId)
   }
 
   isUserOffline(roomKey: string, userId: number): boolean {
@@ -297,16 +308,25 @@ export class GameRuntimeRegistry {
   /** 销毁运行时：reset Texas 后移除上下文。 */
   destroyRuntime(roomKey: string) {
     const runtime = this.#runtimes.get(roomKey)
+    const roomId = runtime?.roomId ?? Number(roomKey)
+
     if (runtime?.texas) {
       runtime.texas.reset()
       /** 销毁时不查库；空集表示无人视为「已回房」，延摘用户一律尝试摘环。 */
       this.flushDeferredTexasSeatRemovals(roomKey, new Set())
     }
+
+    clearRoomEventDrainLock(roomKey)
     this.#runtimes.delete(roomKey)
     clearGameRoomWsReplay(roomKey)
-    void import('./texasDomain/playerTurnTimeoutScheduler').then((m) =>
-      m.clearPlayerTurnTimeout(roomKey)
-    )
+
+    for (const listener of runtimeDestroyListeners) {
+      try {
+        listener(roomKey, roomId)
+      } catch (e) {
+        logger.error(`[runtime] destroy listener failed roomKey=${roomKey}`, e)
+      }
+    }
   }
 }
 

@@ -19,7 +19,6 @@ import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
 import { isAllowedBuiltInVoiceName } from '../../constants/clientAssetIdValidation'
 import { NextHandTopUpRequestUseCase } from './services/nextHandTopUpRequestUseCase'
 import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
-import { scheduleBuiltInVoiceBroadcast } from './services/builtInVoiceBroadcastScheduler'
 import {
   JoinGameUseCase,
   StartGameUseCase,
@@ -29,6 +28,11 @@ import {
   gameRuntimeConfig,
   type GameRuntimeConfigPatch
 } from '../../utils/gameRuntimeConfig'
+import {
+  recordBuiltInVoiceUserEmit,
+  scheduleBuiltInVoiceBroadcast,
+  getBuiltInVoiceUserLastEmitAt
+} from './services/builtInVoiceBroadcastScheduler'
 import {
   MAX_PLAYERS_COUNT,
   ROOM_PRESET_RULES,
@@ -299,12 +303,6 @@ router.post(gameClientApi('/takeAction'), async (ctx) => {
   respondFromApiResult(ctx, result, { okMessage: '行动已提交' })
 })
 
-const builtInVoiceUserLastAt = new Map<string, number>()
-
-function builtInVoiceUserKey(roomId: number, userId: number): string {
-  return `${roomId}:${userId}`
-}
-
 /**
  * 牌桌内置语音：校验房间、成员、在坐（on-set）、白名单；每人每房 5s 内仅可请求一次；
  * 同一房间内 WS 广播排队，相邻两次实际发出至少间隔 3s。
@@ -358,9 +356,8 @@ router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
     return
   }
 
-  const uKey = builtInVoiceUserKey(roomId, userId)
   const now = Date.now()
-  const lastAt = builtInVoiceUserLastAt.get(uKey) ?? 0
+  const lastAt = getBuiltInVoiceUserLastEmitAt(roomId, userId)
   if (now - lastAt < BUILT_IN_VOICE_USER_COOLDOWN_MS) {
     response.error(
       ctx,
@@ -369,7 +366,7 @@ router.post(gameClientApi('/send_built_in_voice'), async (ctx) => {
     )
     return
   }
-  builtInVoiceUserLastAt.set(uKey, now)
+  recordBuiltInVoiceUserEmit(roomId, userId)
 
   response.success(ctx, true)
   scheduleBuiltInVoiceBroadcast(

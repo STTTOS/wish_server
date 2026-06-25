@@ -59,6 +59,11 @@ class MinDeadlineHeap {
     return top
   }
 
+  /** 丢弃全部结点（用于按 Map 真源重建堆）。 */
+  clear(): void {
+    this.a.length = 0
+  }
+
   private cmp(i: HeapNode, j: HeapNode): number {
     const t = i.deadlineAt - j.deadlineAt
     if (t !== 0) return t
@@ -172,6 +177,14 @@ function rescheduleNextAlarm(): void {
   }, delay)
 }
 
+/** 按 `pendingByRoomKey` 真源重建堆，避免长期 reschedule 堆积惰性作废结点。 */
+function rebuildHeapFromPending(): void {
+  heap.clear()
+  for (const [roomKey, pending] of pendingByRoomKey) {
+    heap.push({ deadlineAt: pending.deadlineAt, roomKey })
+  }
+}
+
 /**
  * 闹钟触发：处理所有「已经到期」的有效条目，再为剩余堆设下一闹钟。
  *
@@ -236,6 +249,7 @@ export function schedulePlayerTurnTimeout(params: {
  */
 export function clearPlayerTurnTimeout(roomKey: string): void {
   pendingByRoomKey.delete(roomKey)
+  rebuildHeapFromPending()
   rescheduleNextAlarm()
 }
 

@@ -12,6 +12,7 @@ import {
 
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
+import { withRoomEventDrainLock } from './roomEventDrainLock'
 import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { CUSTOM_27O_REWARD_TIERS } from '../../../../constants/game'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
@@ -980,7 +981,7 @@ async function drainPendingFlowQueueWithPacing(
 }
 
 function scheduleDeferredPendingFlowPacing(ctx: TexasEventContext): void {
-  void (async () => {
+  void withRoomEventDrainLock(ctx.roomKey, async () => {
     try {
       await drainPendingFlowQueueWithPacing(ctx)
     } catch (e: unknown) {
@@ -995,7 +996,7 @@ function scheduleDeferredPendingFlowPacing(ctx: TexasEventContext): void {
         logger.error('[texas domain] deferred pacing failed', e)
       }
     }
-  })()
+  })
 }
 
 export type DrainAndInterpretOptions = {
@@ -1016,13 +1017,15 @@ export async function drainAndInterpretTexas(
   ctx: TexasEventContext,
   options?: DrainAndInterpretOptions
 ): Promise<void> {
-  if (options?.preEvents?.length) {
-    await interpretTexasDomainEvents(ctx, options.preEvents)
-  }
-  await drainBufferedDomainEvents(ctx)
-  if (options?.deferPacing) {
-    scheduleDeferredPendingFlowPacing(ctx)
-    return
-  }
-  await drainPendingFlowQueueWithPacing(ctx)
+  await withRoomEventDrainLock(ctx.roomKey, async () => {
+    if (options?.preEvents?.length) {
+      await interpretTexasDomainEvents(ctx, options.preEvents)
+    }
+    await drainBufferedDomainEvents(ctx)
+    if (options?.deferPacing) {
+      scheduleDeferredPendingFlowPacing(ctx)
+      return
+    }
+    await drainPendingFlowQueueWithPacing(ctx)
+  })
 }
