@@ -263,7 +263,8 @@ router.post(matchApi('/rooms'), async (ctx) => {
 })
 
 /**
- * 战绩总览：当前用户总对局数、allIn 次数、弃牌次数
+ * 战绩总览：当前用户总对局数、allIn 次数、弃牌次数；
+ * 牌型成就（皇家同花顺 / 同花顺 / 四条）仅统计未弃牌手，与成就奖励一致。
  */
 router.post(matchApi('/overview'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
@@ -312,9 +313,11 @@ router.post(matchApi('/overview'), async (ctx) => {
     if (r.isAllIn) allInCount += 1
     if (r.isFold) foldCount += 1
 
-    if (r.rankCategory === 'z') royalFlushCount += 1
-    if (r.rankCategory === 'y') straightFlushCount += 1
-    if (r.rankCategory === 'x') fourOfKindCount += 1
+    if (!r.isFold) {
+      if (r.rankCategory === 'z') royalFlushCount += 1
+      if (r.rankCategory === 'y') straightFlushCount += 1
+      if (r.rankCategory === 'x') fourOfKindCount += 1
+    }
 
     const wager = r.wager ?? 0
     if (wager > 0) winMatchCount += 1
