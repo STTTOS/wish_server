@@ -21,6 +21,9 @@
   },
   "author": "三分",
   "license": "ISC",
+  "dependencies": {
+    "@wishufree/cos-upload": "workspace:*"
+  },
   "devDependencies": {
     "eslint-config-custom": "workspace:*",
     "prettier-config": "workspace:*",

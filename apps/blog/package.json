@@ -23,6 +23,9 @@
   },
   "author": "三分",
   "license": "ISC",
+  "dependencies": {
+    "@wishufree/cos-upload": "workspace:*"
+  },
   "devDependencies": {
     "tsconfig": "workspace:*",
     "eslint-config-custom": "workspace:*",
