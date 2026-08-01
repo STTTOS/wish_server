@@ -52,11 +52,19 @@ export function createApp() {
     })
   )
 
+  // 静态资源可长缓存；HTML 入口必须在静态中间件之后覆盖 Cache-Control，
+  // 否则 koa-static 的 maxAge 会盖掉前置设置，导致旧 SPA 路由被浏览器缓存。
   app.use(async (ctx, next) => {
-    if (ctx.path === '/public/index.html' || ctx.path === '/index.html') {
-      ctx.set('Cache-Control', 'max-age=0')
-    }
     await next()
+    const path = ctx.path
+    const isHtmlEntry =
+      path === '/' ||
+      path === '/index.html' ||
+      path === '/public/index.html' ||
+      (typeof ctx.type === 'string' && ctx.type.includes('html'))
+    if (isHtmlEntry) {
+      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    }
   })
 
   app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
