@@ -5,6 +5,7 @@ import koaJwt from 'koa-jwt'
 import mount from 'koa-mount'
 import koaBody from 'koa-body'
 import serve from 'koa-static'
+import historyApiFallback from 'koa2-connect-history-api-fallback'
 
 import router from './router'
 import { logger } from './logger'
@@ -34,6 +35,14 @@ export function createApp() {
   })
   app.use(createRequestLogMiddleware())
 
+  // 配合 history 模式：放在静态资源前，未匹配文件的前端路由回退到 index.html
+  app.use(
+    historyApiFallback({
+      index: '/public/index.html',
+      whiteList: ['^/api']
+    })
+  )
+
   app.use(
     cors({
       origin(ctx) {
@@ -42,6 +51,13 @@ export function createApp() {
       credentials: true
     })
   )
+
+  app.use(async (ctx, next) => {
+    if (ctx.path === '/public/index.html' || ctx.path === '/index.html') {
+      ctx.set('Cache-Control', 'max-age=0')
+    }
+    await next()
+  })
 
   app.use(mount('/', serve(join(__dirname, '../public'), { maxAge })))
   app.use(mount('/public', serve(join(__dirname, '../public'), { maxAge })))
