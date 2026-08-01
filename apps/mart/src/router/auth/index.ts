@@ -1,20 +1,13 @@
-import type { Context } from 'koa'
-
 import router from '../instance'
 import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { loginFacade } from './services/loginFacade'
+import { tokenCookie } from '../../utils/tokenCookie'
+import { HTTP_STATUS } from '../../constants/httpStatus'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 
 const authApi = combinePath(apiPrefix)('/auth')
-
-function setTokenCookie(ctx: Context, token: string) {
-  ctx.cookies.set('token', token, {
-    httpOnly: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000
-  })
-}
 
 router.post(authApi('/login'), async (ctx) => {
   const body = (ctx.request.body || {}) as {
@@ -26,20 +19,20 @@ router.post(authApi('/login'), async (ctx) => {
     password: body.password
   })
   if (result.ok) {
-    setTokenCookie(ctx, result.data.token)
+    tokenCookie.set(ctx, result.data.token)
   }
   respondFromApiResult(ctx, result, { okMessage: '登录成功' })
 })
 
 router.post(authApi('/logout'), async (ctx) => {
-  ctx.cookies.set('token', null)
+  tokenCookie.clear(ctx)
   response.success(ctx, null, '已退出登录')
 })
 
 router.get(authApi('/me'), async (ctx) => {
   const current = ctx.state.user
   if (!current) {
-    response.error(ctx, 401, '身份凭证无效, 请重新登陆')
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }
   response.success(ctx, {

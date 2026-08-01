@@ -6,11 +6,11 @@
  *
  * 用法：pnpm --filter @wishufree/mart-server db:seed
  */
-import { Role } from '@prisma/mart-client'
+import type { Role } from '@prisma/mart-client'
 
-import { user } from '../models'
 import { logger } from '../logger'
 import { hashPassword } from '../utils/password'
+import { userRepository } from '../repositories/userRepository'
 import { ensureDefaultCategory } from '../services/ensureDefaultCategory'
 
 const SEED_USERS: Array<{
@@ -22,31 +22,15 @@ const SEED_USERS: Array<{
   { username: 'staff', password: 'yuangong', role: 'staff' }
 ]
 
-async function upsertUser(item: (typeof SEED_USERS)[number]) {
-  const existing = await user.findUnique({ where: { username: item.username } })
-  const password = hashPassword(item.password)
-  if (existing) {
-    await user.update({
-      where: { id: existing.id },
-      data: { password, role: item.role }
-    })
-    logger.info(`[seed] updated user: ${item.username}`)
-    return
-  }
-  await user.create({
-    data: {
-      username: item.username,
-      password,
-      role: item.role
-    }
-  })
-  logger.info(`[seed] created user: ${item.username}`)
-}
-
 async function main() {
   await ensureDefaultCategory()
   for (const item of SEED_USERS) {
-    await upsertUser(item)
+    await userRepository.upsertSeed({
+      username: item.username,
+      password: hashPassword(item.password),
+      role: item.role
+    })
+    logger.info(`[seed] upserted user: ${item.username}`)
   }
   logger.info('[seed] done')
 }

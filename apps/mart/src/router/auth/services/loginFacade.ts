@@ -1,9 +1,10 @@
 import type { ApiResult } from '../../../utils/apiResult'
 
-import { user } from '../../../models'
 import { encrypt } from '../../../utils/cryptor'
+import { ok, fail } from '../../../utils/apiResult'
 import { verifyPassword } from '../../../utils/password'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { userRepository } from '../../../repositories/userRepository'
 
 export type LoginInput = {
   username: unknown
@@ -19,43 +20,41 @@ export type LoginData = {
   }
 }
 
+function validateLoginCredentials(
+  input: LoginInput
+): ApiResult<{ username: string; password: string }> {
+  if (
+    typeof input.username !== 'string' ||
+    typeof input.password !== 'string'
+  ) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '参数异常')
+  }
+
+  const username = input.username.trim()
+  if (!username || !input.password) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '账号或密码不能为空')
+  }
+
+  return ok({ username, password: input.password })
+}
+
 export async function loginFacade(
   input: LoginInput
 ): Promise<ApiResult<LoginData>> {
-  const { username, password } = input
+  const credentials = validateLoginCredentials(input)
+  if (!credentials.ok) return credentials
 
-  if (typeof username !== 'string' || typeof password !== 'string') {
-    return { ok: false, status: HTTP_STATUS.BAD_REQUEST, message: '参数异常' }
+  const record = await userRepository.findByUsername(credentials.data.username)
+  if (!record || !verifyPassword(credentials.data.password, record.password)) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '账号或密码不正确')
   }
 
-  const trimmedUsername = username.trim()
-  if (!trimmedUsername || !password) {
-    return {
-      ok: false,
-      status: HTTP_STATUS.BAD_REQUEST,
-      message: '账号或密码不能为空'
+  return ok({
+    token: encrypt({ id: record.id }),
+    user: {
+      id: record.id,
+      username: record.username,
+      role: record.role
     }
-  }
-
-  const record = await user.findUnique({ where: { username: trimmedUsername } })
-  if (!record || !verifyPassword(password, record.password)) {
-    return {
-      ok: false,
-      status: HTTP_STATUS.BAD_REQUEST,
-      message: '账号或密码不正确'
-    }
-  }
-
-  const token = encrypt({ id: record.id })
-  return {
-    ok: true,
-    data: {
-      token,
-      user: {
-        id: record.id,
-        username: record.username,
-        role: record.role
-      }
-    }
-  }
+  })
 }

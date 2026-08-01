@@ -39,6 +39,24 @@
 
 响应体与 texas 一致：`{ ok, message, data|details, traceId }`，HTTP status 即业务状态码。
 
+## 分层与模式
+
+```
+Route → Facade（编排）
+      → Validator / Domain Policy / Visibility Strategy
+      → Repository（Prisma）
+      → Presenter / Mapper（出入站投影）
+```
+
+| 模式                         | 落点                                         |
+| ---------------------------- | -------------------------------------------- |
+| Facade / Application Service | `router/*/services/*Facade.ts`               |
+| Repository                   | `repositories/*`                             |
+| Strategy                     | `domain/policies/productVisibilityPolicy.ts` |
+| Domain Policy                | `domain/policies/categoryPolicy.ts`          |
+| Mapper                       | `productWriteMapper.ts` + Presenter          |
+| Factory                      | `ok`/`fail`、`createApp()`                   |
+
 ## 本地启动
 
 ```bash

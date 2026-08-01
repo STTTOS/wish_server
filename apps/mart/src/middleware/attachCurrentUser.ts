@@ -1,10 +1,10 @@
 import { ParameterizedContext } from 'koa'
 
-import { user } from '../models'
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
 import { is401BypassPath } from '../constants/paths'
 import { HTTP_STATUS } from '../constants/httpStatus'
+import { userRepository } from '../repositories/userRepository'
 
 /**
  * 将 JWT 中的 id 补全为当前用户（含 role）。
@@ -25,11 +25,7 @@ const attachCurrentUser = async (
     return
   }
 
-  const record = await user.findUnique({
-    where: { id: userId },
-    select: { id: true, role: true, username: true }
-  })
-
+  const record = await userRepository.findAuthById(userId)
   if (!record) {
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return

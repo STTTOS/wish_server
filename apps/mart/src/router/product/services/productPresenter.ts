@@ -1,6 +1,7 @@
 import type { Role, Product, Category } from '@prisma/mart-client'
 
 import { decimalToNumber } from '../../../utils/decimal'
+import { getProductVisibilityPolicy } from '../../../domain/policies/productVisibilityPolicy'
 
 type ProductWithCategory = Product & {
   category: Pick<Category, 'id' | 'name'>
@@ -20,12 +21,14 @@ export type ProductView = {
   updatedAt: Date
 }
 
-/** 按角色投影商品：非管理员不返回进价字段 */
+/** Presenter：领域记录 → API 视图（配合可见性策略） */
 export function presentProduct(
   record: ProductWithCategory,
   role: Role
 ): ProductView {
-  const base: ProductView = {
+  const policy = getProductVisibilityPolicy(role)
+
+  const view: ProductView = {
     id: record.id,
     name: record.name,
     retailPrice: decimalToNumber(record.retailPrice)!,
@@ -41,9 +44,9 @@ export function presentProduct(
     updatedAt: record.updatedAt
   }
 
-  if (role === 'admin') {
-    base.purchasePrice = decimalToNumber(record.purchasePrice)
+  if (policy.showPurchasePrice) {
+    view.purchasePrice = decimalToNumber(record.purchasePrice)
   }
 
-  return base
+  return view
 }

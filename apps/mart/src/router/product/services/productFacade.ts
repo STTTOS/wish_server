@@ -3,11 +3,16 @@ import type { ProductView } from './productPresenter'
 import type { ApiResult } from '../../../utils/apiResult'
 
 import { withList } from '../../../utils/response'
-import { toDecimal } from '../../../utils/decimal'
-import { product, category } from '../../../models'
+import { ok, fail } from '../../../utils/apiResult'
 import { presentProduct } from './productPresenter'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { productRepository } from '../../../repositories/productRepository'
+import { categoryRepository } from '../../../repositories/categoryRepository'
 import { getDefaultCategoryId } from '../../../services/ensureDefaultCategory'
+import {
+  mapProductCreateData,
+  mapProductUpdateData
+} from './productWriteMapper'
 import {
   validateProductId,
   validateProductCreate,
@@ -15,22 +20,17 @@ import {
   validateProductListQuery
 } from './productValidator'
 
-const productInclude = {
-  category: { select: { id: true, name: true } }
-} as const
-
 async function assertCategoryExists(
   categoryId: number
 ): Promise<ApiResult<null>> {
-  const record = await category.findFirst({
-    where: { id: categoryId, deletedAt: null }
-  })
+  const record = await categoryRepository.findActiveById(categoryId)
   if (!record) {
-    return { ok: false, status: HTTP_STATUS.BAD_REQUEST, message: '品类不存在' }
+    return fail(HTTP_STATUS.BAD_REQUEST, '品类不存在')
   }
-  return { ok: true, data: null }
+  return ok(null)
 }
 
+/** Application Service / Facade：编排校验 → 仓储 → 投影 */
 export async function listProductsFacade(input: {
   role: Role
   keyword?: unknown
@@ -41,31 +41,13 @@ export async function listProductsFacade(input: {
   const queryResult = validateProductListQuery(input)
   if (!queryResult.ok) return queryResult
 
-  const { keyword, categoryId, page, pageSize } = queryResult.data
-  const where = {
-    deletedAt: null,
-    ...(categoryId ? { categoryId } : {}),
-    ...(keyword ? { name: { contains: keyword } } : {})
-  }
-
-  const [total, list] = await Promise.all([
-    product.count({ where }),
-    product.findMany({
-      where,
-      include: productInclude,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize
-    })
-  ])
-
-  return {
-    ok: true as const,
-    data: withList(
+  const { total, list } = await productRepository.listActive(queryResult.data)
+  return ok(
+    withList(
       list.map((item) => presentProduct(item, input.role)),
       total
     )
-  }
+  )
 }
 
 export async function getProductFacade(input: {
@@ -75,15 +57,12 @@ export async function getProductFacade(input: {
   const idResult = validateProductId(input.id)
   if (!idResult.ok) return idResult
 
-  const record = await product.findFirst({
-    where: { id: idResult.data.id, deletedAt: null },
-    include: productInclude
-  })
+  const record = await productRepository.findActiveById(idResult.data.id)
   if (!record) {
-    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '商品不存在' }
+    return fail(HTTP_STATUS.NOT_FOUND, '商品不存在')
   }
 
-  return { ok: true, data: presentProduct(record, input.role) }
+  return ok(presentProduct(record, input.role))
 }
 
 export async function createProductFacade(input: {
@@ -97,26 +76,10 @@ export async function createProductFacade(input: {
   const categoryResult = await assertCategoryExists(categoryId)
   if (!categoryResult.ok) return categoryResult
 
-  const created = await product.create({
-    data: {
-      name: validated.data.name,
-      retailPrice: toDecimal(validated.data.retailPrice),
-      wholesalePrice:
-        validated.data.wholesalePrice === null
-          ? null
-          : toDecimal(validated.data.wholesalePrice),
-      purchasePrice:
-        validated.data.purchasePrice === null
-          ? null
-          : toDecimal(validated.data.purchasePrice),
-      image: validated.data.image,
-      stock: validated.data.stock,
-      categoryId
-    },
-    include: productInclude
-  })
-
-  return { ok: true, data: presentProduct(created, input.role) }
+  const created = await productRepository.create(
+    mapProductCreateData(validated.data, categoryId)
+  )
+  return ok(presentProduct(created, input.role))
 }
 
 export async function updateProductFacade(input: {
@@ -126,11 +89,9 @@ export async function updateProductFacade(input: {
   const validated = validateProductUpdate(input.body)
   if (!validated.ok) return validated
 
-  const existing = await product.findFirst({
-    where: { id: validated.data.id, deletedAt: null }
-  })
+  const existing = await productRepository.findActiveByIdLite(validated.data.id)
   if (!existing) {
-    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '商品不存在' }
+    return fail(HTTP_STATUS.NOT_FOUND, '商品不存在')
   }
 
   if (validated.data.categoryId !== undefined) {
@@ -138,45 +99,11 @@ export async function updateProductFacade(input: {
     if (!categoryResult.ok) return categoryResult
   }
 
-  const updated = await product.update({
-    where: { id: existing.id },
-    data: {
-      ...(validated.data.name !== undefined
-        ? { name: validated.data.name }
-        : {}),
-      ...(validated.data.retailPrice !== undefined
-        ? { retailPrice: toDecimal(validated.data.retailPrice) }
-        : {}),
-      ...(validated.data.wholesalePrice !== undefined
-        ? {
-            wholesalePrice:
-              validated.data.wholesalePrice === null
-                ? null
-                : toDecimal(validated.data.wholesalePrice)
-          }
-        : {}),
-      ...(validated.data.purchasePrice !== undefined
-        ? {
-            purchasePrice:
-              validated.data.purchasePrice === null
-                ? null
-                : toDecimal(validated.data.purchasePrice)
-          }
-        : {}),
-      ...(validated.data.image !== undefined
-        ? { image: validated.data.image }
-        : {}),
-      ...(validated.data.stock !== undefined
-        ? { stock: validated.data.stock }
-        : {}),
-      ...(validated.data.categoryId !== undefined
-        ? { categoryId: validated.data.categoryId }
-        : {})
-    },
-    include: productInclude
-  })
-
-  return { ok: true, data: presentProduct(updated, input.role) }
+  const updated = await productRepository.update(
+    existing.id,
+    mapProductUpdateData(validated.data)
+  )
+  return ok(presentProduct(updated, input.role))
 }
 
 export async function deleteProductFacade(input: {
@@ -185,16 +112,11 @@ export async function deleteProductFacade(input: {
   const idResult = validateProductId(input.id)
   if (!idResult.ok) return idResult
 
-  const existing = await product.findFirst({
-    where: { id: idResult.data.id, deletedAt: null }
-  })
+  const existing = await productRepository.findActiveByIdLite(idResult.data.id)
   if (!existing) {
-    return { ok: false, status: HTTP_STATUS.NOT_FOUND, message: '商品不存在' }
+    return fail(HTTP_STATUS.NOT_FOUND, '商品不存在')
   }
 
-  await product.update({
-    where: { id: existing.id },
-    data: { deletedAt: new Date() }
-  })
-  return { ok: true, data: null }
+  await productRepository.softDelete(existing.id)
+  return ok(null)
 }
