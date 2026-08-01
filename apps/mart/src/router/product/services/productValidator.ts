@@ -182,7 +182,9 @@ export function validateProductListQuery(input: {
 
   const pageResult = validatePagination({
     page: input.page,
-    pageSize: input.pageSize
+    pageSize: input.pageSize,
+    defaultPageSize: 20,
+    maxPageSize: 200
   })
   if (!pageResult.ok) return pageResult
 
