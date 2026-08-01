@@ -18,13 +18,17 @@ router.get(productApi('/list'), async (ctx) => {
     categoryId?: unknown
     page?: unknown
     pageSize?: unknown
+    sortBy?: unknown
+    sortOrder?: unknown
   }
   const result = await listProductsFacade({
     role: ctx.state.user!.role,
     keyword: query.keyword,
     categoryId: query.categoryId,
     page: query.page,
-    pageSize: query.pageSize
+    pageSize: query.pageSize,
+    sortBy: query.sortBy,
+    sortOrder: query.sortOrder
   })
   respondFromApiResult(ctx, result)
 })

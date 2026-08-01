@@ -10,6 +10,7 @@ type ProductWithCategory = Product & {
 export type ProductView = {
   id: number
   name: string
+  description: string | null
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice?: number | null
@@ -31,6 +32,7 @@ export function presentProduct(
   const view: ProductView = {
     id: record.id,
     name: record.name,
+    description: record.description,
     retailPrice: decimalToNumber(record.retailPrice)!,
     wholesalePrice: decimalToNumber(record.wholesalePrice),
     image: record.image,

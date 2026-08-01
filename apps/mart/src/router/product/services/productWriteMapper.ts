@@ -10,6 +10,7 @@ export function mapProductCreateData(
 ): Prisma.ProductCreateInput {
   return {
     name: data.name,
+    description: data.description,
     retailPrice: toDecimal(data.retailPrice),
     wholesalePrice:
       data.wholesalePrice === null ? null : toDecimal(data.wholesalePrice),
@@ -27,6 +28,7 @@ export function mapProductUpdateData(
   const patch: Prisma.ProductUpdateInput = {}
 
   if (data.name !== undefined) patch.name = data.name
+  if (data.description !== undefined) patch.description = data.description
   if (data.retailPrice !== undefined) {
     patch.retailPrice = toDecimal(data.retailPrice)
   }

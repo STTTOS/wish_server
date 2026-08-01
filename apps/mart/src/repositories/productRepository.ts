@@ -13,6 +13,8 @@ export type ProductListFilter = {
   categoryId?: number
   page: number
   pageSize: number
+  sortBy?: 'retailPrice' | 'wholesalePrice' | 'purchasePrice'
+  sortOrder?: 'asc' | 'desc'
 }
 
 /** Repository：商品持久化（软删除与 include 约定集中在此） */
@@ -43,12 +45,17 @@ export const productRepository = {
       ...(filter.keyword ? { name: { contains: filter.keyword } } : {})
     }
 
+    const orderBy: Prisma.ProductOrderByWithRelationInput[] =
+      filter.sortBy && filter.sortOrder
+        ? [{ [filter.sortBy]: filter.sortOrder }, { id: 'desc' }]
+        : [{ updatedAt: 'desc' }, { id: 'desc' }]
+
     const [total, list] = await Promise.all([
       product.count({ where }),
       product.findMany({
         where,
         include: productInclude,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip: (filter.page - 1) * filter.pageSize,
         take: filter.pageSize
       })

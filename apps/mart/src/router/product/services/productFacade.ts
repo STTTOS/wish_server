@@ -37,9 +37,15 @@ export async function listProductsFacade(input: {
   categoryId?: unknown
   page?: unknown
   pageSize?: unknown
+  sortBy?: unknown
+  sortOrder?: unknown
 }) {
   const queryResult = validateProductListQuery(input)
   if (!queryResult.ok) return queryResult
+
+  if (queryResult.data.sortBy === 'purchasePrice' && input.role !== 'admin') {
+    return fail(HTTP_STATUS.FORBIDDEN, '无权按进价排序')
+  }
 
   const { total, list } = await productRepository.listActive(queryResult.data)
   return ok(

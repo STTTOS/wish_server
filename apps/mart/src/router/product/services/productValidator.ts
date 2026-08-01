@@ -15,6 +15,7 @@ import {
 
 export type ProductCreateData = {
   name: string
+  description: string | null
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice: number | null
@@ -26,6 +27,7 @@ export type ProductCreateData = {
 export type ProductUpdateData = {
   id: number
   name?: string
+  description?: string | null
   retailPrice?: number
   wholesalePrice?: number | null
   purchasePrice?: number | null
@@ -51,6 +53,23 @@ function validateOptionalImage(
   return ok(value)
 }
 
+/** 可选描述：空串视为清空；最长 500 */
+function validateOptionalDescription(
+  value: unknown
+): ApiResult<string | null | undefined> {
+  if (value === undefined) return ok(undefined)
+  if (value === null) return ok(null)
+  if (typeof value !== 'string') {
+    return fail(HTTP_STATUS.BAD_REQUEST, '描述参数异常')
+  }
+  const trimmed = value.trim()
+  if (!trimmed) return ok(null)
+  if (trimmed.length > 500) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '描述过长')
+  }
+  return ok(trimmed)
+}
+
 export function validateProductCreate(
   input: Record<string, unknown>
 ): ApiResult<ProductCreateData> {
@@ -60,6 +79,9 @@ export function validateProductCreate(
     tooLongMessage: '商品名称过长'
   })
   if (!nameResult.ok) return nameResult
+
+  const descriptionResult = validateOptionalDescription(input.description)
+  if (!descriptionResult.ok) return descriptionResult
 
   const retailResult = validateRequiredMoney(input.retailPrice, '零售价')
   if (!retailResult.ok) return retailResult
@@ -89,6 +111,7 @@ export function validateProductCreate(
 
   return ok({
     name: nameResult.data,
+    description: descriptionResult.data ?? null,
     retailPrice: retailResult.data,
     wholesalePrice: wholesaleResult.data ?? null,
     purchasePrice: purchaseResult.data ?? null,
@@ -114,6 +137,12 @@ export function validateProductUpdate(
     })
     if (!nameResult.ok) return nameResult
     data.name = nameResult.data
+  }
+
+  if (input.description !== undefined) {
+    const descriptionResult = validateOptionalDescription(input.description)
+    if (!descriptionResult.ok) return descriptionResult
+    data.description = descriptionResult.data ?? null
   }
 
   if (input.retailPrice !== undefined) {
@@ -158,16 +187,29 @@ export function validateProductUpdate(
   return ok(data)
 }
 
+const PRODUCT_SORT_FIELDS = [
+  'retailPrice',
+  'wholesalePrice',
+  'purchasePrice'
+] as const
+
+export type ProductSortField = (typeof PRODUCT_SORT_FIELDS)[number]
+export type ProductSortOrder = 'asc' | 'desc'
+
 export function validateProductListQuery(input: {
   keyword?: unknown
   categoryId?: unknown
   page?: unknown
   pageSize?: unknown
+  sortBy?: unknown
+  sortOrder?: unknown
 }): ApiResult<{
   keyword?: string
   categoryId?: number
   page: number
   pageSize: number
+  sortBy?: ProductSortField
+  sortOrder?: ProductSortOrder
 }> {
   let keyword: string | undefined
   if (input.keyword !== undefined && input.keyword !== null) {
@@ -188,9 +230,43 @@ export function validateProductListQuery(input: {
   })
   if (!pageResult.ok) return pageResult
 
+  let sortBy: ProductSortField | undefined
+  if (
+    input.sortBy !== undefined &&
+    input.sortBy !== null &&
+    input.sortBy !== ''
+  ) {
+    if (
+      typeof input.sortBy !== 'string' ||
+      !(PRODUCT_SORT_FIELDS as readonly string[]).includes(input.sortBy)
+    ) {
+      return fail(HTTP_STATUS.BAD_REQUEST, '排序字段不正确')
+    }
+    sortBy = input.sortBy as ProductSortField
+  }
+
+  let sortOrder: ProductSortOrder | undefined
+  if (
+    input.sortOrder !== undefined &&
+    input.sortOrder !== null &&
+    input.sortOrder !== ''
+  ) {
+    if (input.sortOrder !== 'asc' && input.sortOrder !== 'desc') {
+      return fail(HTTP_STATUS.BAD_REQUEST, '排序方向不正确')
+    }
+    sortOrder = input.sortOrder
+  }
+
+  if (sortBy && !sortOrder) sortOrder = 'desc'
+  if (sortOrder && !sortBy) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '排序参数不完整')
+  }
+
   return ok({
     keyword,
     categoryId: categoryResult.data,
-    ...pageResult.data
+    ...pageResult.data,
+    sortBy,
+    sortOrder
   })
 }

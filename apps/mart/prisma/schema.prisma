@@ -38,6 +38,8 @@ model Category {
 model Product {
   id             Int       @id @default(autoincrement())
   name           String
+  /// 商品描述（可选）
+  description    String?   @db.VarChar(500)
   /// 零售价（必填）
   retailPrice    Decimal   @db.Decimal(12, 2)
   /// 批发价
