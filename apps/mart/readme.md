@@ -22,22 +22,25 @@
 
 前缀：`/api`
 
-| 方法 | 路径               | 权限     | 说明                                  |
-| ---- | ------------------ | -------- | ------------------------------------- |
-| POST | `/auth/login`      | 公开     | 登录，写 cookie `token`，并返回 token |
-| POST | `/auth/logout`     | 可选登录 | 退出                                  |
-| GET  | `/auth/me`         | 登录     | 当前用户                              |
-| GET  | `/category/list`   | 登录     | 品类列表                              |
-| POST | `/category/create` | 管理员   | 创建品类                              |
-| POST | `/category/update` | 管理员   | 编辑品类                              |
-| POST | `/category/delete` | 管理员   | 软删除（有商品则拒绝）                |
-| GET  | `/product/list`    | 登录     | 商品分页列表                          |
-| GET  | `/product/detail`  | 登录     | 商品详情                              |
-| POST | `/product/create`  | 管理员   | 创建商品                              |
-| POST | `/product/update`  | 管理员   | 更新商品                              |
-| POST | `/product/delete`  | 管理员   | 软删除商品                            |
+| 方法 | 路径                   | 权限     | 说明                                             |
+| ---- | ---------------------- | -------- | ------------------------------------------------ |
+| POST | `/auth/login`          | 公开     | 登录，写 cookie `token`，并返回 token            |
+| POST | `/auth/logout`         | 可选登录 | 退出                                             |
+| GET  | `/auth/me`             | 登录     | 当前用户                                         |
+| GET  | `/category/list`       | 登录     | 品类列表                                         |
+| POST | `/category/create`     | 管理员   | 创建品类                                         |
+| POST | `/category/update`     | 管理员   | 编辑品类                                         |
+| POST | `/category/delete`     | 管理员   | 软删除（有商品则拒绝）                           |
+| GET  | `/product/list`        | 登录     | 商品分页列表                                     |
+| GET  | `/product/detail`      | 登录     | 商品详情                                         |
+| POST | `/product/create`      | 管理员   | 创建商品                                         |
+| POST | `/product/update`      | 管理员   | 更新商品                                         |
+| POST | `/product/delete`      | 管理员   | 软删除商品                                       |
+| POST | `/common/upload_image` | 管理员   | 单图上传（转发 blog `/api/common/upload_image`） |
 
 响应体与 texas 一致：`{ ok, message, data|details, traceId }`，HTTP status 即业务状态码。
+
+图片上传依赖环境变量：`BLOG_BASE_URL`、`BLOG_SECRET_KEY`（同 blog `SECRET_KEY`）、`BLOG_ADMIN_USER_ID`。
 
 ## 分层与模式
 

@@ -1,4 +1,5 @@
 import './auth'
+import './common'
 import './product'
 import './category'
 

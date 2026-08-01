@@ -17,7 +17,8 @@ export const ADMIN_ONLY_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/product\/delete$/,
   /^\/api\/category\/create$/,
   /^\/api\/category\/update$/,
-  /^\/api\/category\/delete$/
+  /^\/api\/category\/delete$/,
+  /^\/api\/common\/upload_image$/
 ]
 
 export const pathMatches = (
