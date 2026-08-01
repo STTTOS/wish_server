@@ -22,7 +22,7 @@ router.get(productApi('/list'), async (ctx) => {
     sortOrder?: unknown
   }
   const result = await listProductsFacade({
-    role: ctx.state.user!.role,
+    role: ctx.state.user?.role,
     keyword: query.keyword,
     categoryId: query.categoryId,
     page: query.page,
@@ -38,7 +38,7 @@ router.get(productApi('/detail'), async (ctx) => {
   const id =
     typeof idRaw === 'string' ? Number(idRaw) : (idRaw as unknown as number)
   const result = await getProductFacade({
-    role: ctx.state.user!.role,
+    role: ctx.state.user?.role,
     id
   })
   respondFromApiResult(ctx, result)

@@ -25,7 +25,7 @@ export type ProductView = {
 /** Presenter：领域记录 → API 视图（配合可见性策略） */
 export function presentProduct(
   record: ProductWithCategory,
-  role: Role
+  role: Role | undefined | null
 ): ProductView {
   const policy = getProductVisibilityPolicy(role)
 

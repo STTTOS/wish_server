@@ -5,9 +5,11 @@ export const PUBLIC_NO_AUTH_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/auth\/login$/
 ]
 
-/** 鉴权可选 */
+/** 鉴权可选（未登录可访问；有 token 时仍解析角色） */
 export const AUTH_OPTIONAL_PATHS: ReadonlyArray<string | RegExp> = [
-  /^\/api\/auth\/logout$/
+  /^\/api\/auth\/logout$/,
+  /^\/api\/product\/list$/,
+  /^\/api\/product\/detail$/
 ]
 
 /** 仅管理员 */

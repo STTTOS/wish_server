@@ -22,7 +22,8 @@ const strategies: Record<Role, ProductVisibilityPolicy> = {
 }
 
 export function getProductVisibilityPolicy(
-  role: Role
+  role: Role | undefined | null
 ): ProductVisibilityPolicy {
+  if (!role) return staffPolicy
   return strategies[role] ?? staffPolicy
 }

@@ -1,6 +1,9 @@
 import type { Prisma } from '@prisma/mart-client'
 
-import { product } from '../models'
+import { Prisma as PrismaNS } from '@prisma/mart-client'
+
+import prisma, { product } from '../models'
+import { buildNameSubsequenceLikePattern } from '../utils/productSearch'
 
 const notDeleted = { deletedAt: null } as const
 
@@ -41,8 +44,32 @@ export const productRepository = {
   async listActive(filter: ProductListFilter) {
     const where: Prisma.ProductWhereInput = {
       ...notDeleted,
-      ...(filter.categoryId ? { categoryId: filter.categoryId } : {}),
-      ...(filter.keyword ? { name: { contains: filter.keyword } } : {})
+      ...(filter.categoryId ? { categoryId: filter.categoryId } : {})
+    }
+
+    if (filter.keyword) {
+      const keyword = filter.keyword.trim()
+      const pattern = buildNameSubsequenceLikePattern(keyword)
+      const rows = await prisma.$queryRaw<{ id: number }[]>`
+        SELECT p.id AS id
+        FROM Product p
+        INNER JOIN Category c ON c.id = p.categoryId
+        WHERE p.deletedAt IS NULL
+          AND (
+            (c.deletedAt IS NULL AND c.name = ${keyword})
+            OR p.name LIKE ${pattern}
+          )
+          ${
+            filter.categoryId != null
+              ? PrismaNS.sql`AND p.categoryId = ${filter.categoryId}`
+              : PrismaNS.empty
+          }
+      `
+      const ids = rows.map((row) => row.id)
+      if (ids.length === 0) {
+        return { total: 0, list: [] }
+      }
+      where.id = { in: ids }
     }
 
     const orderBy: Prisma.ProductOrderByWithRelationInput[] =

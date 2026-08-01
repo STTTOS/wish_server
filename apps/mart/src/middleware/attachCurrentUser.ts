@@ -8,17 +8,13 @@ import { userRepository } from '../repositories/userRepository'
 
 /**
  * 将 JWT 中的 id 补全为当前用户（含 role）。
- * 放在 401 之后：公开接口跳过；受保护接口要求账号仍存在。
+ * 公开/可选鉴权路径：无 token 放行；有 token 则尽量补全（失效则清空）。
+ * 受保护接口：账号必须仍存在。
  */
 const attachCurrentUser = async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
 ) => {
-  if (is401BypassPath(ctx.request.url)) {
-    await next()
-    return
-  }
-
   const userId = (ctx.state.user as { id?: number } | undefined)?.id
   if (!userId) {
     await next()
@@ -27,6 +23,11 @@ const attachCurrentUser = async (
 
   const record = await userRepository.findAuthById(userId)
   if (!record) {
+    if (is401BypassPath(ctx.request.url)) {
+      ctx.state.user = undefined
+      await next()
+      return
+    }
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登陆')
     return
   }

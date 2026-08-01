@@ -32,7 +32,7 @@ async function assertCategoryExists(
 
 /** Application Service / Facade：编排校验 → 仓储 → 投影 */
 export async function listProductsFacade(input: {
-  role: Role
+  role?: Role
   keyword?: unknown
   categoryId?: unknown
   page?: unknown
@@ -57,7 +57,7 @@ export async function listProductsFacade(input: {
 }
 
 export async function getProductFacade(input: {
-  role: Role
+  role?: Role
   id: unknown
 }): Promise<ApiResult<ProductView>> {
   const idResult = validateProductId(input.id)
