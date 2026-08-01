@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "private": true,
+  "description": "百货超市商品库存与价格管理后台",
+  "name": "@wishufree/mart-server",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"node --env-file=.env -r ts-node/register/transpile-only ./src/index.ts\"",
+    "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
+    "lint": "eslint --cache --ext .ts ./src",
+    "lint:fix": "eslint --fix --cache --ext .ts ./src",
+    "db:gui": "npx prisma studio",
+    "db:migrate--dev": "npx prisma migrate dev --name modifiy",
+    "db:migrate--prod": "npx prisma migrate deploy --schema=./prisma/schema.prisma",
+    "db:generate": "npx prisma generate",
+    "db:sync": "npm run db:migrate--dev && npm run db:generate",
+    "db:seed": "ts-node --transpile-only ./src/scripts/seed.ts",
+    "copy-env": "cp ./.local.env .env",
+    "setup": "pnpm run copy-env && pnpm run db:sync && pnpm run db:seed"
+  },
+  "author": "三分",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint-config-custom": "workspace:*",
+    "prettier-config": "workspace:*",
+    "tsconfig": "workspace:*"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx,less,md,json}": [
+      "pnpm run prettier"
+    ],
+    "**/*.{js,jsx,ts,tsx}": "pnpm run lint:fix"
+  }
+}

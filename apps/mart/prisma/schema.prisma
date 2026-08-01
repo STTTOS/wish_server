@@ -1,0 +1,58 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/mart-client"
+}
+
+enum Role {
+  admin
+  staff
+}
+
+/// 账号（无注册；由管理员在库中录入）
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  /// SHA256 摘要
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// 一级品类
+model Category {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  products  Product[]
+}
+
+/// 商品（一商品一品类）
+model Product {
+  id             Int       @id @default(autoincrement())
+  name           String
+  /// 零售价（必填）
+  retailPrice    Decimal   @db.Decimal(12, 2)
+  /// 批发价
+  wholesalePrice Decimal?  @db.Decimal(12, 2)
+  /// 进价（仅管理员可见）
+  purchasePrice  Decimal?  @db.Decimal(12, 2)
+  image          String?   @db.VarChar(500)
+  stock          Int       @default(9999)
+  categoryId     Int
+  category       Category  @relation(fields: [categoryId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@index([name])
+}
