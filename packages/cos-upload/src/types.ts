@@ -17,7 +17,7 @@ export type CosUploadClientOptions = {
   region?: string
   /** CDN / 自定义域名，默认 cos.wishufree.com */
   cosDomain?: string
-  /** 本地临时目录（origin / compressed 缓存） */
+  /** 本地临时目录（formidable 原图落盘） */
   staticDir: string
   /** 文件名分隔符，默认 __ */
   fileNameSplitter?: string

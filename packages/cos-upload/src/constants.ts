@@ -13,3 +13,5 @@ export const DEFAULT_COS_REGION = 'ap-chengdu'
 export const DEFAULT_COS_DOMAIN = 'cos.wishufree.com'
 export const DEFAULT_FILE_NAME_SPLITTER = '__'
 export const DEFAULT_IMAGE_COMPRESS_RATIO = 0.3
+/** 压缩图最长边像素；等比缩放，小图不放大 */
+export const IMAGE_COMPRESS_MAX_EDGE = 2048

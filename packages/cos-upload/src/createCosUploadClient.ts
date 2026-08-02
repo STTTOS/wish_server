@@ -11,6 +11,7 @@ import {
   DEFAULT_COS_REGION,
   DEFAULT_FILE_NAME_SPLITTER,
   DEFAULT_IMAGE_COMPRESS_RATIO,
+  IMAGE_COMPRESS_MAX_EDGE,
   IMAGE_UPLOAD_BATCH_MAX,
   IMAGE_UPLOAD_BATCH_PARSE_LIMIT_MB,
   IMAGE_UPLOAD_MAX_FILE_SIZE_MB,
@@ -49,6 +50,9 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     SecretKey: options.secretKey
   })
 
+  const toCosObjectKey = (prefix: string, fileName: string) =>
+    `${prefix}/${fileName}`.replace(/\\/g, '/')
+
   const uploadFileToCos = (
     prefix: string,
     fileName: string,
@@ -59,13 +63,36 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
         {
           Bucket: bucket,
           Region: region,
-          Key: join(prefix, fileName),
+          Key: toCosObjectKey(prefix, fileName),
           FilePath: filePath,
           SliceSize: 1024 * 1024 * 3
         },
         (err, data) => {
           if (!err) resolve(data.Location)
           else reject(err.message)
+        }
+      )
+    })
+
+  /** 压缩图走内存，避免再落盘 */
+  const uploadBufferToCos = (
+    prefix: string,
+    fileName: string,
+    body: Buffer
+  ) =>
+    new Promise<string>((resolve, reject) => {
+      cos.putObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Key: toCosObjectKey(prefix, fileName),
+          Body: body,
+          ContentLength: body.length,
+          ContentType: 'image/jpeg'
+        },
+        (err, data) => {
+          if (!err) resolve(data.Location)
+          else reject(err?.message || err)
         }
       )
     })
@@ -82,17 +109,8 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       originalFilename || 'file_unknown'
     )}${fileNameSplitter}${v4()}${extname(originalFilename || '')}`
 
-  const getCompressedFilePath = (newFilename: string) =>
-    join(staticDir, newFilename)
-
-  const cleanupLocalImageArtifacts = async (
-    file: UploadedImageFile,
-    compressFilePath: string
-  ) => {
-    await Promise.allSettled([
-      unlink(file.filepath),
-      unlink(compressFilePath)
-    ])
+  const cleanupLocalOriginFile = async (file: UploadedImageFile) => {
+    await unlink(file.filepath).catch(() => undefined)
   }
 
   const oversizeMessage = (filename: string | null) =>
@@ -124,26 +142,25 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     await Promise.allSettled(
       files
         .filter((file) => !acceptedPaths.has(file.filepath))
-        .map((file) =>
-          cleanupLocalImageArtifacts(
-            file,
-            getCompressedFilePath(file.newFilename)
-          )
-        )
+        .map((file) => cleanupLocalOriginFile(file))
     )
   }
 
   const processOneImage = async (
     file: UploadedImageFile
   ): Promise<ProcessedImage> => {
-    const compressFilePath = getCompressedFilePath(file.newFilename)
-
     try {
       logger?.info('upload_image:', file.originalFilename, 'start sharp')
-      await sharp(file.filepath)
+      const compressedBuffer = await sharp(file.filepath)
         .rotate()
+        .resize({
+          width: IMAGE_COMPRESS_MAX_EDGE,
+          height: IMAGE_COMPRESS_MAX_EDGE,
+          fit: 'inside',
+          withoutEnlargement: true
+        })
         .jpeg({ quality: imageCompressRatio * 100 })
-        .toFile(compressFilePath)
+        .toBuffer()
 
       const start = Date.now()
       logger?.info(
@@ -153,10 +170,10 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       )
       const [originalUrl, compressedUrl] = await Promise.all([
         uploadFileToCos('images/origin', file.newFilename, file.filepath),
-        uploadFileToCos(
+        uploadBufferToCos(
           'images/compressed',
           file.newFilename,
-          compressFilePath
+          compressedBuffer
         )
       ])
       logger?.info(
@@ -173,7 +190,7 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
         filename: file.originalFilename
       }
     } catch (error) {
-      await cleanupLocalImageArtifacts(file, compressFilePath)
+      await cleanupLocalOriginFile(file)
       throw error
     }
   }
