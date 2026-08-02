@@ -3,6 +3,7 @@ import type { ApiResult } from '../../../utils/apiResult'
 import { ok, fail } from '../../../utils/apiResult'
 import { DEFAULT_PRODUCT_STOCK } from '../../../config'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { validateOptionalAliases } from '../../../utils/productAliases'
 import {
   validatePagination,
   validatePositiveInt,
@@ -16,6 +17,8 @@ import {
 export type ProductCreateData = {
   name: string
   description: string | null
+  /** 规范化后的别名列表；空则 null */
+  aliases: string[] | null
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice: number | null
@@ -28,6 +31,7 @@ export type ProductUpdateData = {
   id: number
   name?: string
   description?: string | null
+  aliases?: string[] | null
   retailPrice?: number
   wholesalePrice?: number | null
   purchasePrice?: number | null
@@ -83,6 +87,11 @@ export function validateProductCreate(
   const descriptionResult = validateOptionalDescription(input.description)
   if (!descriptionResult.ok) return descriptionResult
 
+  const aliasesResult = validateOptionalAliases(input.aliases)
+  if (!aliasesResult.ok) {
+    return fail(HTTP_STATUS.BAD_REQUEST, aliasesResult.message)
+  }
+
   const retailResult = validateRequiredMoney(input.retailPrice, '零售价')
   if (!retailResult.ok) return retailResult
 
@@ -112,6 +121,7 @@ export function validateProductCreate(
   return ok({
     name: nameResult.data,
     description: descriptionResult.data ?? null,
+    aliases: aliasesResult.data ?? null,
     retailPrice: retailResult.data,
     wholesalePrice: wholesaleResult.data ?? null,
     purchasePrice: purchaseResult.data ?? null,
@@ -143,6 +153,14 @@ export function validateProductUpdate(
     const descriptionResult = validateOptionalDescription(input.description)
     if (!descriptionResult.ok) return descriptionResult
     data.description = descriptionResult.data ?? null
+  }
+
+  if (input.aliases !== undefined) {
+    const aliasesResult = validateOptionalAliases(input.aliases)
+    if (!aliasesResult.ok) {
+      return fail(HTTP_STATUS.BAD_REQUEST, aliasesResult.message)
+    }
+    data.aliases = aliasesResult.data ?? null
   }
 
   if (input.retailPrice !== undefined) {

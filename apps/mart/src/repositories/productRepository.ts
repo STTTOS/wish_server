@@ -59,6 +59,7 @@ export const productRepository = {
             (c.deletedAt IS NULL AND c.name = ${keyword})
             OR p.name LIKE ${pattern}
             OR p.description LIKE ${pattern}
+            OR p.aliases LIKE ${pattern}
           )
           ${
             filter.categoryId != null

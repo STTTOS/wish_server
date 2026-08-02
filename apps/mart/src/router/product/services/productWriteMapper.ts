@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/mart-client'
 import type { ProductCreateData, ProductUpdateData } from './productValidator'
 
 import { toDecimal } from '../../../utils/decimal'
+import { serializeAliases } from '../../../utils/productAliases'
 
 /** Mapper：校验后的写模型 → Prisma 写入数据 */
 export function mapProductCreateData(
@@ -11,6 +12,7 @@ export function mapProductCreateData(
   return {
     name: data.name,
     description: data.description,
+    aliases: data.aliases ? serializeAliases(data.aliases) : null,
     retailPrice: toDecimal(data.retailPrice),
     wholesalePrice:
       data.wholesalePrice === null ? null : toDecimal(data.wholesalePrice),
@@ -29,6 +31,9 @@ export function mapProductUpdateData(
 
   if (data.name !== undefined) patch.name = data.name
   if (data.description !== undefined) patch.description = data.description
+  if (data.aliases !== undefined) {
+    patch.aliases = data.aliases ? serializeAliases(data.aliases) : null
+  }
   if (data.retailPrice !== undefined) {
     patch.retailPrice = toDecimal(data.retailPrice)
   }

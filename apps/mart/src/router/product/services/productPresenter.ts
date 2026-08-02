@@ -1,6 +1,7 @@
 import type { Role, Product, Category } from '@prisma/mart-client'
 
 import { decimalToNumber } from '../../../utils/decimal'
+import { parseAliasesStored } from '../../../utils/productAliases'
 import { getProductVisibilityPolicy } from '../../../domain/policies/productVisibilityPolicy'
 
 type ProductWithCategory = Product & {
@@ -11,6 +12,7 @@ export type ProductView = {
   id: number
   name: string
   description: string | null
+  aliases: string[]
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice?: number | null
@@ -33,6 +35,7 @@ export function presentProduct(
     id: record.id,
     name: record.name,
     description: record.description,
+    aliases: parseAliasesStored(record.aliases),
     retailPrice: decimalToNumber(record.retailPrice)!,
     wholesalePrice: decimalToNumber(record.wholesalePrice),
     image: record.image,
