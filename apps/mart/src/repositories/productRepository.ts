@@ -58,6 +58,7 @@ export const productRepository = {
           AND (
             (c.deletedAt IS NULL AND c.name = ${keyword})
             OR p.name LIKE ${pattern}
+            OR p.description LIKE ${pattern}
           )
           ${
             filter.categoryId != null
@@ -75,7 +76,7 @@ export const productRepository = {
     const orderBy: Prisma.ProductOrderByWithRelationInput[] =
       filter.sortBy && filter.sortOrder
         ? [{ [filter.sortBy]: filter.sortOrder }, { id: 'desc' }]
-        : [{ updatedAt: 'desc' }, { id: 'desc' }]
+        : [{ createdAt: 'desc' }, { id: 'desc' }]
 
     const [total, list] = await Promise.all([
       product.count({ where }),
