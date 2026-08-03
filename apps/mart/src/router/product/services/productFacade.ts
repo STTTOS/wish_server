@@ -63,11 +63,14 @@ export async function listProductsFacade(input: {
     return fail(HTTP_STATUS.FORBIDDEN, '无权按进价排序')
   }
 
-  const { total, list } = await productRepository.listActive(queryResult.data)
+  const { total, withoutBarcode, list } = await productRepository.listActive(
+    queryResult.data
+  )
   return ok(
     withList(
       list.map((item) => presentProduct(item, input.role)),
-      total
+      total,
+      { withoutBarcode }
     )
   )
 }

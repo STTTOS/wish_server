@@ -2,8 +2,12 @@ import type { Context } from 'koa'
 
 import { HTTP_STATUS } from '../constants/httpStatus'
 
-export function withList(list: unknown[], total: number) {
-  return { total, list }
+export function withList(
+  list: unknown[],
+  total: number,
+  extra?: Record<string, unknown>
+) {
+  return { total, list, ...extra }
 }
 
 export function success(ctx: Context, data: unknown = null, message = '成功') {

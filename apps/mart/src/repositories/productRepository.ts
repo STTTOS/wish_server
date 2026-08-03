@@ -19,7 +19,7 @@ export type ProductListFilter = {
   categoryId?: number
   page: number
   pageSize: number
-  sortBy?: 'retailPrice' | 'wholesalePrice' | 'purchasePrice'
+  sortBy?: 'retailPrice' | 'wholesalePrice' | 'purchasePrice' | 'barcode'
   sortOrder?: 'asc' | 'desc'
 }
 
@@ -97,19 +97,30 @@ export const productRepository = {
         `
         const ids = rows.map((row) => row.id)
         if (ids.length === 0) {
-          return { total: 0, list: [] }
+          return { total: 0, withoutBarcode: 0, list: [] }
         }
         where.id = { in: ids }
       }
     }
 
-    const orderBy: Prisma.ProductOrderByWithRelationInput[] =
-      filter.sortBy && filter.sortOrder
-        ? [{ [filter.sortBy]: filter.sortOrder }, { id: 'desc' }]
-        : [{ createdAt: 'desc' }, { id: 'desc' }]
+    let orderBy: Prisma.ProductOrderByWithRelationInput[]
+    if (filter.sortBy === 'barcode') {
+      // MySQL ASC 默认 NULL 在前，实现「未设条码优先」
+      orderBy = [{ barcode: 'asc' }, { createdAt: 'desc' }, { id: 'desc' }]
+    } else if (filter.sortBy && filter.sortOrder) {
+      orderBy = [{ [filter.sortBy]: filter.sortOrder }, { id: 'desc' }]
+    } else {
+      orderBy = [{ createdAt: 'desc' }, { id: 'desc' }]
+    }
 
-    const [total, list] = await Promise.all([
+    const withoutBarcodeWhere: Prisma.ProductWhereInput = {
+      ...where,
+      barcode: null
+    }
+
+    const [total, withoutBarcode, list] = await Promise.all([
       product.count({ where }),
+      product.count({ where: withoutBarcodeWhere }),
       product.findMany({
         where,
         include: productInclude,
@@ -119,7 +130,7 @@ export const productRepository = {
       })
     ])
 
-    return { total, list }
+    return { total, withoutBarcode, list }
   },
 
   create(data: Prisma.ProductCreateInput) {

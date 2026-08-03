@@ -221,7 +221,8 @@ export function validateProductUpdate(
 const PRODUCT_SORT_FIELDS = [
   'retailPrice',
   'wholesalePrice',
-  'purchasePrice'
+  'purchasePrice',
+  'barcode'
 ] as const
 
 export type ProductSortField = (typeof PRODUCT_SORT_FIELDS)[number]
@@ -288,7 +289,9 @@ export function validateProductListQuery(input: {
     sortOrder = input.sortOrder
   }
 
-  if (sortBy && !sortOrder) sortOrder = 'desc'
+  if (sortBy && !sortOrder) {
+    sortOrder = sortBy === 'barcode' ? 'asc' : 'desc'
+  }
   if (sortOrder && !sortBy) {
     return fail(HTTP_STATUS.BAD_REQUEST, '排序参数不完整')
   }
