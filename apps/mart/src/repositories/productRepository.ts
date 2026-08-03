@@ -62,12 +62,11 @@ export const productRepository = {
     })
   },
 
-  /** 查重：同条码是否已被其他在售商品占用 */
-  findActiveByBarcodeExcept(barcode: string, excludeId?: number) {
+  /** 查重：同条码是否已被任意商品占用（含软删，因 DB 唯一索引覆盖全表） */
+  findAnyByBarcodeExcept(barcode: string, excludeId?: number) {
     return product.findFirst({
       where: {
         barcode,
-        ...notDeleted,
         ...(excludeId != null ? { id: { not: excludeId } } : {})
       }
     })
@@ -151,7 +150,15 @@ export const productRepository = {
   softDelete(id: number) {
     return product.update({
       where: { id },
-      data: { deletedAt: new Date() }
+      // 释放条码唯一约束，避免软删记录继续占码
+      data: { deletedAt: new Date(), barcode: null }
+    })
+  },
+
+  clearBarcode(id: number) {
+    return product.update({
+      where: { id },
+      data: { barcode: null }
     })
   }
 }

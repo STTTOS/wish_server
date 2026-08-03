@@ -36,14 +36,19 @@ async function assertBarcodeAvailable(
   excludeId?: number
 ): Promise<ApiResult<null>> {
   if (!barcode) return ok(null)
-  const occupied = await productRepository.findActiveByBarcodeExcept(
+  const occupied = await productRepository.findAnyByBarcodeExcept(
     barcode,
     excludeId
   )
-  if (occupied) {
-    return fail(HTTP_STATUS.BAD_REQUEST, '该条码已绑定其他商品')
+  if (!occupied) return ok(null)
+
+  // 软删商品仍占唯一索引时释放条码，允许重新建档
+  if (occupied.deletedAt) {
+    await productRepository.clearBarcode(occupied.id)
+    return ok(null)
   }
-  return ok(null)
+
+  return fail(HTTP_STATUS.CONFLICT, '该条码已绑定其他商品')
 }
 
 /** Application Service / Facade：编排校验 → 仓储 → 投影 */

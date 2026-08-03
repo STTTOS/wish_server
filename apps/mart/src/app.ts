@@ -13,6 +13,7 @@ import response from './utils/response'
 import { cacheTime as maxAge } from './config'
 import requireAdmin from './middleware/requireAdmin'
 import { HTTP_STATUS } from './constants/httpStatus'
+import { mapPrismaError } from './utils/mapPrismaError'
 import customHandle401 from './middleware/customHandle401'
 import attachCurrentUser from './middleware/attachCurrentUser'
 import { createTraceIdMiddleware } from './middleware/traceId'
@@ -29,7 +30,12 @@ export function createApp() {
     try {
       await next()
     } catch (error) {
-      response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '系统异常')
+      const mapped = mapPrismaError(error)
+      if (mapped) {
+        response.error(ctx, mapped.status, mapped.message)
+      } else {
+        response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, '系统异常')
+      }
       logger.error(error)
     }
   })
