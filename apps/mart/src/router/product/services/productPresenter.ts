@@ -13,6 +13,7 @@ export type ProductView = {
   name: string
   description: string | null
   aliases: string[]
+  barcode: string | null
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice?: number | null
@@ -36,6 +37,7 @@ export function presentProduct(
     name: record.name,
     description: record.description,
     aliases: parseAliasesStored(record.aliases),
+    barcode: record.barcode,
     retailPrice: decimalToNumber(record.retailPrice)!,
     wholesalePrice: decimalToNumber(record.wholesalePrice),
     image: record.image,

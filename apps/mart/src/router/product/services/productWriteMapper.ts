@@ -13,6 +13,7 @@ export function mapProductCreateData(
     name: data.name,
     description: data.description,
     aliases: data.aliases ? serializeAliases(data.aliases) : null,
+    barcode: data.barcode,
     retailPrice: toDecimal(data.retailPrice),
     wholesalePrice:
       data.wholesalePrice === null ? null : toDecimal(data.wholesalePrice),
@@ -34,6 +35,7 @@ export function mapProductUpdateData(
   if (data.aliases !== undefined) {
     patch.aliases = data.aliases ? serializeAliases(data.aliases) : null
   }
+  if (data.barcode !== undefined) patch.barcode = data.barcode
   if (data.retailPrice !== undefined) {
     patch.retailPrice = toDecimal(data.retailPrice)
   }

@@ -9,7 +9,8 @@ export const PUBLIC_NO_AUTH_PATHS: ReadonlyArray<string | RegExp> = [
 export const AUTH_OPTIONAL_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/auth\/logout$/,
   /^\/api\/product\/list$/,
-  /^\/api\/product\/detail$/
+  /^\/api\/product\/detail$/,
+  /^\/api\/product\/by-barcode$/
 ]
 
 /** 仅管理员 */

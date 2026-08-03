@@ -30,6 +30,7 @@ function buildTokenMatchSql(token: string) {
     OR p.name LIKE ${pattern}
     OR p.description LIKE ${pattern}
     OR p.aliases LIKE ${pattern}
+    OR p.barcode = ${token}
   )`
 }
 
@@ -51,6 +52,24 @@ export const productRepository = {
   findActiveByIdLite(id: number) {
     return product.findFirst({
       where: { id, ...notDeleted }
+    })
+  },
+
+  findActiveByBarcode(barcode: string) {
+    return product.findFirst({
+      where: { barcode, ...notDeleted },
+      include: productInclude
+    })
+  },
+
+  /** 查重：同条码是否已被其他在售商品占用 */
+  findActiveByBarcodeExcept(barcode: string, excludeId?: number) {
+    return product.findFirst({
+      where: {
+        barcode,
+        ...notDeleted,
+        ...(excludeId != null ? { id: { not: excludeId } } : {})
+      }
     })
   },
 

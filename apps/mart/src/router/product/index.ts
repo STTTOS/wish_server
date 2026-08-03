@@ -7,7 +7,8 @@ import {
   listProductsFacade,
   createProductFacade,
   deleteProductFacade,
-  updateProductFacade
+  updateProductFacade,
+  getProductByBarcodeFacade
 } from './services/productFacade'
 
 const productApi = combinePath(apiPrefix)('/product')
@@ -40,6 +41,14 @@ router.get(productApi('/detail'), async (ctx) => {
   const result = await getProductFacade({
     role: ctx.state.user?.role,
     id
+  })
+  respondFromApiResult(ctx, result)
+})
+
+router.get(productApi('/by-barcode'), async (ctx) => {
+  const result = await getProductByBarcodeFacade({
+    role: ctx.state.user?.role,
+    barcode: ctx.query.barcode
   })
   respondFromApiResult(ctx, result)
 })

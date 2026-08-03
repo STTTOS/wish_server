@@ -4,6 +4,7 @@ import { ok, fail } from '../../../utils/apiResult'
 import { DEFAULT_PRODUCT_STOCK } from '../../../config'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { validateOptionalAliases } from '../../../utils/productAliases'
+import { validateOptionalBarcode } from '../../../utils/productBarcode'
 import {
   validatePagination,
   validatePositiveInt,
@@ -19,6 +20,7 @@ export type ProductCreateData = {
   description: string | null
   /** 规范化后的别名列表；空则 null */
   aliases: string[] | null
+  barcode: string | null
   retailPrice: number
   wholesalePrice: number | null
   purchasePrice: number | null
@@ -32,6 +34,7 @@ export type ProductUpdateData = {
   name?: string
   description?: string | null
   aliases?: string[] | null
+  barcode?: string | null
   retailPrice?: number
   wholesalePrice?: number | null
   purchasePrice?: number | null
@@ -92,6 +95,9 @@ export function validateProductCreate(
     return fail(HTTP_STATUS.BAD_REQUEST, aliasesResult.message)
   }
 
+  const barcodeResult = validateOptionalBarcode(input.barcode)
+  if (!barcodeResult.ok) return barcodeResult
+
   const retailResult = validateRequiredMoney(input.retailPrice, '零售价')
   if (!retailResult.ok) return retailResult
 
@@ -122,6 +128,7 @@ export function validateProductCreate(
     name: nameResult.data,
     description: descriptionResult.data ?? null,
     aliases: aliasesResult.data ?? null,
+    barcode: barcodeResult.data ?? null,
     retailPrice: retailResult.data,
     wholesalePrice: wholesaleResult.data ?? null,
     purchasePrice: purchaseResult.data ?? null,
@@ -161,6 +168,12 @@ export function validateProductUpdate(
       return fail(HTTP_STATUS.BAD_REQUEST, aliasesResult.message)
     }
     data.aliases = aliasesResult.data ?? null
+  }
+
+  if (input.barcode !== undefined) {
+    const barcodeResult = validateOptionalBarcode(input.barcode)
+    if (!barcodeResult.ok) return barcodeResult
+    data.barcode = barcodeResult.data ?? null
   }
 
   if (input.retailPrice !== undefined) {

@@ -42,6 +42,8 @@ model Product {
   description    String?   @db.VarChar(500)
   /// 搜索别名，逗号分隔，如「瓜子,葵花籽」
   aliases        String?   @db.VarChar(500)
+  /// 商品条形码（EAN 等），同款同规格通常相同
+  barcode        String?   @db.VarChar(64)
   /// 零售价（必填）
   retailPrice    Decimal   @db.Decimal(12, 2)
   /// 批发价
@@ -59,4 +61,5 @@ model Product {
   @@index([categoryId])
   @@index([deletedAt])
   @@index([name])
+  @@unique([barcode])
 }
