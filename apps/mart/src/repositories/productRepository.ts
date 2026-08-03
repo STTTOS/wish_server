@@ -3,7 +3,10 @@ import type { Prisma } from '@prisma/mart-client'
 import { Prisma as PrismaNS } from '@prisma/mart-client'
 
 import prisma, { product } from '../models'
-import { buildNameSubsequenceLikePattern } from '../utils/productSearch'
+import {
+  splitSearchTokens,
+  buildNameSubsequenceLikePattern
+} from '../utils/productSearch'
 
 const notDeleted = { deletedAt: null } as const
 
@@ -18,6 +21,16 @@ export type ProductListFilter = {
   pageSize: number
   sortBy?: 'retailPrice' | 'wholesalePrice' | 'purchasePrice'
   sortOrder?: 'asc' | 'desc'
+}
+
+function buildTokenMatchSql(token: string) {
+  const pattern = buildNameSubsequenceLikePattern(token)
+  return PrismaNS.sql`(
+    (c.deletedAt IS NULL AND c.name = ${token})
+    OR p.name LIKE ${pattern}
+    OR p.description LIKE ${pattern}
+    OR p.aliases LIKE ${pattern}
+  )`
 }
 
 /** Repository：商品持久化（软删除与 include 约定集中在此） */
@@ -48,30 +61,27 @@ export const productRepository = {
     }
 
     if (filter.keyword) {
-      const keyword = filter.keyword.trim()
-      const pattern = buildNameSubsequenceLikePattern(keyword)
-      const rows = await prisma.$queryRaw<{ id: number }[]>`
-        SELECT p.id AS id
-        FROM Product p
-        INNER JOIN Category c ON c.id = p.categoryId
-        WHERE p.deletedAt IS NULL
-          AND (
-            (c.deletedAt IS NULL AND c.name = ${keyword})
-            OR p.name LIKE ${pattern}
-            OR p.description LIKE ${pattern}
-            OR p.aliases LIKE ${pattern}
-          )
-          ${
-            filter.categoryId != null
-              ? PrismaNS.sql`AND p.categoryId = ${filter.categoryId}`
-              : PrismaNS.empty
-          }
-      `
-      const ids = rows.map((row) => row.id)
-      if (ids.length === 0) {
-        return { total: 0, list: [] }
+      const tokens = splitSearchTokens(filter.keyword)
+      if (tokens.length > 0) {
+        const tokenClauses = tokens.map(buildTokenMatchSql)
+        const rows = await prisma.$queryRaw<{ id: number }[]>`
+          SELECT p.id AS id
+          FROM Product p
+          INNER JOIN Category c ON c.id = p.categoryId
+          WHERE p.deletedAt IS NULL
+            AND ${PrismaNS.join(tokenClauses, ' AND ')}
+            ${
+              filter.categoryId != null
+                ? PrismaNS.sql`AND p.categoryId = ${filter.categoryId}`
+                : PrismaNS.empty
+            }
+        `
+        const ids = rows.map((row) => row.id)
+        if (ids.length === 0) {
+          return { total: 0, list: [] }
+        }
+        where.id = { in: ids }
       }
-      where.id = { in: ids }
     }
 
     const orderBy: Prisma.ProductOrderByWithRelationInput[] =
