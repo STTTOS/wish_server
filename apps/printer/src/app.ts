@@ -40,10 +40,11 @@ export function createApp() {
   })
   app.use(createRequestLogMiddleware())
 
+  // 配合 history 模式：放在静态资源前，未匹配文件的前端路由回退到 index.html
   app.use(
     historyApiFallback({
       index: '/public/index.html',
-      whiteList: ['^/api', '^/upload']
+      whiteList: ['^/api']
     })
   )
 
@@ -56,6 +57,8 @@ export function createApp() {
     })
   )
 
+  // 静态资源可长缓存；HTML 入口必须在静态中间件之后覆盖 Cache-Control，
+  // 否则 koa-static 的 maxAge 会盖掉前置设置，导致旧 SPA 路由被浏览器缓存。
   app.use(async (ctx, next) => {
     await next()
     const path = ctx.path
@@ -63,8 +66,6 @@ export function createApp() {
       path === '/' ||
       path === '/index.html' ||
       path === '/public/index.html' ||
-      path === '/upload' ||
-      path === '/upload/' ||
       (typeof ctx.type === 'string' && ctx.type.includes('html'))
     if (isHtmlEntry) {
       ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate')

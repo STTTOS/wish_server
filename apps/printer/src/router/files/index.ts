@@ -30,12 +30,12 @@ function shopRoom(shopCode: string) {
 
 router.post(publicApi('/upload'), async (ctx) => {
   const body = (ctx.request.body || {}) as { shopCode?: unknown }
-  const queryShop =
-    typeof ctx.query.shop === 'string'
-      ? ctx.query.shop
-      : typeof ctx.query.shopCode === 'string'
-        ? ctx.query.shopCode
-        : ''
+  let queryShop = ''
+  if (typeof ctx.query.shop === 'string') {
+    queryShop = ctx.query.shop
+  } else if (typeof ctx.query.shopCode === 'string') {
+    queryShop = ctx.query.shopCode
+  }
   const shopCode =
     (typeof body.shopCode === 'string' && body.shopCode) || queryShop || ''
 

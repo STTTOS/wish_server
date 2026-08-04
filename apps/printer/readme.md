@@ -15,9 +15,9 @@ pnpm run dev
 ```
 
 - 端口默认 `7503`
-- H5：`http://localhost:7503/upload?shop=default`
+- H5：`http://localhost:7503/?shop=default`
   - 顾客端源码在独立仓库 [`printer-h5`](../../../printer-h5)（React + Vite + Tailwind + Motion）
-  - 构建产物部署到本应用 `public/upload/`
+  - 构建产物部署到本应用 `public/`（与 mart 一致；history fallback → `index.html`）
 - 账号：`printer` / `printer123`，`shopCode=default`
 
 ## COS

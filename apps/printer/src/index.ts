@@ -27,7 +27,7 @@ async function bootstrap() {
 
   server.listen(Number(port), () => {
     logger.info('printer server startup', `http://localhost:${port}`)
-    logger.info('H5 upload', `http://localhost:${port}/upload?shop=default`)
+    logger.info('H5 upload', `http://localhost:${port}/?shop=default`)
   })
 }
 
