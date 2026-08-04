@@ -1,0 +1,51 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/printer-client"
+}
+
+enum PrintFileStatus {
+  new
+  reviewed
+  printed
+  print_failed
+}
+
+/// 店员账号（无注册；seed 初始化）
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  /// SHA256 摘要
+  password  String
+  /// 店铺码：H5 上传与桌面登录绑定同一 shop
+  shopCode  String   @db.VarChar(64)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shopCode])
+}
+
+/// 顾客上传的打印文件（COS 中转 + 多端同步）
+model PrintFile {
+  id           String          @id @default(cuid())
+  shopCode     String          @db.VarChar(64)
+  originalName String          @db.VarChar(500)
+  cosKey       String          @db.VarChar(500)
+  cosUrl       String          @db.VarChar(1000)
+  mime         String?         @db.VarChar(128)
+  size         Int
+  pageCount    Int?
+  status       PrintFileStatus @default(new)
+  /// { color?: 'bw'|'color', duplex?: boolean, copies?: number, printerName?: string }
+  printOptions Json?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+
+  @@index([shopCode, deletedAt, createdAt])
+  @@index([createdAt])
+}

@@ -189,6 +189,22 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tsconfig
 
+  apps/printer:
+    dependencies:
+      '@wishufree/cos-upload':
+        specifier: workspace:*
+        version: link:../../packages/cos-upload
+    devDependencies:
+      eslint-config-custom:
+        specifier: workspace:*
+        version: link:../../packages/eslint-config-custom
+      prettier-config:
+        specifier: workspace:*
+        version: link:../../packages/prettier-config
+      tsconfig:
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+
   apps/texas:
     dependencies:
       '@wishufree/texas-ws-contract':

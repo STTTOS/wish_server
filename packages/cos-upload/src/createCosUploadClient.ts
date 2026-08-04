@@ -260,8 +260,72 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       file.newFilename = newFileName
     }
 
+  const isAlreadyGone = (err: unknown) => {
+    const code =
+      err && typeof err === 'object' && 'statusCode' in err
+        ? Number((err as { statusCode?: number }).statusCode)
+        : undefined
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'string'
+          ? err
+          : String(err ?? '')
+    return code === 404 || /NoSuchKey|not exist|404/i.test(message)
+  }
+
+  /** 删除单个对象；对象不存在视为成功（幂等） */
+  const deleteObject = (key: string) =>
+    new Promise<void>((resolve, reject) => {
+      cos.deleteObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Key: key.replace(/^\/+/, '')
+        },
+        (err) => {
+          if (!err || isAlreadyGone(err)) resolve()
+          else reject(err instanceof Error ? err : new Error(String(err)))
+        }
+      )
+    })
+
+  /**
+   * 批量删除（单次最多 1000）。
+   * @see https://cloud.tencent.com/document/product/436/64983
+   */
+  const deleteMultipleObjects = (keys: string[]) =>
+    new Promise<void>((resolve, reject) => {
+      const Objects = keys
+        .map((key) => key.replace(/^\/+/, '').trim())
+        .filter(Boolean)
+        .map((Key) => ({ Key }))
+      if (Objects.length === 0) {
+        resolve()
+        return
+      }
+      if (Objects.length > 1000) {
+        reject(new Error('deleteMultipleObjects supports at most 1000 keys'))
+        return
+      }
+      cos.deleteMultipleObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Objects,
+          Quiet: true
+        },
+        (err) => {
+          if (!err) resolve()
+          else reject(err instanceof Error ? err : new Error(String(err)))
+        }
+      )
+    })
+
   return {
     uploadFileToCos,
+    deleteObject,
+    deleteMultipleObjects,
     toCosSafeUrl,
     hashAndKeepOriginalName,
     partitionImagesBySize,
