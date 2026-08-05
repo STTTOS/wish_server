@@ -10,6 +10,7 @@ import { getDeskIo } from '../../services/deskSocket'
 import { printFileRepository } from '../../repositories/printFileRepository'
 import { presentPrintFile } from './services/printFilePresenter'
 import {
+  parsePublicPrintOptions,
   uploadPublicFile,
   type UploadedTempFile
 } from './services/uploadFacade'
@@ -29,7 +30,10 @@ function shopRoom(shopCode: string) {
 }
 
 router.post(publicApi('/upload'), async (ctx) => {
-  const body = (ctx.request.body || {}) as { shopCode?: unknown }
+  const body = (ctx.request.body || {}) as {
+    shopCode?: unknown
+    printOptions?: unknown
+  }
   let queryShop = ''
   if (typeof ctx.query.shop === 'string') {
     queryShop = ctx.query.shop
@@ -53,8 +57,18 @@ router.post(publicApi('/upload'), async (ctx) => {
     return
   }
 
+  let printOptions
   try {
-    const presented = await uploadPublicFile({ shopCode, file })
+    printOptions = parsePublicPrintOptions(body.printOptions)
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'printOptions 参数错误'
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, message)
+    return
+  }
+
+  try {
+    const presented = await uploadPublicFile({ shopCode, file, printOptions })
     const io = getDeskIo()
     io?.of('/desk').to(shopRoom(presented.shopCode)).emit('file:new', presented)
     response.success(ctx, presented, '上传成功')
@@ -100,7 +114,7 @@ router.patch(filesApi('/:id'), async (ctx) => {
   const data: Prisma.PrintFileUpdateInput = {}
 
   if (typeof body.status === 'string') {
-    const allowed = ['new', 'reviewed', 'printed', 'print_failed'] as const
+    const allowed = ['new', 'printed', 'print_failed'] as const
     if (!(allowed as readonly string[]).includes(body.status)) {
       response.error(ctx, HTTP_STATUS.BAD_REQUEST, '非法 status')
       return
@@ -111,7 +125,12 @@ router.patch(filesApi('/:id'), async (ctx) => {
   if (body.printOptions === null) {
     data.printOptions = Prisma.DbNull
   } else if (body.printOptions && typeof body.printOptions === 'object') {
+    // Desk may send full PrintOptions (printerName, A5/Legal, etc.) — do not run
+    // the stricter public customer parser here.
     data.printOptions = body.printOptions as Prisma.InputJsonValue
+  } else if (body.printOptions !== undefined) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'printOptions 必须是对象')
+    return
   }
 
   if (body.pageCount === null) {

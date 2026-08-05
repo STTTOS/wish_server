@@ -11,8 +11,19 @@ export const printFileRepository = {
     mime?: string | null
     size: number
     pageCount?: number | null
+    printOptions?: Prisma.InputJsonValue
   }) {
-    return printFile.create({ data })
+    const createData: Prisma.PrintFileCreateInput = {
+      shopCode: data.shopCode,
+      originalName: data.originalName,
+      cosKey: data.cosKey,
+      cosUrl: data.cosUrl,
+      size: data.size
+    }
+    if (data.mime != null) createData.mime = data.mime
+    if (data.pageCount != null) createData.pageCount = data.pageCount
+    if (data.printOptions !== undefined) createData.printOptions = data.printOptions
+    return printFile.create({ data: createData })
   },
 
   listByShop(shopCode: string) {
