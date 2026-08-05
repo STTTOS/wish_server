@@ -14,6 +14,12 @@ import {
   uploadPublicFile,
   type UploadedTempFile
 } from './services/uploadFacade'
+import { issuePublicUploadToken } from './services/uploadTokenFacade'
+import { isWechatMiniConfigured } from '../../services/wechatMini'
+import {
+  extractUploadToken,
+  verifyUploadToken
+} from '../../utils/uploadToken'
 
 const publicApi = combinePath(apiPrefix)('/public')
 const filesApi = combinePath(apiPrefix)('/files')
@@ -29,12 +35,50 @@ function shopRoom(shopCode: string) {
   return `shop:${shopCode}`
 }
 
+function errorStatus(error: unknown, fallback: number) {
+  if (error && typeof error === 'object' && 'status' in error) {
+    const status = Number((error as { status: number }).status)
+    if (Number.isFinite(status) && status >= 400) return status
+  }
+  return fallback
+}
+
+/** 小程序：wx.login code → 短时上传凭证（无授权弹窗） */
+router.post(publicApi('/upload-token'), async (ctx) => {
+  const body = (ctx.request.body || {}) as {
+    code?: unknown
+    shopCode?: unknown
+    shop?: unknown
+  }
+  const shopCode =
+    (typeof body.shopCode === 'string' && body.shopCode) ||
+    (typeof body.shop === 'string' && body.shop) ||
+    (typeof ctx.query.shop === 'string' && ctx.query.shop) ||
+    (typeof ctx.query.shopCode === 'string' && ctx.query.shopCode) ||
+    ''
+
+  try {
+    const issued = await issuePublicUploadToken({
+      code: body.code,
+      shopCode
+    })
+    response.success(ctx, issued, 'ok')
+  } catch (error) {
+    response.error(
+      ctx,
+      errorStatus(error, HTTP_STATUS.INTERNAL_SERVER_ERROR),
+      error instanceof Error ? error.message : '获取上传凭证失败'
+    )
+  }
+})
+
 router.post(publicApi('/upload'), async (ctx) => {
   const body = (ctx.request.body || {}) as {
     shopCode?: unknown
     fileName?: unknown
     originalName?: unknown
     printOptions?: unknown
+    uploadToken?: unknown
   }
   let queryShop = ''
   if (typeof ctx.query.shop === 'string') {
@@ -44,6 +88,40 @@ router.post(publicApi('/upload'), async (ctx) => {
   }
   const shopCode =
     (typeof body.shopCode === 'string' && body.shopCode) || queryShop || ''
+
+  if (!isWechatMiniConfigured()) {
+    response.error(
+      ctx,
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      '服务未配置微信小程序凭证'
+    )
+    return
+  }
+
+  const rawToken = extractUploadToken({
+    authorization: ctx.get('authorization'),
+    uploadTokenHeader: ctx.get('x-upload-token'),
+    formToken: body.uploadToken
+  })
+  if (!rawToken) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '缺少上传凭证')
+    return
+  }
+
+  try {
+    const claims = verifyUploadToken(rawToken)
+    if (claims.shopCode !== shopCode.trim()) {
+      response.error(ctx, HTTP_STATUS.FORBIDDEN, '上传凭证与店铺不匹配')
+      return
+    }
+  } catch (error) {
+    response.error(
+      ctx,
+      errorStatus(error, HTTP_STATUS.UNAUTHORIZED),
+      error instanceof Error ? error.message : '上传凭证无效或已过期'
+    )
+    return
+  }
 
   const files = ctx.request.files || {}
   const file =
@@ -80,12 +158,11 @@ router.post(publicApi('/upload'), async (ctx) => {
     io?.of('/desk').to(shopRoom(presented.shopCode)).emit('file:new', presented)
     response.success(ctx, presented, '上传成功')
   } catch (error) {
-    const status =
-      error && typeof error === 'object' && 'status' in error
-        ? Number((error as { status: number }).status)
-        : HTTP_STATUS.INTERNAL_SERVER_ERROR
-    const message = error instanceof Error ? error.message : '上传失败'
-    response.error(ctx, status || HTTP_STATUS.INTERNAL_SERVER_ERROR, message)
+    response.error(
+      ctx,
+      errorStatus(error, HTTP_STATUS.INTERNAL_SERVER_ERROR),
+      error instanceof Error ? error.message : '上传失败'
+    )
   }
 })
 

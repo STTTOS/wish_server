@@ -6,7 +6,11 @@ import dayjs from 'dayjs'
 import { PRINTING_COS_PREFIX } from '../../../config'
 import { getCosUploadClient } from '../../../services/cosUpload'
 import { printFileRepository } from '../../../repositories/printFileRepository'
+import { userRepository } from '../../../repositories/userRepository'
 import { presentPrintFile } from './printFilePresenter'
+
+/** 店铺码进 COS 路径，限制字符防路径污染 */
+const SHOP_CODE_RE = /^[a-zA-Z0-9_-]{1,64}$/
 
 export type UploadedTempFile = {
   filepath: string
@@ -163,6 +167,12 @@ export async function uploadPublicFile(input: {
   const shopCode = input.shopCode.trim()
   if (!shopCode) {
     throw Object.assign(new Error('shopCode 不能为空'), { status: 400 })
+  }
+  if (!SHOP_CODE_RE.test(shopCode)) {
+    throw Object.assign(new Error('shopCode 非法'), { status: 400 })
+  }
+  if (!(await userRepository.existsByShopCode(shopCode))) {
+    throw Object.assign(new Error('店铺不存在或未开通'), { status: 403 })
   }
 
   const originalName = resolveOriginalName(

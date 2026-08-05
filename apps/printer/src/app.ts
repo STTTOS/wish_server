@@ -15,6 +15,7 @@ import { HTTP_STATUS } from './constants/httpStatus'
 import { mapPrismaError } from './utils/mapPrismaError'
 import customHandle401 from './middleware/customHandle401'
 import attachCurrentUser from './middleware/attachCurrentUser'
+import rateLimit from './middleware/rateLimit'
 import { createTraceIdMiddleware } from './middleware/traceId'
 import { createRequestLogMiddleware } from './middleware/requestLog'
 
@@ -23,6 +24,8 @@ import { createRequestLogMiddleware } from './middleware/requestLog'
  */
 export function createApp() {
   const app = new Koa()
+  // nginx 已设 X-Real-IP / X-Forwarded-For，限流与日志需要真实客户端 IP
+  app.proxy = true
 
   app.use(createTraceIdMiddleware())
   app.use(async (ctx, next) => {
@@ -86,6 +89,8 @@ export function createApp() {
 
   app.use(customHandle401)
   app.use(attachCurrentUser)
+  // 限流放在解析 multipart 之前，避免刷上传时先落盘再拒绝
+  app.use(rateLimit)
 
   app.use(
     koaBody({

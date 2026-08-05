@@ -18,3 +18,8 @@ export const PRINT_FILE_RETENTION_DAYS = Number(
 
 /** 上传单文件上限（MB） */
 export const UPLOAD_MAX_FILE_SIZE_MB = 50
+
+/** 小程序上传凭证有效期（秒），默认 30 分钟 */
+export const UPLOAD_TOKEN_TTL_SECONDS = Number(
+  process.env.UPLOAD_TOKEN_TTL_SECONDS || 30 * 60
+)

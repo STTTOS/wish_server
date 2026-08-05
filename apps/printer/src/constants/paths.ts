@@ -3,6 +3,7 @@ import { toLower } from 'ramda'
 /** 完全公开：无需登录 */
 export const PUBLIC_NO_AUTH_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/auth\/login$/,
+  /^\/api\/public\/upload-token$/,
   /^\/api\/public\/upload$/
 ]
 

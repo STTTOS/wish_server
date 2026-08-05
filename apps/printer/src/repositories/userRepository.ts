@@ -18,6 +18,15 @@ export const userRepository = {
     })
   },
 
+  /** 公开上传：仅允许已绑定店员账号的 shopCode */
+  async existsByShopCode(shopCode: string): Promise<boolean> {
+    const row = await user.findFirst({
+      where: { shopCode },
+      select: { id: true }
+    })
+    return row != null
+  },
+
   upsertSeed(input: {
     username: string
     password: string
