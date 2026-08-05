@@ -32,6 +32,8 @@ function shopRoom(shopCode: string) {
 router.post(publicApi('/upload'), async (ctx) => {
   const body = (ctx.request.body || {}) as {
     shopCode?: unknown
+    fileName?: unknown
+    originalName?: unknown
     printOptions?: unknown
   }
   let queryShop = ''
@@ -68,7 +70,12 @@ router.post(publicApi('/upload'), async (ctx) => {
   }
 
   try {
-    const presented = await uploadPublicFile({ shopCode, file, printOptions })
+    const presented = await uploadPublicFile({
+      shopCode,
+      file,
+      clientFileName: body.fileName ?? body.originalName,
+      printOptions
+    })
     const io = getDeskIo()
     io?.of('/desk').to(shopRoom(presented.shopCode)).emit('file:new', presented)
     response.success(ctx, presented, '上传成功')

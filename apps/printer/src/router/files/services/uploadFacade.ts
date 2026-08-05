@@ -57,6 +57,26 @@ function sanitizeFileName(name: string) {
   return name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 180)
 }
 
+/** Mini program temp path: `up_<ms>_<name>` — strip when multipart leaks it. */
+const UPLOAD_TEMP_NAME_PREFIX = /^up_\d+_/
+
+/**
+ * Prefer explicit form `fileName` / `originalName`; fall back to multipart
+ * filename and strip the local upload-temp prefix if present.
+ */
+export function resolveOriginalName(
+  preferred: unknown,
+  multipartName?: string | null,
+  fallback = 'file'
+): string {
+  const fromForm =
+    typeof preferred === 'string' && preferred.trim() ? preferred.trim() : ''
+  const raw = fromForm || (multipartName || '').trim() || fallback
+  const base = basename(raw)
+  const cleaned = base.replace(UPLOAD_TEMP_NAME_PREFIX, '') || base
+  return cleaned.slice(0, 500) || fallback
+}
+
 /** Customer-facing print intent from public upload (mini program / H5). */
 export type PublicPrintOptions = {
   color: 'bw' | 'color'
@@ -136,6 +156,8 @@ export function parsePublicPrintOptions(
 export async function uploadPublicFile(input: {
   shopCode: string
   file: UploadedTempFile
+  /** Explicit customer-facing name from multipart form (preferred). */
+  clientFileName?: unknown
   printOptions?: PublicPrintOptions | null
 }) {
   const shopCode = input.shopCode.trim()
@@ -143,8 +165,10 @@ export async function uploadPublicFile(input: {
     throw Object.assign(new Error('shopCode 不能为空'), { status: 400 })
   }
 
-  const originalName =
-    input.file.originalFilename || input.file.newFilename || 'file'
+  const originalName = resolveOriginalName(
+    input.clientFileName,
+    input.file.originalFilename || input.file.newFilename
+  )
   const ext = extname(originalName).toLowerCase()
   if (!ALLOWED_EXT.has(ext)) {
     throw Object.assign(new Error('不支持的文件类型'), { status: 400 })
