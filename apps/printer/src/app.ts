@@ -18,6 +18,7 @@ import attachCurrentUser from './middleware/attachCurrentUser'
 import rateLimit from './middleware/rateLimit'
 import { createTraceIdMiddleware } from './middleware/traceId'
 import { createRequestLogMiddleware } from './middleware/requestLog'
+import { memoryFileWriteStreamHandler } from './utils/memoryUpload'
 
 /**
  * Factory Method：组装 Koa 应用（中间件顺序集中在此）。
@@ -98,10 +99,11 @@ export function createApp() {
       json: true,
       urlencoded: true,
       formidable: {
-        uploadDir: join(__dirname, '../static'),
+        // 公开上传走内存 buffer，不写 static/
+        maxFileSize: UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024,
         keepExtensions: true,
-        maxFileSize: UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024
-      }
+        fileWriteStreamHandler: memoryFileWriteStreamHandler
+      } as koaBody.IKoaBodyFormidableOptions
     })
   )
 

@@ -18,6 +18,7 @@ async function bootstrap() {
     throw new Error('DATABASE_URL is required')
   }
 
+  // koa-static 挂载 /static；上传已不落盘，目录仅保障静态服务
   await mkdir(staticDir, { recursive: true })
 
   const app = createApp()

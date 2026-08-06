@@ -20,6 +20,7 @@ import {
   extractUploadToken,
   verifyUploadToken
 } from '../../utils/uploadToken'
+import { takeMemoryUploadBuffer } from '../../utils/memoryUpload'
 
 const publicApi = combinePath(apiPrefix)('/public')
 const filesApi = combinePath(apiPrefix)('/files')
@@ -132,7 +133,8 @@ router.post(publicApi('/upload'), async (ctx) => {
       files.files as UploadedTempFile | UploadedTempFile[] | undefined
     )
 
-  if (!file) {
+  const buffer = takeMemoryUploadBuffer(file)
+  if (!file || !buffer?.length) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '请选择要上传的文件')
     return
   }
@@ -151,6 +153,7 @@ router.post(publicApi('/upload'), async (ctx) => {
     const presented = await uploadPublicFile({
       shopCode,
       file,
+      buffer,
       clientFileName: body.fileName ?? body.originalName,
       printOptions
     })

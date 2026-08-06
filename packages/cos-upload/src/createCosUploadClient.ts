@@ -75,11 +75,12 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       )
     })
 
-  /** 压缩图走内存，避免再落盘 */
+  /** Buffer 直传 COS；contentType 默认 octet-stream（图片压缩可传 image/jpeg） */
   const uploadBufferToCos = (
     prefix: string,
     fileName: string,
-    body: Buffer
+    body: Buffer,
+    contentType = 'application/octet-stream'
   ) =>
     new Promise<string>((resolve, reject) => {
       cos.putObject(
@@ -89,7 +90,7 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
           Key: toCosObjectKey(prefix, fileName),
           Body: body,
           ContentLength: body.length,
-          ContentType: 'image/jpeg'
+          ContentType: contentType
         },
         (err, data) => {
           if (!err) resolve(data.Location)
@@ -174,7 +175,8 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
         uploadBufferToCos(
           'images/compressed',
           file.newFilename,
-          compressedBuffer
+          compressedBuffer,
+          'image/jpeg'
         )
       ])
       logger?.info(
@@ -232,7 +234,8 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     const compressedUrl = await uploadBufferToCos(
       'images/compressed',
       file.newFilename,
-      compressedBuffer
+      compressedBuffer,
+      'image/jpeg'
     )
     logger?.info(
       'upload_image:',
@@ -380,6 +383,7 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
 
   return {
     uploadFileToCos,
+    uploadBufferToCos,
     deleteObject,
     deleteMultipleObjects,
     toCosSafeUrl,

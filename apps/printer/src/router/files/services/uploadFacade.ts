@@ -1,5 +1,4 @@
 import { extname, basename } from 'path'
-import { unlink } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import dayjs from 'dayjs'
 
@@ -13,11 +12,12 @@ import { presentPrintFile } from './printFilePresenter'
 const SHOP_CODE_RE = /^[a-zA-Z0-9_-]{1,64}$/
 
 export type UploadedTempFile = {
-  filepath: string
+  filepath?: string
   originalFilename?: string | null
   newFilename?: string
   mimetype?: string | null
   size?: number
+  buffer?: Buffer
 }
 
 const ALLOWED_EXT = new Set([
@@ -163,6 +163,8 @@ export async function uploadPublicFile(input: {
   /** Explicit customer-facing name from multipart form (preferred). */
   clientFileName?: unknown
   printOptions?: PublicPrintOptions | null
+  /** 内存上传内容（不落盘） */
+  buffer: Buffer
 }) {
   const shopCode = input.shopCode.trim()
   if (!shopCode) {
@@ -175,6 +177,11 @@ export async function uploadPublicFile(input: {
     throw Object.assign(new Error('店铺不存在或未开通'), { status: 403 })
   }
 
+  const buffer = input.buffer
+  if (!buffer?.length) {
+    throw Object.assign(new Error('空文件'), { status: 400 })
+  }
+
   const originalName = resolveOriginalName(
     input.clientFileName,
     input.file.originalFilename || input.file.newFilename
@@ -184,34 +191,31 @@ export async function uploadPublicFile(input: {
     throw Object.assign(new Error('不支持的文件类型'), { status: 400 })
   }
 
-  const size = input.file.size || 0
-  if (size <= 0) {
-    throw Object.assign(new Error('空文件'), { status: 400 })
-  }
+  const size = input.file.size && input.file.size > 0 ? input.file.size : buffer.length
 
+  const mime = guessMime(ext, input.file.mimetype)
   const safeName = sanitizeFileName(basename(originalName))
   const objectName = `${uuidv4()}-${safeName}`
   const prefix = `${PRINTING_COS_PREFIX}/${shopCode}/${dayjs().format('YYYY/MM')}`
 
   const cos = getCosUploadClient()
-  const location = await cos.uploadFileToCos(
+  const location = await cos.uploadBufferToCos(
     prefix,
     objectName,
-    input.file.filepath
+    buffer,
+    mime
   )
   const cosKey = `${prefix}/${objectName}`.replace(/\\/g, '/')
   const cosUrl = location.startsWith('http')
     ? location
     : `https://${location}`
 
-  await unlink(input.file.filepath).catch(() => undefined)
-
   const row = await printFileRepository.create({
     shopCode,
     originalName,
     cosKey,
     cosUrl,
-    mime: guessMime(ext, input.file.mimetype),
+    mime,
     size,
     printOptions: input.printOptions ?? undefined
   })
