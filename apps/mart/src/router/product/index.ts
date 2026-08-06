@@ -16,6 +16,7 @@ const productApi = combinePath(apiPrefix)('/product')
 router.get(productApi('/list'), async (ctx) => {
   const query = ctx.query as {
     keyword?: unknown
+    barcode?: unknown
     categoryId?: unknown
     page?: unknown
     pageSize?: unknown
@@ -25,6 +26,7 @@ router.get(productApi('/list'), async (ctx) => {
   const result = await listProductsFacade({
     role: ctx.state.user?.role,
     keyword: query.keyword,
+    barcode: query.barcode,
     categoryId: query.categoryId,
     page: query.page,
     pageSize: query.pageSize,

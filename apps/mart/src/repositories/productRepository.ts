@@ -27,6 +27,8 @@ export const productInclude = {
 
 export type ProductListFilter = {
   keyword?: string
+  /** 仅匹配条码字段（连续子串） */
+  barcode?: string
   categoryId?: number
   page: number
   pageSize: number
@@ -90,6 +92,10 @@ export const productRepository = {
       ...(filter.categoryId ? { categoryId: filter.categoryId } : {})
     }
 
+    if (filter.barcode) {
+      where.barcode = { contains: filter.barcode.replace(/\s+/g, '') }
+    }
+
     if (filter.keyword) {
       const tokens = splitSearchTokens(filter.keyword)
       if (tokens.length > 0) {
@@ -103,6 +109,13 @@ export const productRepository = {
             ${
               filter.categoryId != null
                 ? PrismaNS.sql`AND p.categoryId = ${filter.categoryId}`
+                : PrismaNS.empty
+            }
+            ${
+              filter.barcode
+                ? PrismaNS.sql`AND p.barcode LIKE ${buildContainsLikePattern(
+                    filter.barcode
+                  )}`
                 : PrismaNS.empty
             }
         `

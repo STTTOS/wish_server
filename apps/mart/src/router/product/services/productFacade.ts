@@ -55,6 +55,7 @@ async function assertBarcodeAvailable(
 export async function listProductsFacade(input: {
   role?: Role
   keyword?: unknown
+  barcode?: unknown
   categoryId?: unknown
   page?: unknown
   pageSize?: unknown

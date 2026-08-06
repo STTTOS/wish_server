@@ -230,6 +230,7 @@ export type ProductSortOrder = 'asc' | 'desc'
 
 export function validateProductListQuery(input: {
   keyword?: unknown
+  barcode?: unknown
   categoryId?: unknown
   page?: unknown
   pageSize?: unknown
@@ -237,6 +238,7 @@ export function validateProductListQuery(input: {
   sortOrder?: unknown
 }): ApiResult<{
   keyword?: string
+  barcode?: string
   categoryId?: number
   page: number
   pageSize: number
@@ -249,6 +251,15 @@ export function validateProductListQuery(input: {
       return fail(HTTP_STATUS.BAD_REQUEST, '参数异常')
     }
     keyword = input.keyword.trim() || undefined
+  }
+
+  let barcode: string | undefined
+  if (input.barcode !== undefined && input.barcode !== null) {
+    if (typeof input.barcode !== 'string') {
+      return fail(HTTP_STATUS.BAD_REQUEST, '条码参数异常')
+    }
+    const compact = input.barcode.trim().replace(/\s+/g, '')
+    barcode = compact || undefined
   }
 
   const categoryResult = parsePositiveIntQuery(input.categoryId, '品类参数异常')
@@ -298,6 +309,7 @@ export function validateProductListQuery(input: {
 
   return ok({
     keyword,
+    barcode,
     categoryId: categoryResult.data,
     ...pageResult.data,
     sortBy,
