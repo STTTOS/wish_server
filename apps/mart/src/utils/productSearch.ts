@@ -13,6 +13,10 @@ export function splitSearchTokens(keyword: string): string[] {
   return tokens.slice(0, MAX_SEARCH_TOKENS)
 }
 
+function escapeLikeLiteral(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+}
+
 /**
  * 名称/描述宽松匹配：将关键词拆成字符序列，生成 LIKE 模式。
  * 例：「香甜蛋挞」→ `%香%甜%蛋%挞%`，可命中「香甜滋味手工蛋挞」。
@@ -22,10 +26,18 @@ export function buildNameSubsequenceLikePattern(keyword: string): string {
   const compact = keyword.trim().replace(/\s+/g, '')
   if (!compact) return '%'
 
-  const parts = [...compact].map((ch) =>
-    ch.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
-  )
+  const parts = [...compact].map((ch) => escapeLikeLiteral(ch))
   return `%${parts.join('%')}%`
+}
+
+/**
+ * 条码等连续子串匹配：生成 `%token%` LIKE 模式（转义 \ % _）。
+ * 不要对条码使用字符子序列模式，否则「690123」会变成 `%6%9%0%1%2%3%` 过度命中。
+ */
+export function buildContainsLikePattern(keyword: string): string {
+  const compact = keyword.trim().replace(/\s+/g, '')
+  if (!compact) return '%'
+  return `%${escapeLikeLiteral(compact)}%`
 }
 
 /** 供单测 / 本地校验：名称是否按序包含关键词各字符 */

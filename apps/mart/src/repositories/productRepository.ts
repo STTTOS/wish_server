@@ -5,6 +5,7 @@ import { Prisma as PrismaNS } from '@prisma/mart-client'
 import prisma, { product } from '../models'
 import {
   splitSearchTokens,
+  buildContainsLikePattern,
   buildNameSubsequenceLikePattern
 } from '../utils/productSearch'
 
@@ -34,13 +35,14 @@ export type ProductListFilter = {
 }
 
 function buildTokenMatchSql(token: string) {
-  const pattern = buildNameSubsequenceLikePattern(token)
+  const namePattern = buildNameSubsequenceLikePattern(token)
+  const barcodePattern = buildContainsLikePattern(token)
   return PrismaNS.sql`(
     (c.deletedAt IS NULL AND c.name = ${token})
-    OR p.name LIKE ${pattern}
-    OR p.description LIKE ${pattern}
-    OR p.aliases LIKE ${pattern}
-    OR p.barcode = ${token}
+    OR p.name LIKE ${namePattern}
+    OR p.description LIKE ${namePattern}
+    OR p.aliases LIKE ${namePattern}
+    OR p.barcode LIKE ${barcodePattern}
   )`
 }
 
