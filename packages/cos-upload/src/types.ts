@@ -33,6 +33,14 @@ export type UploadedImageFile = {
   size: number
 }
 
+/** 内存上传（不落盘）：仅 sharp 后传 compressed */
+export type UploadedImageBuffer = {
+  newFilename: string
+  originalFilename: string | null
+  buffer: Buffer
+  size: number
+}
+
 export type ProcessedImage = {
   url: string
   originalUrl: string

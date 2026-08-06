@@ -22,6 +22,7 @@ import type {
   BatchProcessedImage,
   CosUploadClientOptions,
   ProcessedImage,
+  UploadedImageBuffer,
   UploadedImageFile
 } from './types'
 
@@ -195,6 +196,61 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     }
   }
 
+  /**
+   * 内存 buffer → sharp 压缩 → 仅上传 images/compressed（不落盘、不传原图）。
+   * 供 mart 等只要展示图、追求延迟的调用方；不影响 processOneImage。
+   */
+  const processCompressedImageFromBuffer = async (
+    file: UploadedImageBuffer
+  ): Promise<ProcessedImage> => {
+    if (!file.buffer?.length) {
+      throw new Error('空文件')
+    }
+
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'start sharp (buffer, compressed-only)'
+    )
+    const compressedBuffer = await sharp(file.buffer)
+      .rotate()
+      .resize({
+        width: IMAGE_COMPRESS_MAX_EDGE,
+        height: IMAGE_COMPRESS_MAX_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: imageCompressRatio * 100 })
+      .toBuffer()
+
+    const start = Date.now()
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'sharp done, upload compressed only'
+    )
+    const compressedUrl = await uploadBufferToCos(
+      'images/compressed',
+      file.newFilename,
+      compressedBuffer
+    )
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'cos done, cost',
+      dayjs().diff(start, 'second'),
+      's'
+    )
+
+    const url = toCosSafeUrl(compressedUrl)
+    return {
+      url,
+      // 未上传 origin：与 url 相同，保持响应字段兼容
+      originalUrl: url,
+      filename: file.originalFilename
+    }
+  }
+
   const toFailureMessage = (reason: unknown) => {
     if (reason instanceof Error) return reason.message
     if (typeof reason === 'string') return reason
@@ -330,6 +386,7 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     hashAndKeepOriginalName,
     partitionImagesBySize,
     processOneImage,
+    processCompressedImageFromBuffer,
     processImagesBatch,
     processImagesBatchWithSizeFilter,
     assignOriginUploadPath,

@@ -17,6 +17,7 @@ import { mapPrismaError } from './utils/mapPrismaError'
 import customHandle401 from './middleware/customHandle401'
 import attachCurrentUser from './middleware/attachCurrentUser'
 import { createTraceIdMiddleware } from './middleware/traceId'
+import { memoryFileWriteStreamHandler } from './utils/memoryUpload'
 import { createRequestLogMiddleware } from './middleware/requestLog'
 
 /**
@@ -95,10 +96,12 @@ export function createApp() {
       json: true,
       urlencoded: true,
       formidable: {
-        uploadDir: join(__dirname, '../static'),
+        // 商品图上传走内存 buffer，不写 static/；不传 COS origin
+        maxFileSize: 10 * 1024 * 1024,
         keepExtensions: true,
-        maxFileSize: 10 * 1024 * 1024
-      }
+        // koa-body 类型未声明；formidable@2 支持 fileWriteStreamHandler
+        fileWriteStreamHandler: memoryFileWriteStreamHandler
+      } as koaBody.IKoaBodyFormidableOptions
     })
   )
 

@@ -1,5 +1,3 @@
-import { unlink } from 'fs/promises'
-
 import router from '../instance'
 import { logger } from '../../logger'
 import { apiPrefix } from '../../config'
@@ -11,25 +9,27 @@ import { respondFromApiResult } from '../../utils/respondFromApiResult'
 
 const commonApi = combinePath(apiPrefix)('/common')
 
-type FormidableFile = {
-  filepath: string
+type MemoryUploadFile = {
+  filepath?: string
   originalFilename?: string | null
   mimetype?: string | null
   size?: number
   newFilename?: string
+  /** formidable fileWriteStreamHandler 写入的内存内容 */
+  buffer?: Buffer
 }
 
-function pickSingleFile(files: unknown): FormidableFile | null {
+function pickSingleFile(files: unknown): MemoryUploadFile | null {
   if (!files || typeof files !== 'object') return null
-  const raw = (files as { file?: FormidableFile | FormidableFile[] }).file
+  const raw = (files as { file?: MemoryUploadFile | MemoryUploadFile[] }).file
   if (!raw) return null
   return Array.isArray(raw) ? raw[0] ?? null : raw
 }
 
-/** 登录即可上传；不走管理员限制 */
+/** 登录即可上传；不走管理员限制。内存 → sharp → 仅 compressed COS */
 router.post(commonApi('/upload_image'), async (ctx) => {
   const file = pickSingleFile(ctx.request.files)
-  if (!file?.filepath) {
+  if (!file?.buffer?.length) {
     respondFromApiResult(
       ctx,
       fail(HTTP_STATUS.BAD_REQUEST, '请选择要上传的图片')
@@ -37,6 +37,7 @@ router.post(commonApi('/upload_image'), async (ctx) => {
     return
   }
 
+  const { buffer } = file
   const cos = getCosUploadClient()
   const newFilename = cos
     .hashAndKeepOriginalName({
@@ -45,11 +46,11 @@ router.post(commonApi('/upload_image'), async (ctx) => {
     .replaceAll(/\s/g, '')
 
   try {
-    const data = await cos.processOneImage({
-      filepath: file.filepath,
+    const data = await cos.processCompressedImageFromBuffer({
+      buffer,
       originalFilename: file.originalFilename ?? null,
       newFilename,
-      size: file.size ?? 0
+      size: file.size ?? buffer.length
     })
     respondFromApiResult(ctx, ok(data), { okMessage: '上传成功' })
   } catch (error) {
@@ -61,7 +62,5 @@ router.post(commonApi('/upload_image'), async (ctx) => {
         error instanceof Error ? error.message : '上传失败'
       )
     )
-  } finally {
-    await unlink(file.filepath).catch(() => undefined)
   }
 })

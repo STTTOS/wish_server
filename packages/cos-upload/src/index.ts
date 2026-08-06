@@ -5,6 +5,7 @@ export type {
   CosUploadClientOptions,
   CosUploadLogger,
   ProcessedImage,
+  UploadedImageBuffer,
   UploadedImageFile
 } from './types'
 export {
