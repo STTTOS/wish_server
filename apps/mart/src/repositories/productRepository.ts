@@ -10,6 +10,16 @@ import {
 
 const notDeleted = { deletedAt: null } as const
 
+export class ProductNotFoundForCheckoutError extends Error {
+  readonly productId: number
+
+  constructor(productId: number) {
+    super(`商品不存在（id=${productId}）`)
+    this.name = 'ProductNotFoundForCheckoutError'
+    this.productId = productId
+  }
+}
+
 export const productInclude = {
   category: { select: { id: true, name: true } }
 } as const
@@ -159,6 +169,45 @@ export const productRepository = {
     return product.update({
       where: { id },
       data: { barcode: null }
+    })
+  },
+
+  /**
+   * 结账扣库存（事务）：允许扣到 0 以下视为 0，不因库存不足拒绝。
+   * 任一商品不存在则整笔回滚。
+   */
+  deductStockForCheckout(
+    items: ReadonlyArray<{ productId: number; quantity: number }>
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const deducted: Array<{
+        productId: number
+        quantity: number
+        stock: number
+      }> = []
+
+      for (const item of items) {
+        const record = await tx.product.findFirst({
+          where: { id: item.productId, ...notDeleted },
+          select: { id: true, stock: true }
+        })
+        if (!record) {
+          throw new ProductNotFoundForCheckoutError(item.productId)
+        }
+
+        const stock = Math.max(record.stock - item.quantity, 0)
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock }
+        })
+        deducted.push({
+          productId: item.productId,
+          quantity: item.quantity,
+          stock
+        })
+      }
+
+      return deducted
     })
   }
 }
