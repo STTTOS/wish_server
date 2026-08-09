@@ -46,18 +46,23 @@ export const printFileRepository = {
     })
   },
 
-  softDelete(id: string) {
+  softDelete(id: string, opts?: { cosPurged?: boolean }) {
     return printFile.update({
       where: { id },
-      data: { deletedAt: new Date() }
+      data: {
+        deletedAt: new Date(),
+        ...(opts?.cosPurged ? { cosPurgedAt: new Date() } : {})
+      }
     })
   },
 
+  /** 超过保留期且 COS 尚未确认清除的记录（含已软删的孤儿） */
   listExpiredForCleanup(before: Date, take = 1000) {
     return printFile.findMany({
       where: {
-        deletedAt: null,
-        createdAt: { lt: before }
+        createdAt: { lt: before },
+        cosPurgedAt: null,
+        cosKey: { not: '' }
       },
       select: { id: true, cosKey: true },
       take,
@@ -65,11 +70,16 @@ export const printFileRepository = {
     })
   },
 
-  softDeleteMany(ids: string[]) {
+  /** COS 删除成功后：软删（若尚未）并标记已 purge，避免重复扫描 */
+  markCosPurged(ids: string[]) {
     if (ids.length === 0) return Promise.resolve({ count: 0 })
+    const now = new Date()
     return printFile.updateMany({
       where: { id: { in: ids } },
-      data: { deletedAt: new Date() }
+      data: {
+        deletedAt: now,
+        cosPurgedAt: now
+      }
     })
   }
 }

@@ -261,13 +261,17 @@ router.delete(filesApi('/:id'), async (ctx) => {
     ctx.query.purgeCos === 'true' ||
     ctx.query.purgeCos === 'yes'
 
+  let cosPurged = false
   if (purgeCos) {
-    await getCosUploadClient()
-      .deleteObject(row.cosKey)
-      .catch(() => undefined)
+    try {
+      await getCosUploadClient().deleteObject(row.cosKey)
+      cosPurged = true
+    } catch {
+      // 软删仍执行；COS 由定时清理按 cosPurgedAt=null 重试
+    }
   }
 
-  await printFileRepository.softDelete(id)
+  await printFileRepository.softDelete(id, { cosPurged })
   getDeskIo()
     ?.of('/desk')
     .to(shopRoom(current.shopCode))

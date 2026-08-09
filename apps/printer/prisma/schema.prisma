@@ -44,7 +44,10 @@ model PrintFile {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   deletedAt    DateTime?
+  /// COS 对象已删除时间；null 表示仍需清理（含软删后的孤儿）
+  cosPurgedAt  DateTime?
 
   @@index([shopCode, deletedAt, createdAt])
   @@index([createdAt])
+  @@index([cosPurgedAt, createdAt])
 }

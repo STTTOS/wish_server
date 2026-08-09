@@ -5,27 +5,58 @@ import { printFileRepository } from '../repositories/printFileRepository'
 
 const HOUR_MS = 60 * 60 * 1000
 
+async function deleteCosKeysBestEffort(
+  items: { id: string; cosKey: string }[]
+): Promise<string[]> {
+  if (items.length === 0) return []
+
+  const keys = items.map((item) => item.cosKey)
+  try {
+    await getCosUploadClient().deleteMultipleObjects(keys)
+    return items.map((item) => item.id)
+  } catch (error) {
+    logger.error(
+      '[cleanup] COS batch delete failed, falling back to per-object',
+      error
+    )
+  }
+
+  const cos = getCosUploadClient()
+  const succeeded: string[] = []
+  for (const item of items) {
+    try {
+      await cos.deleteObject(item.cosKey)
+      succeeded.push(item.id)
+    } catch (error) {
+      logger.error(`[cleanup] COS delete failed key=${item.cosKey}`, error)
+    }
+  }
+  return succeeded
+}
+
 export async function cleanupExpiredPrintFiles() {
   const before = new Date(
     Date.now() - PRINT_FILE_RETENTION_DAYS * 24 * HOUR_MS
   )
   const batch = await printFileRepository.listExpiredForCleanup(before, 1000)
   if (batch.length === 0) {
-    logger.info('[cleanup] no expired print files')
+    logger.info('[cleanup] no expired print files pending COS purge')
     return
   }
 
-  const keys = batch.map((item) => item.cosKey).filter(Boolean)
-  try {
-    await getCosUploadClient().deleteMultipleObjects(keys)
-  } catch (error) {
-    logger.error('[cleanup] COS delete failed', error)
-    // still soft-delete DB so we do not retry forever on stuck keys;
-    // lifecycle rule is the backup for orphan objects
+  const purgedIds = await deleteCosKeysBestEffort(batch)
+  if (purgedIds.length > 0) {
+    await printFileRepository.markCosPurged(purgedIds)
   }
 
-  await printFileRepository.softDeleteMany(batch.map((item) => item.id))
-  logger.info(`[cleanup] soft-deleted ${batch.length} print files`)
+  const failed = batch.length - purgedIds.length
+  if (failed > 0) {
+    logger.warn(
+      `[cleanup] purged ${purgedIds.length}/${batch.length}; ${failed} left for retry`
+    )
+  } else {
+    logger.info(`[cleanup] purged ${purgedIds.length} print files from COS`)
+  }
 }
 
 export function startPrintFileCleanupCron() {
