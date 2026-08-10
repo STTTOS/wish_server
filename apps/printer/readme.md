@@ -30,6 +30,6 @@ pnpm run dev
 
 要点：
 
-- `client_max_body_size 60m`（上传）
+- `client_max_body_size 210m`（上传，对应服务端 200MB）
 - `/socket.io/` 开启 WebSocket（桌面端实时推送）
 - 先解析 DNS A 记录到服务器，再签 SSL / reload nginx
