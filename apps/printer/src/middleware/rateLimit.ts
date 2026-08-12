@@ -1,5 +1,9 @@
 import type { ParameterizedContext } from 'koa'
 
+import {
+  PUBLIC_UPLOAD_RATE_MAX,
+  PUBLIC_UPLOAD_TOKEN_RATE_MAX
+} from '../config'
 import response from '../utils/response'
 import { DefaultState } from '../router/instance'
 import { HTTP_STATUS } from '../constants/httpStatus'
@@ -25,12 +29,12 @@ const RULES: LimitRule[] = [
   {
     pattern: /^\/api\/public\/upload-token$/,
     windowMs: 60_000,
-    max: 30
+    max: PUBLIC_UPLOAD_TOKEN_RATE_MAX
   },
   {
     pattern: /^\/api\/public\/upload$/,
     windowMs: 60_000,
-    max: 20
+    max: PUBLIC_UPLOAD_RATE_MAX
   },
   {
     pattern: /^\/api\/auth\/login$/,

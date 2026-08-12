@@ -23,3 +23,13 @@ export const UPLOAD_MAX_FILE_SIZE_MB = 200
 export const UPLOAD_TOKEN_TTL_SECONDS = Number(
   process.env.UPLOAD_TOKEN_TTL_SECONDS || 30 * 60
 )
+
+/** 公共上传限流：每 IP 每分钟次数（批量多选需高于默认防刷阈值） */
+export const PUBLIC_UPLOAD_RATE_MAX = Number(
+  process.env.PUBLIC_UPLOAD_RATE_MAX || 200
+)
+
+/** 公共上传凭证限流：每 IP 每分钟次数 */
+export const PUBLIC_UPLOAD_TOKEN_RATE_MAX = Number(
+  process.env.PUBLIC_UPLOAD_TOKEN_RATE_MAX || 60
+)

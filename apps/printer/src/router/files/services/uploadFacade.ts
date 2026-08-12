@@ -26,6 +26,7 @@ const ALLOWED_EXT = new Set([
   '.docx',
   '.xls',
   '.xlsx',
+  '.cdr',
   '.png',
   '.jpg',
   '.jpeg',
@@ -45,6 +46,7 @@ function guessMime(ext: string, fallback?: string | null) {
     '.xls': 'application/vnd.ms-excel',
     '.xlsx':
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.cdr': 'application/x-coreldraw',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
