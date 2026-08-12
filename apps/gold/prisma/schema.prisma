@@ -1,0 +1,38 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/gold-client"
+}
+
+/// 现货 tick（约 5s 一条）
+model Tick {
+  id              BigInt   @id @default(autoincrement())
+  /// 采集时刻 epoch ms
+  ts              BigInt   @unique
+  usdOz           Float
+  usdCny          Float?
+  cnyG            Float?
+  source          String   @db.VarChar(32)
+  sourceUpdatedAt String?  @db.VarChar(64)
+  createdAt       DateTime @default(now())
+
+  @@index([ts])
+}
+
+/// 日线 OHLC（美元/盎司）；历史来自 currency-api，当日可由 tick 滚动更新
+model DailyBar {
+  date      String   @id @db.VarChar(10)
+  ts        BigInt
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  source    String   @db.VarChar(64)
+  updatedAt DateTime @updatedAt
+
+  @@index([ts])
+}

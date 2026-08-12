@@ -173,6 +173,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/tsconfig
 
+  apps/gold:
+    devDependencies:
+      eslint-config-custom:
+        specifier: workspace:*
+        version: link:../../packages/eslint-config-custom
+      prettier-config:
+        specifier: workspace:*
+        version: link:../../packages/prettier-config
+      tsconfig:
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+
   apps/mart:
     dependencies:
       '@wishufree/cos-upload':
