@@ -31,6 +31,19 @@ async function persistQuote() {
     cachedFx = quote.usdCny
   }
 
+  // currency-api 是日级近似，写入 Tick 会在图上造成针状尖刺；仅允许 gold-api 等现货源落库
+  if (
+    quote.source === 'currency-api' ||
+    quote.source.startsWith('currency-api')
+  ) {
+    lastError = `skip tick: ${quote.source} is daily approx, not spot`
+    logger.warn(lastError, {
+      usdOz: quote.usdOz,
+      sourceUpdatedAt: quote.sourceUpdatedAt
+    })
+    return null
+  }
+
   await prisma.tick.create({
     data: {
       ts: BigInt(quote.ts),

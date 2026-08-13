@@ -61,6 +61,8 @@
 ```text
 Tick + DailyQuality（可信原料）
   → 决策/成交/进化日志（本机）
-  → 人改规则
-  → 需要时再加「按日特征摘要」落库
+  → AI 主导：目标吃波段最大化收益
+  → 数据够才改规则并写进化日志
 ```
+
+游戏北星（桌面）：`london-gold/docs/game-north-star.md`
