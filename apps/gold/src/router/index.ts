@@ -3,8 +3,18 @@ import Router from 'koa-router'
 import { apiPrefix } from '../config'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import prisma from '../models'
+import {
+  listDailyQuality,
+  runYesterdayDailyQuality,
+  upsertDailyQuality
+} from '../services/dailyQuality'
 import { syncDailyHistory } from '../services/dailySync'
 import { getPollerStatus } from '../services/poller'
+import {
+  buildSwingFeatures,
+  clampMinAmpCnyG,
+  clampSwingHours
+} from '../services/swingFeatures'
 import response from '../utils/response'
 
 const router = new Router({ prefix: apiPrefix })
@@ -45,6 +55,15 @@ function toDailyDto(row: {
     close: row.close,
     source: row.source
   }
+}
+
+function queryNumber(
+  raw: string | string[] | undefined,
+  fallback: number
+): number {
+  if (raw == null || raw === '') return fallback
+  const n = Number(Array.isArray(raw) ? raw[0] : raw)
+  return Number.isFinite(n) ? n : fallback
 }
 
 router.get('/health', async (ctx) => {
@@ -151,6 +170,88 @@ router.post('/daily/sync', async (ctx) => {
   try {
     const result = await syncDailyHistory()
     response.success(ctx, result, result.message)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, msg)
+  }
+})
+
+/**
+ * 只读波段特征：Tick → H1 → 正向低→高腿（与桌面端同算法）
+ * query: hours (6–168, default 48), minAmpCnyG (≥10, default 10), includeBars (0|1)
+ */
+router.get('/features/swing', async (ctx) => {
+  try {
+    const hours = clampSwingHours(queryNumber(ctx.query.hours, 48))
+    const minAmpCnyG = clampMinAmpCnyG(queryNumber(ctx.query.minAmpCnyG, 10))
+    const includeRaw = ctx.query.includeBars
+    const includeBars =
+      includeRaw === '1' ||
+      includeRaw === 'true' ||
+      (Array.isArray(includeRaw) &&
+        (includeRaw[0] === '1' || includeRaw[0] === 'true'))
+
+    const data = await buildSwingFeatures({
+      hours,
+      minAmpCnyG,
+      includeBars
+    })
+    response.success(ctx, data)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, msg)
+  }
+})
+
+/**
+ * 日终原料质量快照（已落库）
+ * query: date=YYYY-MM-DD | from=&to=&limit=
+ */
+router.get('/features/quality', async (ctx) => {
+  try {
+    const dateRaw = ctx.query.date
+    const date =
+      dateRaw != null
+        ? String(Array.isArray(dateRaw) ? dateRaw[0] : dateRaw)
+        : ''
+    const fromRaw = ctx.query.from
+    const toRaw = ctx.query.to
+    const from =
+      fromRaw != null
+        ? String(Array.isArray(fromRaw) ? fromRaw[0] : fromRaw)
+        : ''
+    const to =
+      toRaw != null ? String(Array.isArray(toRaw) ? toRaw[0] : toRaw) : ''
+    const limit = queryNumber(ctx.query.limit, 30)
+
+    const list = await listDailyQuality({
+      date: date || undefined,
+      from: from || undefined,
+      to: to || undefined,
+      limit
+    })
+    response.success(ctx, { list, count: list.length })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, msg)
+  }
+})
+
+/**
+ * 手动重算某日质量（默认昨日）
+ * body/query: date=YYYY-MM-DD
+ */
+router.post('/features/quality/run', async (ctx) => {
+  try {
+    const body = (ctx.request.body || {}) as { date?: string }
+    const q = ctx.query.date
+    const raw =
+      body.date || (q != null ? String(Array.isArray(q) ? q[0] : q) : '') || ''
+    const row =
+      raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)
+        ? await upsertDailyQuality(raw)
+        : await runYesterdayDailyQuality()
+    response.success(ctx, row, `已写入日终质量 ${row.date}`)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     response.error(ctx, HTTP_STATUS.INTERNAL_SERVER_ERROR, msg)

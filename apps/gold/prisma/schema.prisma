@@ -36,3 +36,26 @@ model DailyBar {
 
   @@index([ts])
 }
+
+/// 日终原料质量快照（每天一行；服务持续分析/迭代的体检）
+model DailyQuality {
+  /// 本地日历日 YYYY-MM-DD
+  date              String   @id @db.VarChar(10)
+  tickCount         Int
+  /// 按全日 / POLL_INTERVAL 估算的期望条数
+  expectedTicks     Int
+  coveragePct       Float
+  gapCount          Int
+  maxGapMs          Int
+  firstTickAt       BigInt?
+  lastTickAt        BigInt?
+  dailyBarSource    String?  @db.VarChar(64)
+  dailyBarFrozen    Boolean  @default(false)
+  /// tick 日线收盘 − currency-api 单点（有则填）
+  currencyCloseDiff Float?
+  currencyCloseUsd  Float?
+  tickCloseUsd      Float?
+  note              String?  @db.VarChar(255)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

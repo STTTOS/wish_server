@@ -7,6 +7,7 @@ import {
   freezeYesterdayDailyBar,
   syncDailyHistory
 } from './services/dailySync'
+import { runYesterdayDailyQuality } from './services/dailyQuality'
 import { startPricePoller } from './services/poller'
 
 async function bootstrap() {
@@ -28,13 +29,26 @@ async function bootstrap() {
     .then((r) => logger.info('daily sync', r.message))
     .catch((err) => logger.error('daily sync failed', err))
 
-  // 每天 00:01 冻结昨日 tick 日线（防 currency-api / 迟到写覆盖）
+  // 启动补写昨日质量（若尚无）
+  void runYesterdayDailyQuality().catch((err) =>
+    logger.warn('daily quality bootstrap failed', err)
+  )
+
+  // 每天 00:01 冻结昨日 tick 日线 + 写日终质量快照
   cron.schedule('1 0 * * *', () => {
-    void freezeYesterdayDailyBar()
-      .then((froze) => {
+    void (async () => {
+      try {
+        const froze = await freezeYesterdayDailyBar()
         if (froze) logger.info('daily freeze cron', 'yesterday → tick:final')
-      })
-      .catch((err) => logger.error('daily freeze cron failed', err))
+      } catch (err) {
+        logger.error('daily freeze cron failed', err)
+      }
+      try {
+        await runYesterdayDailyQuality()
+      } catch (err) {
+        logger.error('daily quality cron failed', err)
+      }
+    })()
   })
 
   // 每天 06:30 / 18:30（服务器本地时区）增量补日线

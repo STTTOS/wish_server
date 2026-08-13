@@ -13,6 +13,7 @@
 - **有 tick 覆盖的日子**：以 `tick:*` 滚出来的 OHLC 为准（比 currency-api 单点近似准）。
 - **跨日 / 00:01 / sync 前**：若昨日是 `tick:*`，标成 `tick:final` 冻结，之后不再改 OHLC。
 - **currency-api upsert**：不覆盖任何 `tick:` / `tick:final`，也不用它写「今天」。仅补没有 tick 的历史缺口。
+- **日终质量**：冻结后写入 `DailyQuality`（覆盖率/断档/冻结态/与 currency 偏差），不存波段特征全量。
 
 ## 本地
 
@@ -43,6 +44,34 @@ pnpm run dev
 | GET  | `/api/ticks?since=&until=&limit=` | 区间补洞（`since` 为开区间 ms）；默认 limit 5000，最大 20000 |
 | GET  | `/api/daily?from=&to=`            | 日线 OHLC（`YYYY-MM-DD`）                                    |
 | POST | `/api/daily/sync`                 | 手动日线 bootstrap / 增量                                    |
+| GET  | `/api/features/swing`             | 只读波段特征（Tick→H1→ 正向腿；按需计算，不落库）            |
+| GET  | `/api/features/quality`           | 日终原料质量快照列表（已落库）                               |
+| POST | `/api/features/quality/run`       | 手动重算某日质量（默认昨日）                                 |
+
+### 波段特征 `GET /api/features/swing`
+
+只读结构证据，**不**产生买卖信号、不自动改策略。算法与桌面端 `swingRanges` 对齐。**结果不落库**（原料是 Tick）。
+
+| Query         | 默认 | 说明                        |
+| ------------- | ---- | --------------------------- |
+| `hours`       | 48   | 回看小时，钳制 6–168        |
+| `minAmpCnyG`  | 10   | 最小振幅（元/克），下限 10  |
+| `includeBars` | 0    | `1`/`true` 时附带 H1 `bars` |
+
+`data`：`hours, minAmpCnyG, fx, asOfTs, tickCount, barCount, legs, maxAmpCnyG, bars`。
+
+### 日终质量 `DailyQuality`（持久化）
+
+每天一行：tick 覆盖率、断档次数/最大空洞、日线是否 `tick:final`、与 currency-api 收盘偏差。  
+触发：`00:01`（冻结昨日后）+ 启动补写昨日；可 `POST /api/features/quality/run`。
+
+| Query / 字段                 | 说明                                        |
+| ---------------------------- | ------------------------------------------- |
+| `date` / `from`+`to`+`limit` | 查单日或区间                                |
+| `coveragePct`                | `tickCount / (86400s/POLL_INTERVAL)`        |
+| `gapCount` / `maxGapMs`      | 相邻 tick ≥45s 计断档                       |
+| `dailyBarFrozen`             | `source === tick:final`                     |
+| `currencyCloseDiff`          | tick/日线收盘 − currency-api 单点（有则填） |
 
 ### Tick 字段（与 london-gold `PriceQuote` 对齐）
 
@@ -62,6 +91,7 @@ pnpm run dev
 1. 运行中：轮询 `GET /api/spot`（或短间隔 `since=lastTs`）。
 2. 打开 / 回前台：`GET /api/ticks?since=<本地最后 ts>` 补洞写入本地 `prices.jsonl`。
 3. 日线：`GET /api/daily` 替换本地 currency-api bootstrap（可保留种子作离线兜底）。
+4. 波段 Tab：`GET /api/features/swing` 作结构证据；失败回退本地 `prices.jsonl`。
 
 ## Nginx / 部署
 
@@ -74,3 +104,7 @@ pnpm run dev
 ## 环境变量
 
 见 `.local.env` 模板：`POLL_INTERVAL_MS`、`DAILY_LOOKBACK_DAYS`（默认 730）。Tick 长期保留、不做自动清理。
+
+## 后续未做项
+
+见同目录 [TODO.md](./TODO.md)（完整结构特征暂缓、质量 UI 等）。
