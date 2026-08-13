@@ -8,6 +8,12 @@
 - 服务端 bootstrap 一次、定时增量，多端共用；当日 K 线用 tick 滚动更新 high/low/close。
 - **有必要**；tick 不能替代两年日线。
 
+## 日线权威与冻结
+
+- **有 tick 覆盖的日子**：以 `tick:*` 滚出来的 OHLC 为准（比 currency-api 单点近似准）。
+- **跨日 / 00:01 / sync 前**：若昨日是 `tick:*`，标成 `tick:final` 冻结，之后不再改 OHLC。
+- **currency-api upsert**：不覆盖任何 `tick:` / `tick:final`，也不用它写「今天」。仅补没有 tick 的历史缺口。
+
 ## 本地
 
 ```bash
