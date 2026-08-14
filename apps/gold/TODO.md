@@ -1,9 +1,9 @@
 # Gold 服务后续 TODO（未做项）
 
 > 防止遗忘。原则：**先确认 Tick 原料可信，再沉淀分析结果。**  
-> 已做：Tick 采集、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality` 日终质量快照。
+> 已做：Tick 采集（墙上时钟）、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality`、`PollLog` 采价失败/skip。
 
-最后更新：2026-08-13
+最后更新：2026-08-14
 
 ---
 
@@ -41,9 +41,10 @@
 **可选增强（仍属质量，非结构特征）**
 
 - [x] 桌面端展示日终质量（london-gold「服务日志」Tab）
+- [x] 采价失败 / skip 落库 `PollLog` + `GET /api/poll-logs`（短窗合并，约留 7 天）
 - [ ] 连续多日覆盖率告警（通知或日志）
 - [ ] 周汇总：平均覆盖、断档趋势
-- [ ] 桌面「更多日志」：结构摘要 / poll 错误 / collect-log
+- [ ] 桌面「更多日志」：结构摘要 / poll 错误（可接 `/api/poll-logs`）/ collect-log
 
 ---
 

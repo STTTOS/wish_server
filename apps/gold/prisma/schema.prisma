@@ -42,7 +42,7 @@ model DailyQuality {
   /// 本地日历日 YYYY-MM-DD
   date              String   @id @db.VarChar(10)
   tickCount         Int
-  /// 按全日 / POLL_INTERVAL 估算的期望条数
+  /// 按全日 / POLL_INTERVAL 估算的期望条数（墙上时钟调度下与「每 interval 发起一轮」对齐）
   expectedTicks     Int
   coveragePct       Float
   gapCount          Int
@@ -58,4 +58,22 @@ model DailyQuality {
   note              String?  @db.VarChar(255)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+/// 采价失败 / skip 轻量日志（成功不写；短窗合并 count；约保留 7 天）
+model PollLog {
+  id        BigInt   @id @default(autoincrement())
+  /// 首次出现 epoch ms
+  ts        BigInt
+  /// 最近一次 epoch ms
+  lastTs    BigInt
+  /// error | skip
+  kind      String   @db.VarChar(16)
+  message   String   @db.VarChar(512)
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastTs])
+  @@index([kind, lastTs])
 }

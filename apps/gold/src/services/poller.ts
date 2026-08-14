@@ -3,6 +3,7 @@ import { logger } from '../logger'
 import prisma from '../models'
 import { rollTodayFromSpot } from './dailySync'
 import { fetchQuote, fetchUsdCny } from './fetchQuote'
+import { recordPollEvent } from './pollLog'
 
 let timer: NodeJS.Timeout | null = null
 let inFlight = false
@@ -10,14 +11,17 @@ let cachedFx: number | null = null
 let lastQuoteAt = 0
 let lastError: string | null = null
 let startedAt = 0
+/** 下一轮预计发起时刻（墙上） */
+let nextDueAt = 0
 
 export function getPollerStatus() {
   return {
-    running: timer != null,
+    running: startedAt > 0,
     intervalMs: pollIntervalMs,
     lastQuoteAt: lastQuoteAt || null,
     lastError,
     startedAt: startedAt || null,
+    nextDueAt: nextDueAt || null,
     cachedFx
   }
 }
@@ -41,6 +45,9 @@ async function persistQuote() {
       usdOz: quote.usdOz,
       sourceUpdatedAt: quote.sourceUpdatedAt
     })
+    await recordPollEvent('skip', lastError).catch((e) =>
+      logger.warn('record poll event failed', e)
+    )
     return null
   }
 
@@ -75,32 +82,43 @@ async function tickOnce() {
     const msg = err instanceof Error ? err.message : String(err)
     lastError = msg
     logger.error('poll failed', msg)
+    await recordPollEvent('error', msg).catch((e) =>
+      logger.warn('record poll event failed', e)
+    )
   } finally {
     inFlight = false
   }
 }
 
-function scheduleNext() {
+function arm(delayMs: number) {
   if (timer) clearTimeout(timer)
+  nextDueAt = Date.now() + delayMs
   timer = setTimeout(() => {
-    void (async () => {
-      await tickOnce()
-      scheduleNext()
-    })()
-  }, pollIntervalMs)
+    void runRound()
+  }, delayMs)
+}
+
+/** 墙上时钟：本轮耗时从 interval 里扣，使发起间隔 ≈ interval（请求慢于 interval 则立刻下一轮） */
+async function runRound() {
+  if (!startedAt) return
+  const t0 = Date.now()
+  await tickOnce()
+  if (!startedAt) return
+  const elapsed = Date.now() - t0
+  const delay = Math.max(0, pollIntervalMs - elapsed)
+  arm(delay)
 }
 
 export function startPricePoller() {
-  if (timer) return
+  if (startedAt) return
   startedAt = Date.now()
-  logger.info(`price poller start interval=${pollIntervalMs}ms`)
-  void (async () => {
-    await tickOnce()
-    scheduleNext()
-  })()
+  logger.info(`price poller start interval=${pollIntervalMs}ms (wall-clock)`)
+  void runRound()
 }
 
 export function stopPricePoller() {
   if (timer) clearTimeout(timer)
   timer = null
+  startedAt = 0
+  nextDueAt = 0
 }

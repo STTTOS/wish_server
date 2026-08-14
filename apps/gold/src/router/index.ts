@@ -10,6 +10,7 @@ import {
 } from '../services/dailyQuality'
 import { syncDailyHistory } from '../services/dailySync'
 import { getPollerStatus } from '../services/poller'
+import { listPollLogs, type PollLogKind } from '../services/pollLog'
 import {
   buildSwingFeatures,
   clampMinAmpCnyG,
@@ -76,6 +77,25 @@ router.get('/health', async (ctx) => {
     tickLagMs: latest ? Date.now() - Number(latest.ts) : null,
     dailyCount
   })
+})
+
+/**
+ * 采价失败 / skip 日志（轻量；成功不写）
+ * query: limit=50, kind=error|skip
+ */
+router.get('/poll-logs', async (ctx) => {
+  const limit = queryNumber(ctx.query.limit, 50)
+  const kindRaw = ctx.query.kind
+  const kindStr =
+    kindRaw != null
+      ? String(Array.isArray(kindRaw) ? kindRaw[0] : kindRaw)
+      : ''
+  const kind =
+    kindStr === 'error' || kindStr === 'skip'
+      ? (kindStr as PollLogKind)
+      : undefined
+  const list = await listPollLogs({ limit, kind })
+  response.success(ctx, { list, count: list.length })
 })
 
 /** 最新一条现货 */

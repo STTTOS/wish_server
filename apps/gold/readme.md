@@ -1,6 +1,6 @@
 # Gold server（伦敦金行情）
 
-常驻采集：约 **5s** 拉 XAU 现货落 MySQL；并维护近两年日线。域名：`gold.wishufree.com` → 本机 `7504`。
+常驻采集：约 **5s** 墙上时钟发起一轮（本轮耗时从间隔里扣，不再「结束后再等 5s」）拉 XAU 现货落 MySQL；并维护近两年日线。域名：`gold.wishufree.com` → 本机 `7504`。
 
 ## 为何也要日线
 
@@ -40,6 +40,7 @@ pnpm run dev
 | 方法 | 路径                              | 说明                                                         |
 | ---- | --------------------------------- | ------------------------------------------------------------ |
 | GET  | `/api/health`                     | 探活 + 采价状态 + 最新 tick 延迟                             |
+| GET  | `/api/poll-logs?limit=&kind=`     | 采价失败 / skip 轻量日志（成功不写；短窗合并）               |
 | GET  | `/api/spot`                       | 最新一条 tick                                                |
 | GET  | `/api/ticks?since=&until=&limit=` | 区间补洞（`since` 为开区间 ms）；默认 limit 5000，最大 20000 |
 | GET  | `/api/daily?from=&to=`            | 日线 OHLC（`YYYY-MM-DD`）                                    |
