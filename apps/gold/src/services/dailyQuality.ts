@@ -1,6 +1,6 @@
 /**
  * 日终原料质量：覆盖率 / 断档 / tick:final / 与 currency-api 单点偏差。
- * 每天一行落库，供持续分析与迭代信任度体检。
+ * 每天一行落库；「今天」按已过时长算期望，刷新可现算。
  */
 import { pollIntervalMs } from '../config'
 import { logger } from '../logger'
@@ -25,6 +25,8 @@ export type DailyQualityRow = {
   currencyCloseUsd: number | null;
   tickCloseUsd: number | null;
   note: string | null;
+  /** 当日未结束：覆盖率按已过时长 / 间隔估算 */
+  partialDay?: boolean;
 };
 
 function dateKeyToLocalDayRange(dateKey: string): {
@@ -61,22 +63,25 @@ async function fetchCurrencyCloseUsd(date: string): Promise<number | null> {
   return null
 }
 
-function toDto(row: {
-  date: string;
-  tickCount: number;
-  expectedTicks: number;
-  coveragePct: number;
-  gapCount: number;
-  maxGapMs: number;
-  firstTickAt: bigint | null;
-  lastTickAt: bigint | null;
-  dailyBarSource: string | null;
-  dailyBarFrozen: boolean;
-  currencyCloseDiff: number | null;
-  currencyCloseUsd: number | null;
-  tickCloseUsd: number | null;
-  note: string | null;
-}): DailyQualityRow {
+function toDto(
+  row: {
+    date: string;
+    tickCount: number;
+    expectedTicks: number;
+    coveragePct: number;
+    gapCount: number;
+    maxGapMs: number;
+    firstTickAt: bigint | null;
+    lastTickAt: bigint | null;
+    dailyBarSource: string | null;
+    dailyBarFrozen: boolean;
+    currencyCloseDiff: number | null;
+    currencyCloseUsd: number | null;
+    tickCloseUsd: number | null;
+    note: string | null;
+  },
+  partialDay = false
+): DailyQualityRow {
   return {
     date: row.date,
     tickCount: row.tickCount,
@@ -91,19 +96,27 @@ function toDto(row: {
     currencyCloseDiff: row.currencyCloseDiff,
     currencyCloseUsd: row.currencyCloseUsd,
     tickCloseUsd: row.tickCloseUsd,
-    note: row.note
+    note: row.note,
+    partialDay
   }
 }
 
 /**
  * 计算并 upsert 某日质量快照。
+ * 若 dateKey 为今天：期望条数 = 已过时长 / 间隔（进行中覆盖率）。
  */
 export async function upsertDailyQuality(
   dateKey: string
 ): Promise<DailyQualityRow> {
+  const today = localDateKey()
+  const partialDay = dateKey === today
   const { start, endExclusive } = dateKeyToLocalDayRange(dateKey)
   const interval = Math.max(1000, pollIntervalMs)
-  const expectedTicks = Math.floor(DAY_MS / interval)
+  const now = Date.now()
+  const elapsedMs = partialDay
+    ? Math.max(0, Math.min(now, endExclusive) - start)
+    : DAY_MS
+  const expectedTicks = Math.max(1, Math.floor(elapsedMs / interval))
 
   const ticks = await prisma.tick.findMany({
     where: {
@@ -154,6 +167,7 @@ export async function upsertDailyQuality(
   }
 
   const notes: string[] = []
+  if (partialDay) notes.push('进行中')
   if (tickCount === 0) notes.push('无 tick')
   else if (coveragePct < 50) notes.push('覆盖偏低')
   if (gapCount > 0) notes.push(`断档${gapCount}次`)
@@ -197,7 +211,7 @@ export async function upsertDailyQuality(
     }
   })
 
-  return toDto(row)
+  return toDto(row, partialDay)
 }
 
 /** 冻结后写昨日质量；启动时可补最近几天缺口 */
@@ -216,12 +230,28 @@ export async function listDailyQuality(opts?: {
   from?: string;
   to?: string;
   limit?: number;
+  /** 默认 true：列表时现算并 upsert 今天，便于刷新看进行中覆盖率 */
+  includeToday?: boolean;
 }): Promise<DailyQualityRow[]> {
+  const today = localDateKey()
+  const includeToday = opts?.includeToday !== false
+
   if (opts?.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date)) {
+    if (opts.date === today && includeToday) {
+      return [await upsertDailyQuality(today)]
+    }
     const one = await prisma.dailyQuality.findUnique({
       where: { date: opts.date }
     })
-    return one ? [toDto(one)] : []
+    return one ? [toDto(one, opts.date === today)] : []
+  }
+
+  if (includeToday) {
+    try {
+      await upsertDailyQuality(today)
+    } catch (err) {
+      logger.warn('daily quality today refresh failed', err)
+    }
   }
 
   const where: { date?: { gte?: string; lte?: string } } = {}
@@ -240,5 +270,5 @@ export async function listDailyQuality(opts?: {
     orderBy: { date: 'desc' },
     take
   })
-  return rows.map(toDto)
+  return rows.map((r) => toDto(r, r.date === today))
 }

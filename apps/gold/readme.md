@@ -65,15 +65,17 @@ pnpm run dev
 ### 日终质量 `DailyQuality`（持久化）
 
 每天一行：tick 覆盖率、断档次数/最大空洞、日线是否 `tick:final`、与 currency-api 收盘偏差。  
-触发：`00:01`（冻结昨日后）+ 启动补写昨日；可 `POST /api/features/quality/run`。
+触发：`00:01`（冻结昨日后）+ 启动补写昨日；列表默认**现算今天**（`includeToday=1`，按已过时长估期望）；可 `POST /api/features/quality/run`。
 
-| Query / 字段                 | 说明                                        |
-| ---------------------------- | ------------------------------------------- |
-| `date` / `from`+`to`+`limit` | 查单日或区间                                |
-| `coveragePct`                | `tickCount / (86400s/POLL_INTERVAL)`        |
-| `gapCount` / `maxGapMs`      | 相邻 tick ≥45s 计断档                       |
-| `dailyBarFrozen`             | `source === tick:final`                     |
-| `currencyCloseDiff`          | tick/日线收盘 − currency-api 单点（有则填） |
+| Query / 字段                 | 说明                                              |
+| ---------------------------- | ------------------------------------------------- |
+| `date` / `from`+`to`+`limit` | 查单日或区间                                      |
+| `includeToday`               | 默认开；`0` 关闭今日现算                          |
+| `coveragePct`                | 历史日：`tickCount/(86400s/间隔)`；今日：已过时长 |
+| `partialDay`                 | 响应字段：是否为进行中的今天                      |
+| `gapCount` / `maxGapMs`      | 相邻 tick ≥45s 计断档                             |
+| `dailyBarFrozen`             | `source === tick:final`                           |
+| `currencyCloseDiff`          | tick/日线收盘 − currency-api 单点（有则填）       |
 
 ### Tick 字段（与 london-gold `PriceQuote` 对齐）
 

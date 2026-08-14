@@ -224,8 +224,8 @@ router.get('/features/swing', async (ctx) => {
 })
 
 /**
- * 日终原料质量快照（已落库）
- * query: date=YYYY-MM-DD | from=&to=&limit=
+ * 日终 / 当日原料质量快照
+ * query: date=YYYY-MM-DD | from=&to=&limit=&includeToday=0|1（默认 1，列表时现算今天）
  */
 router.get('/features/quality', async (ctx) => {
   try {
@@ -243,12 +243,21 @@ router.get('/features/quality', async (ctx) => {
     const to =
       toRaw != null ? String(Array.isArray(toRaw) ? toRaw[0] : toRaw) : ''
     const limit = queryNumber(ctx.query.limit, 30)
+    const includeRaw = ctx.query.includeToday
+    const includeToday =
+      includeRaw !== '0' &&
+      includeRaw !== 'false' &&
+      !(
+        Array.isArray(includeRaw) &&
+        (includeRaw[0] === '0' || includeRaw[0] === 'false')
+      )
 
     const list = await listDailyQuality({
       date: date || undefined,
       from: from || undefined,
       to: to || undefined,
-      limit
+      limit,
+      includeToday
     })
     response.success(ctx, { list, count: list.length })
   } catch (err) {
