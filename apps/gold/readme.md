@@ -24,7 +24,8 @@ CREATE DATABASE gold;
 cd apps/gold
 pnpm run copy-env
 # 编辑 .env：DATABASE_URL、可选 GOLD_API_TOKEN、SERVER_PORT=7504
-pnpm run db:sync   # migrate + generate
+pnpm run db:sync   # migrate deploy + generate（生产/服务器）
+# 本地要新建迁移时用：pnpm run db:migrate--dev
 pnpm run dev
 ```
 

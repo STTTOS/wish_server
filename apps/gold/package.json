@@ -11,10 +11,10 @@
     "lint": "eslint --cache --ext .ts ./src",
     "lint:fix": "eslint --fix --cache --ext .ts ./src",
     "db:gui": "npx prisma studio",
-    "db:migrate--dev": "npx prisma migrate dev --name init",
+    "db:migrate--dev": "npx prisma migrate dev",
     "db:migrate--prod": "npx prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:generate": "npx prisma generate",
-    "db:sync": "npm run db:migrate--dev && npm run db:generate",
+    "db:sync": "npm run db:migrate--prod && npm run db:generate",
     "copy-env": "cp ./.local.env .env",
     "setup": "pnpm run copy-env && pnpm run db:sync"
   },
