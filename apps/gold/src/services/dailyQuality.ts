@@ -6,6 +6,7 @@ import { pollIntervalMs } from '../config'
 import { logger } from '../logger'
 import prisma from '../models'
 import { TICK_FINAL_SOURCE, localDateKey, shiftDateKey } from './dailySync'
+import { isGoldMarketOpen, openMsInRange } from './marketHours'
 
 const GAP_MS = 45_000
 const DAY_MS = 86_400_000
@@ -103,7 +104,9 @@ function toDto(
 
 /**
  * 计算并 upsert 某日质量快照。
- * 若 dateKey 为今天：期望条数 = 已过时长 / 间隔（进行中覆盖率）。
+ * 期望条数只计开市毫秒 / 间隔；周末休市不计入分母。
+ * 今天：只计到 now 的开市时长（进行中覆盖率）。
+ * 北京日历：周六约 0–6 点、周一约 6 点后、周日全休。
  */
 export async function upsertDailyQuality(
   dateKey: string
@@ -113,34 +116,45 @@ export async function upsertDailyQuality(
   const { start, endExclusive } = dateKeyToLocalDayRange(dateKey)
   const interval = Math.max(1000, pollIntervalMs)
   const now = Date.now()
-  const elapsedMs = partialDay
-    ? Math.max(0, Math.min(now, endExclusive) - start)
-    : DAY_MS
-  const expectedTicks = Math.max(1, Math.floor(elapsedMs / interval))
+  const rangeEnd = partialDay
+    ? Math.max(start, Math.min(now, endExclusive))
+    : endExclusive
+  const openMs = openMsInRange(start, rangeEnd)
+  const marketClosedDay = openMs <= 0
+  const expectedTicks = marketClosedDay
+    ? 0
+    : Math.max(1, Math.floor(openMs / interval))
 
-  const ticks = await prisma.tick.findMany({
+  const ticksRaw = await prisma.tick.findMany({
     where: {
       ts: { gte: BigInt(start), lt: BigInt(endExclusive) }
     },
     orderBy: { ts: 'asc' },
     select: { ts: true, usdOz: true }
   })
+  // 覆盖率只认开市时段内的点（历史周末脏点不计入）
+  const ticks = ticksRaw.filter((t) => isGoldMarketOpen(Number(t.ts)))
 
   let gapCount = 0
   let maxGapMs = 0
   for (let i = 1; i < ticks.length; i++) {
-    const gap = Number(ticks[i]!.ts) - Number(ticks[i - 1]!.ts)
-    if (gap >= GAP_MS) {
+    const prev = Number(ticks[i - 1]!.ts)
+    const cur = Number(ticks[i]!.ts)
+    // 只计两点之间的开市时长；跨周末休市不记断档
+    const openGap = openMsInRange(prev, cur)
+    if (openGap >= GAP_MS) {
       gapCount += 1
-      if (gap > maxGapMs) maxGapMs = gap
+      if (openGap > maxGapMs) maxGapMs = openGap
     }
   }
 
   const tickCount = ticks.length
-  const coveragePct = Math.min(
-    100,
-    expectedTicks > 0 ? (tickCount / expectedTicks) * 100 : 0
-  )
+  let coveragePct: number
+  if (marketClosedDay) {
+    coveragePct = tickCount === 0 ? 100 : 0
+  } else {
+    coveragePct = Math.min(100, (tickCount / expectedTicks) * 100)
+  }
   const firstTickAt = ticks[0] ? Number(ticks[0].ts) : null
   const lastTickAt = ticks.length ? Number(ticks[ticks.length - 1]!.ts) : null
   const tickCloseUsd = ticks.length ? ticks[ticks.length - 1]!.usdOz : null
@@ -167,9 +181,11 @@ export async function upsertDailyQuality(
   }
 
   const notes: string[] = []
-  if (partialDay) notes.push('进行中')
-  if (tickCount === 0) notes.push('无 tick')
-  else if (coveragePct < 50) notes.push('覆盖偏低')
+  if (marketClosedDay) notes.push('休市')
+  else if (openMs < DAY_MS - 60_000) notes.push('半日开市')
+  if (partialDay && !marketClosedDay) notes.push('进行中')
+  if (tickCount === 0 && !marketClosedDay) notes.push('无 tick')
+  else if (!marketClosedDay && coveragePct < 50) notes.push('覆盖偏低')
   if (gapCount > 0) notes.push(`断档${gapCount}次`)
   if (dailyBarFrozen) notes.push('已冻结')
   else if (dailyBarSource?.startsWith('tick:')) notes.push('tick日线未冻结')

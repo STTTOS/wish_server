@@ -1,9 +1,9 @@
 # Gold 服务后续 TODO（未做项）
 
 > 防止遗忘。原则：**先确认 Tick 原料可信，再沉淀分析结果。**  
-> 已做：Tick 采集（墙上时钟）、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality`、`PollLog` 采价失败/skip。
+> 已做：Tick 采集（墙上时钟）、周末休市停采（UTC 五 22:00→ 日 22:00）、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality`（开市时长期望）、`PollLog` 采价失败/skip。
 
-最后更新：2026-08-14
+最后更新：2026-08-15
 
 ---
 
@@ -35,6 +35,7 @@
 
 - [x] 表 `DailyQuality`（每天一行）
 - [x] 覆盖率 / 断档 / `tick:final` / currency-api 收盘偏差
+- [x] 期望条数按开市毫秒计（北京周六半日 / 周日休市 / 周一晚开）
 - [x] `00:01` 冻结后写入 + 启动补写昨日
 - [x] `GET /api/features/quality` · `POST /api/features/quality/run`
 

@@ -3,6 +3,7 @@ import { logger } from '../logger'
 import prisma from '../models'
 import { rollTodayFromSpot } from './dailySync'
 import { fetchQuote, fetchUsdCny } from './fetchQuote'
+import { isGoldMarketOpen, nextMarketOpenAt } from './marketHours'
 import { recordPollEvent } from './pollLog'
 
 let timer: NodeJS.Timeout | null = null
@@ -15,6 +16,8 @@ let startedAt = 0
 let nextDueAt = 0
 
 export function getPollerStatus() {
+  const now = Date.now()
+  const marketOpen = isGoldMarketOpen(now)
   return {
     running: startedAt > 0,
     intervalMs: pollIntervalMs,
@@ -22,7 +25,9 @@ export function getPollerStatus() {
     lastError,
     startedAt: startedAt || null,
     nextDueAt: nextDueAt || null,
-    cachedFx
+    cachedFx,
+    marketOpen,
+    nextMarketOpenAt: marketOpen ? null : nextMarketOpenAt(now)
   }
 }
 
@@ -98,12 +103,33 @@ function arm(delayMs: number) {
   }, delayMs)
 }
 
+/** 休市：不请求上游，睡到下次开市（最多一次睡到点） */
+async function skipWhileClosed(): Promise<boolean> {
+  const now = Date.now()
+  if (isGoldMarketOpen(now)) return false
+  const openAt = nextMarketOpenAt(now)
+  const waitMs = Math.max(pollIntervalMs, openAt - now)
+  lastError = 'skip: market closed (Fri 22:00 UTC → Sun 22:00 UTC)'
+  logger.info(lastError, { nextOpenAt: openAt, waitMs })
+  await recordPollEvent('skip', lastError).catch((e) =>
+    logger.warn('record poll event failed', e)
+  )
+  arm(waitMs)
+  return true
+}
+
 /** 墙上时钟：本轮耗时从 interval 里扣，使发起间隔 ≈ interval（请求慢于 interval 则立刻下一轮） */
 async function runRound() {
   if (!startedAt) return
+  if (await skipWhileClosed()) return
   const t0 = Date.now()
   await tickOnce()
   if (!startedAt) return
+  // 本轮结束后若已进入休市，下一轮交给 skipWhileClosed 对齐开盘
+  if (!isGoldMarketOpen(Date.now())) {
+    await skipWhileClosed()
+    return
+  }
   const elapsed = Date.now() - t0
   const delay = Math.max(0, pollIntervalMs - elapsed)
   arm(delay)
