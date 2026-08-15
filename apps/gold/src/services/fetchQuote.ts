@@ -24,6 +24,7 @@ async function fetchJson(
   return res.json()
 }
 
+/** 汇率仍用 currency-api（与 XAU 日级近似价无关） */
 export async function fetchUsdCny(): Promise<number | null> {
   try {
     const data = (await fetchJson(
@@ -35,11 +36,15 @@ export async function fetchUsdCny(): Promise<number | null> {
   }
 }
 
-async function fetchGoldPrimary(): Promise<{
+/**
+ * 现货只认 gold-api。
+ * 不再用 currency-api XAU 兜底：那是日级近似，poller 也不会落 Tick，
+ * 失败时反而多耗一次超时、把断采记成 skip。
+ */
+async function fetchGoldSpot(): Promise<{
   usd: number;
   source: string;
   sourceUpdatedAt?: string;
-  cnyPerOz?: number;
 }> {
   const data = (await fetchJson('https://api.gold-api.com/price/XAU')) as {
     price?: number;
@@ -54,45 +59,12 @@ async function fetchGoldPrimary(): Promise<{
   }
 }
 
-async function fetchGoldFallback(): Promise<{
-  usd: number;
-  source: string;
-  sourceUpdatedAt?: string;
-  cnyPerOz?: number;
-}> {
-  const data = (await fetchJson(
-    'https://latest.currency-api.pages.dev/v1/currencies/xau.json'
-  )) as { date?: string; xau?: { usd?: number; cny?: number } }
-  const usd = Number(data?.xau?.usd)
-  if (!usd) throw new Error('备用源无 XAU/USD')
-  const cnyPerOz = data.xau?.cny != null ? Number(data.xau.cny) : undefined
-  return {
-    usd,
-    source: 'currency-api',
-    sourceUpdatedAt: data.date,
-    cnyPerOz
-  }
-}
-
-async function fetchGold() {
-  try {
-    return await fetchGoldPrimary()
-  } catch {
-    return await fetchGoldFallback()
-  }
-}
-
 export async function fetchQuote(cachedFx?: number | null): Promise<GoldQuote> {
-  let fx = cachedFx ?? (await fetchUsdCny())
-  const gold = await fetchGold()
-  if ((fx == null || fx <= 0) && gold.cnyPerOz != null && gold.usd > 0) {
-    fx = gold.cnyPerOz / gold.usd
-  }
+  const fx = cachedFx ?? (await fetchUsdCny())
+  const gold = await fetchGoldSpot()
   let cnyG: number | null = null
   if (fx != null && fx > 0) {
     cnyG = (gold.usd * fx) / OZ_TO_G
-  } else if (gold.cnyPerOz != null) {
-    cnyG = gold.cnyPerOz / OZ_TO_G
   }
   return {
     ts: Date.now(),

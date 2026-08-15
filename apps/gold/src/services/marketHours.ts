@@ -52,3 +52,13 @@ export function nextMarketOpenAt(ts: number = Date.now()): number {
   }
   return ts + step
 }
+
+/** API 用：休市标记 + 下次开市 */
+export function marketSessionDto(now: number = Date.now()) {
+  const marketOpen = isGoldMarketOpen(now)
+  return {
+    marketOpen,
+    marketClosed: !marketOpen,
+    nextMarketOpenAt: marketOpen ? null : nextMarketOpenAt(now)
+  }
+}

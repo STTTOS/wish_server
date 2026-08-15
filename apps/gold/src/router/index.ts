@@ -11,6 +11,7 @@ import {
 import { syncDailyHistory } from '../services/dailySync'
 import { getPollerStatus } from '../services/poller'
 import { listPollLogs, type PollLogKind } from '../services/pollLog'
+import { marketSessionDto } from '../services/marketHours'
 import {
   buildSwingFeatures,
   clampMinAmpCnyG,
@@ -98,19 +99,23 @@ router.get('/poll-logs', async (ctx) => {
   response.success(ctx, { list, count: list.length })
 })
 
-/** 最新一条现货 */
+/** 最新一条现货（含休市标记；休市时仍返回库内最新 tick） */
 router.get('/spot', async (ctx) => {
   const latest = await prisma.tick.findFirst({ orderBy: { ts: 'desc' } })
   if (!latest) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '暂无行情')
     return
   }
-  response.success(ctx, toTickDto(latest))
+  response.success(ctx, {
+    ...toTickDto(latest),
+    ...marketSessionDto()
+  })
 })
 
 /**
  * 补洞 / 拉取区间 tick
  * query: since (ms, exclusive), until (ms, inclusive), limit (default 5000, max 20000)
+ * 响应含 marketClosed / nextMarketOpenAt（与现货是否新增无关）
  */
 router.get('/ticks', async (ctx) => {
   const sinceRaw = ctx.query.since
@@ -146,7 +151,8 @@ router.get('/ticks', async (ctx) => {
   response.success(ctx, {
     list: rows.map(toTickDto),
     count: rows.length,
-    truncated: rows.length >= limit
+    truncated: rows.length >= limit,
+    ...marketSessionDto()
   })
 })
 

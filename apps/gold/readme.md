@@ -2,6 +2,8 @@
 
 常驻采集：约 **5s** 墙上时钟发起一轮（本轮耗时从间隔里扣，不再「结束后再等 5s」）拉 XAU 现货落 MySQL；并维护近两年日线。域名：`gold.wishufree.com` → 本机 `7504`。
 
+现货 Tick **只认 gold-api**（失败记 PollLog，不写近似价）。`currency-api` 仍用于 **USD/CNY 汇率** 与 **历史日线补洞**，不用作 live tick 兜底。
+
 ## 为何也要日线
 
 - 桌面端策略 / 周月季图依赖日线 OHLC，本地种子 + 客户端直拉 currency-api 慢且易断。
@@ -86,9 +88,14 @@ pnpm run dev
   "usdCny": 6.7461,
   "cnyG": 960.12,
   "source": "gold-api",
-  "sourceUpdatedAt": "..."
+  "sourceUpdatedAt": "...",
+  "marketOpen": true,
+  "marketClosed": false,
+  "nextMarketOpenAt": null
 }
 ```
+
+`/api/ticks` 列表外同样带 `marketOpen` / `marketClosed` / `nextMarketOpenAt`（UTC 五 22:00→ 日 22:00）。休市时仍返回库内最新 tick，客户端应显示「休市」而非一直「刷新中」。
 
 ### 客户端后续接入建议
 
@@ -107,7 +114,7 @@ pnpm run dev
 
 ## 环境变量
 
-见 `.local.env` 模板：`POLL_INTERVAL_MS`、`DAILY_LOOKBACK_DAYS`（默认 730）。Tick 长期保留、不做自动清理。
+见 `.local.env` 模板：`POLL_INTERVAL_MS`（默认 5000）、`FETCH_TIMEOUT_MS`（默认同间隔，且不超过间隔）、`DAILY_LOOKBACK_DAYS`（默认 730）。Tick 长期保留、不做自动清理。
 
 ## 后续未做项
 

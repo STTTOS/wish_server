@@ -40,7 +40,7 @@ async function persistQuote() {
     cachedFx = quote.usdCny
   }
 
-  // currency-api 是日级近似，写入 Tick 会在图上造成针状尖刺；仅允许 gold-api 等现货源落库
+  // 现货只走 gold-api；若将来误接日级源，仍禁止落 Tick
   if (
     quote.source === 'currency-api' ||
     quote.source.startsWith('currency-api')
