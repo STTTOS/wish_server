@@ -50,12 +50,14 @@ export async function issuePrintUploadSts(input: {
     throw Object.assign(new Error('cosKey 与店铺不匹配'), { status: 403 })
   }
 
+  // 店铺前缀策略：PutObject 用具体 Key，分片还需 ListMultipartUploads（桶级），
+  // 用 `printing/{shop}/*` 才能覆盖分片全流程，同时仍限制在本店目录。
   const policy = STS.getPolicy([
     {
       action: ALLOW_ACTIONS,
       bucket,
       region,
-      prefix: cosKey
+      prefix: `${prefix}*`
     }
   ])
 
