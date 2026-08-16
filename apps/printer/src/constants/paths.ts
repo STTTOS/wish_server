@@ -4,7 +4,8 @@ import { toLower } from 'ramda'
 export const PUBLIC_NO_AUTH_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/auth\/login$/,
   /^\/api\/public\/upload-token$/,
-  /^\/api\/public\/upload$/
+  /^\/api\/public\/cos-sts$/,
+  /^\/api\/public\/upload-complete$/
 ]
 
 /** 鉴权可选 */

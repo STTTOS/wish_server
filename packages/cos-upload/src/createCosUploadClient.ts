@@ -381,9 +381,55 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       )
     })
 
+  /**
+   * HeadObject：校验直传对象是否存在，返回 size / contentType。
+   * @see https://cloud.tencent.com/document/product/436/7745
+   */
+  const headObject = (key: string) =>
+    new Promise<{ size: number; contentType: string }>((resolve, reject) => {
+      const Key = key.replace(/^\/+/, '').trim()
+      if (!Key) {
+        reject(new Error('cosKey 不能为空'))
+        return
+      }
+      cos.headObject(
+        {
+          Bucket: bucket,
+          Region: region,
+          Key
+        },
+        (err, data) => {
+          if (err) {
+            reject(err instanceof Error ? err : new Error(String(err)))
+            return
+          }
+          const headers = (data && (data.headers || data)) as Record<
+            string,
+            string | undefined
+          >
+          const len = Number(
+            headers['content-length'] || headers['Content-Length'] || 0
+          )
+          const contentType = String(
+            headers['content-type'] ||
+              headers['Content-Type'] ||
+              'application/octet-stream'
+          )
+          resolve({
+            size: Number.isFinite(len) ? len : 0,
+            contentType
+          })
+        }
+      )
+    })
+
   return {
+    bucket,
+    region,
+    cosDomain,
     uploadFileToCos,
     uploadBufferToCos,
+    headObject,
     deleteObject,
     deleteMultipleObjects,
     toCosSafeUrl,

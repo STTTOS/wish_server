@@ -10,27 +10,21 @@ import { getDeskIo } from '../../services/deskSocket'
 import { printFileRepository } from '../../repositories/printFileRepository'
 import { presentPrintFile } from './services/printFilePresenter'
 import {
-  parsePublicPrintOptions,
-  uploadPublicFile,
-  type UploadedTempFile
+  parsePublicPrintOptions
 } from './services/uploadFacade'
 import { issuePublicUploadToken } from './services/uploadTokenFacade'
+import {
+  completeCosDirectUpload,
+  issueCosDirectUpload
+} from './services/cosDirectUploadFacade'
 import { isWechatMiniConfigured } from '../../services/wechatMini'
 import {
   extractUploadToken,
   verifyUploadToken
 } from '../../utils/uploadToken'
-import { takeMemoryUploadBuffer } from '../../utils/memoryUpload'
 
 const publicApi = combinePath(apiPrefix)('/public')
 const filesApi = combinePath(apiPrefix)('/files')
-
-function asSingleFile(
-  file: UploadedTempFile | UploadedTempFile[] | undefined
-): UploadedTempFile | undefined {
-  if (!file) return undefined
-  return Array.isArray(file) ? file[0] : file
-}
 
 function shopRoom(shopCode: string) {
   return `shop:${shopCode}`
@@ -44,6 +38,41 @@ function errorStatus(error: unknown, fallback: number) {
   return fallback
 }
 
+function requirePublicUploadAuth(
+  ctx: { get: (name: string) => string; request: { body?: unknown }; query: Record<string, unknown> },
+  shopCode: string
+) {
+  if (!isWechatMiniConfigured()) {
+    throw Object.assign(new Error('服务未配置微信小程序凭证'), { status: 503 })
+  }
+
+  const body = (ctx.request.body || {}) as { uploadToken?: unknown }
+  const rawToken = extractUploadToken({
+    authorization: ctx.get('authorization'),
+    uploadTokenHeader: ctx.get('x-upload-token'),
+    formToken: body.uploadToken
+  })
+  if (!rawToken) {
+    throw Object.assign(new Error('缺少上传凭证'), { status: 401 })
+  }
+
+  const claims = verifyUploadToken(rawToken)
+  if (claims.shopCode !== shopCode.trim()) {
+    throw Object.assign(new Error('上传凭证与店铺不匹配'), { status: 403 })
+  }
+  return claims
+}
+
+function resolveShopCode(body: Record<string, unknown>, query: Record<string, unknown>) {
+  return (
+    (typeof body.shopCode === 'string' && body.shopCode) ||
+    (typeof body.shop === 'string' && body.shop) ||
+    (typeof query.shop === 'string' && query.shop) ||
+    (typeof query.shopCode === 'string' && query.shopCode) ||
+    ''
+  )
+}
+
 /** 小程序：wx.login code → 短时上传凭证（无授权弹窗） */
 router.post(publicApi('/upload-token'), async (ctx) => {
   const body = (ctx.request.body || {}) as {
@@ -51,12 +80,7 @@ router.post(publicApi('/upload-token'), async (ctx) => {
     shopCode?: unknown
     shop?: unknown
   }
-  const shopCode =
-    (typeof body.shopCode === 'string' && body.shopCode) ||
-    (typeof body.shop === 'string' && body.shop) ||
-    (typeof ctx.query.shop === 'string' && ctx.query.shop) ||
-    (typeof ctx.query.shopCode === 'string' && ctx.query.shopCode) ||
-    ''
+  const shopCode = resolveShopCode(body as Record<string, unknown>, ctx.query)
 
   try {
     const issued = await issuePublicUploadToken({
@@ -73,88 +97,54 @@ router.post(publicApi('/upload-token'), async (ctx) => {
   }
 })
 
-router.post(publicApi('/upload'), async (ctx) => {
+/** COS 直传：签发单文件 STS + 对象 Key */
+router.post(publicApi('/cos-sts'), async (ctx) => {
   const body = (ctx.request.body || {}) as {
     shopCode?: unknown
+    shop?: unknown
+    fileName?: unknown
+    originalName?: unknown
+    size?: unknown
+  }
+  const shopCode = resolveShopCode(body as Record<string, unknown>, ctx.query)
+
+  try {
+    requirePublicUploadAuth(ctx, shopCode)
+    const issued = await issueCosDirectUpload({
+      shopCode,
+      fileName: body.fileName ?? body.originalName,
+      size: body.size
+    })
+    response.success(ctx, issued, 'ok')
+  } catch (error) {
+    response.error(
+      ctx,
+      errorStatus(error, HTTP_STATUS.INTERNAL_SERVER_ERROR),
+      error instanceof Error ? error.message : '获取 COS 临时密钥失败'
+    )
+  }
+})
+
+/** COS 直传完成：校验对象并登记，推送桌面端 */
+router.post(publicApi('/upload-complete'), async (ctx) => {
+  const body = (ctx.request.body || {}) as {
+    shopCode?: unknown
+    shop?: unknown
+    cosKey?: unknown
     fileName?: unknown
     originalName?: unknown
     printOptions?: unknown
-    uploadToken?: unknown
   }
-  let queryShop = ''
-  if (typeof ctx.query.shop === 'string') {
-    queryShop = ctx.query.shop
-  } else if (typeof ctx.query.shopCode === 'string') {
-    queryShop = ctx.query.shopCode
-  }
-  const shopCode =
-    (typeof body.shopCode === 'string' && body.shopCode) || queryShop || ''
-
-  if (!isWechatMiniConfigured()) {
-    response.error(
-      ctx,
-      HTTP_STATUS.INTERNAL_SERVER_ERROR,
-      '服务未配置微信小程序凭证'
-    )
-    return
-  }
-
-  const rawToken = extractUploadToken({
-    authorization: ctx.get('authorization'),
-    uploadTokenHeader: ctx.get('x-upload-token'),
-    formToken: body.uploadToken
-  })
-  if (!rawToken) {
-    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '缺少上传凭证')
-    return
-  }
+  const shopCode = resolveShopCode(body as Record<string, unknown>, ctx.query)
 
   try {
-    const claims = verifyUploadToken(rawToken)
-    if (claims.shopCode !== shopCode.trim()) {
-      response.error(ctx, HTTP_STATUS.FORBIDDEN, '上传凭证与店铺不匹配')
-      return
-    }
-  } catch (error) {
-    response.error(
-      ctx,
-      errorStatus(error, HTTP_STATUS.UNAUTHORIZED),
-      error instanceof Error ? error.message : '上传凭证无效或已过期'
-    )
-    return
-  }
-
-  const files = ctx.request.files || {}
-  const file =
-    asSingleFile(
-      files.file as UploadedTempFile | UploadedTempFile[] | undefined
-    ) ||
-    asSingleFile(
-      files.files as UploadedTempFile | UploadedTempFile[] | undefined
-    )
-
-  const buffer = takeMemoryUploadBuffer(file)
-  if (!file || !buffer?.length) {
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '请选择要上传的文件')
-    return
-  }
-
-  let printOptions
-  try {
-    printOptions = parsePublicPrintOptions(body.printOptions)
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'printOptions 参数错误'
-    response.error(ctx, HTTP_STATUS.BAD_REQUEST, message)
-    return
-  }
-
-  try {
-    const presented = await uploadPublicFile({
+    requirePublicUploadAuth(ctx, shopCode)
+    const printOptions = parsePublicPrintOptions(body.printOptions)
+    const presented = await completeCosDirectUpload({
       shopCode,
-      file,
-      buffer,
-      clientFileName: body.fileName ?? body.originalName,
+      cosKey: body.cosKey,
+      fileName: body.fileName,
+      originalName: body.originalName,
       printOptions
     })
     const io = getDeskIo()
@@ -164,7 +154,7 @@ router.post(publicApi('/upload'), async (ctx) => {
     response.error(
       ctx,
       errorStatus(error, HTTP_STATUS.INTERNAL_SERVER_ERROR),
-      error instanceof Error ? error.message : '上传失败'
+      error instanceof Error ? error.message : '登记上传失败'
     )
   }
 })

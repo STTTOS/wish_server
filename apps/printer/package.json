@@ -22,7 +22,8 @@
   "author": "三分",
   "license": "ISC",
   "dependencies": {
-    "@wishufree/cos-upload": "workspace:*"
+    "@wishufree/cos-upload": "workspace:*",
+    "qcloud-cos-sts": "^3.1.3"
   },
   "devDependencies": {
     "eslint-config-custom": "workspace:*",

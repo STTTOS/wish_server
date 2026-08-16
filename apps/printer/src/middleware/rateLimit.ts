@@ -32,7 +32,12 @@ const RULES: LimitRule[] = [
     max: PUBLIC_UPLOAD_TOKEN_RATE_MAX
   },
   {
-    pattern: /^\/api\/public\/upload$/,
+    pattern: /^\/api\/public\/cos-sts$/,
+    windowMs: 60_000,
+    max: PUBLIC_UPLOAD_RATE_MAX
+  },
+  {
+    pattern: /^\/api\/public\/upload-complete$/,
     windowMs: 60_000,
     max: PUBLIC_UPLOAD_RATE_MAX
   },

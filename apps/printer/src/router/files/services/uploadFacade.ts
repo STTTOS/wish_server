@@ -1,43 +1,22 @@
-import { extname, basename } from 'path'
-import { v4 as uuidv4 } from 'uuid'
-import dayjs from 'dayjs'
+import { basename } from 'path'
 
-import { PRINTING_COS_PREFIX } from '../../../config'
-import { getCosUploadClient } from '../../../services/cosUpload'
-import { printFileRepository } from '../../../repositories/printFileRepository'
-import { userRepository } from '../../../repositories/userRepository'
-import { presentPrintFile } from './printFilePresenter'
-
-/** 店铺码进 COS 路径，限制字符防路径污染 */
-const SHOP_CODE_RE = /^[a-zA-Z0-9_-]{1,64}$/
-
-export type UploadedTempFile = {
-  filepath?: string
-  originalFilename?: string | null
-  newFilename?: string
-  mimetype?: string | null
-  size?: number
-  buffer?: Buffer
+/** Customer-facing print intent from public upload (mini program / H5). */
+export type PublicPrintOptions = {
+  color: 'bw' | 'color'
+  paperSize: 'A4' | 'A3'
+  duplex: boolean
+  copies: number
 }
 
-const ALLOWED_EXT = new Set([
-  '.pdf',
-  '.doc',
-  '.docx',
-  '.xls',
-  '.xlsx',
-  '.cdr',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-  '.bmp',
-  '.tif',
-  '.tiff'
-])
+export class PrintOptionsParseError extends Error {
+  status = 400
+  constructor(message: string) {
+    super(message)
+    this.name = 'PrintOptionsParseError'
+  }
+}
 
-function guessMime(ext: string, fallback?: string | null) {
+export function guessMime(ext: string, fallback?: string | null) {
   const map: Record<string, string> = {
     '.pdf': 'application/pdf',
     '.doc': 'application/msword',
@@ -59,44 +38,23 @@ function guessMime(ext: string, fallback?: string | null) {
   return map[ext] || fallback || 'application/octet-stream'
 }
 
-function sanitizeFileName(name: string) {
+export function sanitizeFileName(name: string) {
   return name.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 180)
 }
 
-/** Mini program temp path: `up_<ms>_<name>` — strip when multipart leaks it. */
-const UPLOAD_TEMP_NAME_PREFIX = /^up_\d+_/
-
 /**
- * Prefer explicit form `fileName` / `originalName`; fall back to multipart
- * filename and strip the local upload-temp prefix if present.
+ * Prefer explicit client `fileName` / `originalName`; fall back to basename.
  */
 export function resolveOriginalName(
   preferred: unknown,
-  multipartName?: string | null,
+  fallbackName?: string | null,
   fallback = 'file'
 ): string {
   const fromForm =
     typeof preferred === 'string' && preferred.trim() ? preferred.trim() : ''
-  const raw = fromForm || (multipartName || '').trim() || fallback
+  const raw = fromForm || (fallbackName || '').trim() || fallback
   const base = basename(raw)
-  const cleaned = base.replace(UPLOAD_TEMP_NAME_PREFIX, '') || base
-  return cleaned.slice(0, 500) || fallback
-}
-
-/** Customer-facing print intent from public upload (mini program / H5). */
-export type PublicPrintOptions = {
-  color: 'bw' | 'color'
-  paperSize: 'A4' | 'A3'
-  duplex: boolean
-  copies: number
-}
-
-export class PrintOptionsParseError extends Error {
-  status = 400
-  constructor(message: string) {
-    super(message)
-    this.name = 'PrintOptionsParseError'
-  }
+  return base.slice(0, 500) || fallback
 }
 
 function parseDuplex(raw: unknown): boolean {
@@ -111,10 +69,10 @@ function parseDuplex(raw: unknown): boolean {
 }
 
 /**
- * Accept JSON object or JSON string from multipart formData.
+ * Accept JSON object or JSON string.
  * - missing / empty → null (shop defaults on desk)
  * - malformed JSON / non-object → 400
- * - object with bad fields → coerce to safe defaults (do not drop the whole options bag)
+ * - object with bad fields → coerce to safe defaults
  */
 export function parsePublicPrintOptions(
   raw: unknown
@@ -157,70 +115,4 @@ export function parsePublicPrintOptions(
     : 1
 
   return { color, paperSize, duplex, copies }
-}
-
-export async function uploadPublicFile(input: {
-  shopCode: string
-  file: UploadedTempFile
-  /** Explicit customer-facing name from multipart form (preferred). */
-  clientFileName?: unknown
-  printOptions?: PublicPrintOptions | null
-  /** 内存上传内容（不落盘） */
-  buffer: Buffer
-}) {
-  const shopCode = input.shopCode.trim()
-  if (!shopCode) {
-    throw Object.assign(new Error('shopCode 不能为空'), { status: 400 })
-  }
-  if (!SHOP_CODE_RE.test(shopCode)) {
-    throw Object.assign(new Error('shopCode 非法'), { status: 400 })
-  }
-  if (!(await userRepository.existsByShopCode(shopCode))) {
-    throw Object.assign(new Error('店铺不存在或未开通'), { status: 403 })
-  }
-
-  const buffer = input.buffer
-  if (!buffer?.length) {
-    throw Object.assign(new Error('空文件'), { status: 400 })
-  }
-
-  const originalName = resolveOriginalName(
-    input.clientFileName,
-    input.file.originalFilename || input.file.newFilename
-  )
-  const ext = extname(originalName).toLowerCase()
-  if (!ALLOWED_EXT.has(ext)) {
-    throw Object.assign(new Error('不支持的文件类型'), { status: 400 })
-  }
-
-  const size = input.file.size && input.file.size > 0 ? input.file.size : buffer.length
-
-  const mime = guessMime(ext, input.file.mimetype)
-  const safeName = sanitizeFileName(basename(originalName))
-  const objectName = `${uuidv4()}-${safeName}`
-  const prefix = `${PRINTING_COS_PREFIX}/${shopCode}/${dayjs().format('YYYY/MM')}`
-
-  const cos = getCosUploadClient()
-  const location = await cos.uploadBufferToCos(
-    prefix,
-    objectName,
-    buffer,
-    mime
-  )
-  const cosKey = `${prefix}/${objectName}`.replace(/\\/g, '/')
-  const cosUrl = location.startsWith('http')
-    ? location
-    : `https://${location}`
-
-  const row = await printFileRepository.create({
-    shopCode,
-    originalName,
-    cosKey,
-    cosUrl,
-    mime,
-    size,
-    printOptions: input.printOptions ?? undefined
-  })
-
-  return presentPrintFile(row)
 }

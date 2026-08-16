@@ -10,7 +10,7 @@ import historyApiFallback from 'koa2-connect-history-api-fallback'
 import router from './router'
 import { logger } from './logger'
 import response from './utils/response'
-import { cacheTime as maxAge, UPLOAD_MAX_FILE_SIZE_MB } from './config'
+import { cacheTime as maxAge } from './config'
 import { HTTP_STATUS } from './constants/httpStatus'
 import { mapPrismaError } from './utils/mapPrismaError'
 import customHandle401 from './middleware/customHandle401'
@@ -18,7 +18,6 @@ import attachCurrentUser from './middleware/attachCurrentUser'
 import rateLimit from './middleware/rateLimit'
 import { createTraceIdMiddleware } from './middleware/traceId'
 import { createRequestLogMiddleware } from './middleware/requestLog'
-import { memoryFileWriteStreamHandler } from './utils/memoryUpload'
 
 /**
  * Factory Method：组装 Koa 应用（中间件顺序集中在此）。
@@ -90,20 +89,15 @@ export function createApp() {
 
   app.use(customHandle401)
   app.use(attachCurrentUser)
-  // 限流放在解析 multipart 之前，避免刷上传时先落盘再拒绝
   app.use(rateLimit)
 
   app.use(
     koaBody({
-      multipart: true,
+      multipart: false,
       json: true,
+      jsonLimit: '2mb',
       urlencoded: true,
-      formidable: {
-        // 公开上传走内存 buffer，不写 static/
-        maxFileSize: UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024,
-        keepExtensions: true,
-        fileWriteStreamHandler: memoryFileWriteStreamHandler
-      } as koaBody.IKoaBodyFormidableOptions
+      formLimit: '2mb'
     })
   )
 
