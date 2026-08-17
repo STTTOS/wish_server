@@ -2,7 +2,7 @@
 
 常驻采集：约 **5s** 墙上时钟发起一轮（本轮耗时从间隔里扣，不再「结束后再等 5s」）拉 XAU 现货落 MySQL；并维护近两年日线。域名：`gold.wishufree.com` → 本机 `7504`。
 
-现货 Tick **只认 gold-api**（失败记 PollLog，不写近似价）。`currency-api` 仍用于 **USD/CNY 汇率** 与 **历史日线补洞**，不用作 live tick 兜底。
+现货 Tick **只认 gold-api**（失败记 PollLog，不写近似价）。`currency-api` 仍用于 **USD/CNY 汇率**（默认每 **10 分钟**重拉，失败沿用缓存）与 **历史日线补洞**，不用作 live tick 兜底。
 
 ## 为何也要日线
 
@@ -114,7 +114,7 @@ pnpm run dev
 
 ## 环境变量
 
-见 `.local.env` 模板：`POLL_INTERVAL_MS`（默认 5000）、`FETCH_TIMEOUT_MS`（默认同间隔，且不超过间隔）、`DAILY_LOOKBACK_DAYS`（默认 730）。Tick 长期保留、不做自动清理。
+见 `.local.env` 模板：`POLL_INTERVAL_MS`（默认 5000）、`FETCH_TIMEOUT_MS`（默认同间隔，且不超过间隔）、`FX_REFRESH_INTERVAL_MS`（默认 600000）、`DAILY_LOOKBACK_DAYS`（默认 730）。Tick 长期保留、不做自动清理。
 
 ## 后续未做项
 

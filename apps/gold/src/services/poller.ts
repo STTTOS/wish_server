@@ -1,4 +1,4 @@
-import { pollIntervalMs } from '../config'
+import { fxRefreshIntervalMs, pollIntervalMs } from '../config'
 import { logger } from '../logger'
 import prisma from '../models'
 import { rollTodayFromSpot } from './dailySync'
@@ -9,6 +9,8 @@ import { recordPollEvent } from './pollLog'
 let timer: NodeJS.Timeout | null = null
 let inFlight = false
 let cachedFx: number | null = null
+/** 上次成功刷新汇率的墙上时间 */
+let lastFxAt = 0
 let lastQuoteAt = 0
 let lastError: string | null = null
 let startedAt = 0
@@ -21,7 +23,9 @@ export function getPollerStatus() {
   return {
     running: startedAt > 0,
     intervalMs: pollIntervalMs,
+    fxRefreshIntervalMs,
     lastQuoteAt: lastQuoteAt || null,
+    lastFxAt: lastFxAt || null,
     lastError,
     startedAt: startedAt || null,
     nextDueAt: nextDueAt || null,
@@ -31,13 +35,37 @@ export function getPollerStatus() {
   }
 }
 
-async function persistQuote() {
-  if (cachedFx == null) {
-    cachedFx = await fetchUsdCny()
+/** 无缓存或已过刷新间隔则重拉；失败保留旧值 */
+async function ensureFx(): Promise<number | null> {
+  const now = Date.now()
+  const stale =
+    cachedFx == null || lastFxAt <= 0 || now - lastFxAt >= fxRefreshIntervalMs
+  if (!stale) return cachedFx
+
+  try {
+    const fx = await fetchUsdCny()
+    if (fx != null && fx > 0) {
+      const prev = cachedFx
+      cachedFx = fx
+      lastFxAt = now
+      if (prev != null && Math.abs(prev - fx) / prev > 0.001) {
+        logger.info('usd/cny refreshed', { prev, fx })
+      }
+      return cachedFx
+    }
+  } catch (err) {
+    logger.warn('usd/cny refresh failed, keep cache', err)
   }
-  const quote = await fetchQuote(cachedFx)
+  return cachedFx
+}
+
+async function persistQuote() {
+  const fx = await ensureFx()
+  const quote = await fetchQuote(fx)
   if (quote.usdCny != null && quote.usdCny > 0) {
     cachedFx = quote.usdCny
+    // fetchQuote 可能只用了传入缓存；成功写入时若刚刷新过则 lastFxAt 已新
+    if (lastFxAt <= 0) lastFxAt = Date.now()
   }
 
   // 现货只走 gold-api；若将来误接日级源，仍禁止落 Tick
@@ -138,7 +166,9 @@ async function runRound() {
 export function startPricePoller() {
   if (startedAt) return
   startedAt = Date.now()
-  logger.info(`price poller start interval=${pollIntervalMs}ms (wall-clock)`)
+  logger.info(
+    `price poller start interval=${pollIntervalMs}ms fxRefresh=${fxRefreshIntervalMs}ms (wall-clock)`
+  )
   void runRound()
 }
 
@@ -147,4 +177,5 @@ export function stopPricePoller() {
   timer = null
   startedAt = 0
   nextDueAt = 0
+  lastFxAt = 0
 }
