@@ -9,13 +9,14 @@ import { recordPollEvent } from './pollLog'
 let timer: NodeJS.Timeout | null = null
 let inFlight = false
 let cachedFx: number | null = null
+let cachedFxSource: string | null = null
 /** 上次成功刷新汇率的墙上时间 */
 let lastFxAt = 0
-let lastQuoteAt = 0
 let lastError: string | null = null
 let startedAt = 0
 /** 下一轮预计发起时刻（墙上） */
 let nextDueAt = 0
+let lastQuoteAt = 0
 
 export function getPollerStatus() {
   const now = Date.now()
@@ -30,6 +31,7 @@ export function getPollerStatus() {
     startedAt: startedAt || null,
     nextDueAt: nextDueAt || null,
     cachedFx,
+    cachedFxSource,
     marketOpen,
     nextMarketOpenAt: marketOpen ? null : nextMarketOpenAt(now)
   }
@@ -44,12 +46,18 @@ async function ensureFx(): Promise<number | null> {
 
   try {
     const fx = await fetchUsdCny()
-    if (fx != null && fx > 0) {
+    if (fx != null && fx.rate > 0) {
       const prev = cachedFx
-      cachedFx = fx
+      cachedFx = fx.rate
+      cachedFxSource = fx.source
       lastFxAt = now
-      if (prev != null && Math.abs(prev - fx) / prev > 0.001) {
-        logger.info('usd/cny refreshed', { prev, fx })
+      if (prev != null && Math.abs(prev - fx.rate) / prev > 0.001) {
+        logger.info('usd/cny refreshed', {
+          prev,
+          fx: fx.rate,
+          source: fx.source,
+          updatedAt: fx.updatedAt ?? null
+        })
       }
       return cachedFx
     }

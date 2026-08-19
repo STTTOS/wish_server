@@ -1,4 +1,5 @@
 import { FETCH_TIMEOUT_MS, OZ_TO_G } from '../config'
+import { logger } from '../logger'
 
 export type GoldQuote = {
   ts: number;
@@ -7,6 +8,14 @@ export type GoldQuote = {
   cnyG: number | null;
   source: string;
   sourceUpdatedAt?: string;
+};
+
+/** 汇率拉取结果（含来源，便于 health / 日志对照） */
+export type FxQuote = {
+  rate: number;
+  source: string;
+  /** 上游声明的更新时间（若有） */
+  updatedAt?: string | null;
 };
 
 async function fetchJson(
@@ -24,16 +33,101 @@ async function fetchJson(
   return res.json()
 }
 
-/** 汇率仍用 currency-api（与 XAU 日级近似价无关） */
-export async function fetchUsdCny(): Promise<number | null> {
-  try {
-    const data = (await fetchJson(
-      'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
-    )) as { usd?: { cny?: number } }
-    return data?.usd?.cny ? Number(data.usd.cny) : null
-  } catch {
-    return null
+function asPositiveRate(n: unknown): number | null {
+  const v = typeof n === 'number' ? n : Number(n)
+  return Number.isFinite(v) && v > 0 ? v : null
+}
+
+/**
+ * 可选：ExchangeRate-API 正式档（有 KEY 时优先）。
+ * https://www.exchangerate-api.com/docs/standard-requests
+ */
+async function fetchFxExchangeRateApiKey(): Promise<FxQuote | null> {
+  const key = (process.env.EXCHANGE_RATE_API_KEY || '').trim()
+  if (!key) return null
+  const data = (await fetchJson(
+    `https://v6.exchangerate-api.com/v6/${encodeURIComponent(key)}/latest/USD`
+  )) as {
+    result?: string;
+    rates?: { CNY?: number };
+    time_last_update_utc?: string;
   }
+  if (data.result && data.result !== 'success') return null
+  const rate = asPositiveRate(data.rates?.CNY)
+  if (rate == null) return null
+  return {
+    rate,
+    source: 'exchangerate-api',
+    updatedAt: data.time_last_update_utc ?? null
+  }
+}
+
+/**
+ * 开放端点（无需 key）：与正式档同系 mid，日更；作无 key 时的主源。
+ * 不宜当作「唯一官方价」，但比单一 currency-api 更稳、对照市价更近。
+ */
+async function fetchFxOpenErApi(): Promise<FxQuote | null> {
+  const data = (await fetchJson('https://open.er-api.com/v6/latest/USD')) as {
+    result?: string;
+    rates?: { CNY?: number };
+    time_last_update_utc?: string;
+  }
+  if (data.result && data.result !== 'success') return null
+  const rate = asPositiveRate(data.rates?.CNY)
+  if (rate == null) return null
+  return {
+    rate,
+    source: 'open.er-api',
+    updatedAt: data.time_last_update_utc ?? null
+  }
+}
+
+/** 原主源：fawazahmed0 currency-api（偶发 403 / 粘滞，作兜底） */
+async function fetchFxCurrencyApi(): Promise<FxQuote | null> {
+  const data = (await fetchJson(
+    'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
+  )) as { usd?: { cny?: number } }
+  const rate = asPositiveRate(data?.usd?.cny)
+  if (rate == null) return null
+  return { rate, source: 'currency-api', updatedAt: null }
+}
+
+/** ECB 系日参考（Frankfurter）；CNY 可用性视上游，作末位兜底 */
+async function fetchFxFrankfurter(): Promise<FxQuote | null> {
+  const data = (await fetchJson(
+    'https://api.frankfurter.app/latest?from=USD&to=CNY'
+  )) as { rates?: { CNY?: number }; date?: string }
+  const rate = asPositiveRate(data.rates?.CNY)
+  if (rate == null) return null
+  return {
+    rate,
+    source: 'frankfurter',
+    updatedAt: data.date ?? null
+  }
+}
+
+type FxFetcher = () => Promise<FxQuote | null>;
+
+/**
+ * USD/CNY 多源级联：有 KEY → 正式档；否则 open.er-api → currency-api → frankfurter。
+ * 任一成功即返回；全部失败返回 null（poller 沿用缓存）。
+ */
+export async function fetchUsdCny(): Promise<FxQuote | null> {
+  const chain: { name: string; run: FxFetcher }[] = [
+    { name: 'exchangerate-api-key', run: fetchFxExchangeRateApiKey },
+    { name: 'open.er-api', run: fetchFxOpenErApi },
+    { name: 'currency-api', run: fetchFxCurrencyApi },
+    { name: 'frankfurter', run: fetchFxFrankfurter }
+  ]
+  for (const { name, run } of chain) {
+    try {
+      const q = await run()
+      if (q != null) return q
+    } catch (err) {
+      logger.warn('fx source failed', name, err)
+    }
+  }
+  return null
 }
 
 /**
@@ -60,7 +154,11 @@ async function fetchGoldSpot(): Promise<{
 }
 
 export async function fetchQuote(cachedFx?: number | null): Promise<GoldQuote> {
-  const fx = cachedFx ?? (await fetchUsdCny())
+  let fx = cachedFx != null && cachedFx > 0 ? cachedFx : null
+  if (fx == null) {
+    const q = await fetchUsdCny()
+    fx = q?.rate ?? null
+  }
   const gold = await fetchGoldSpot()
   let cnyG: number | null = null
   if (fx != null && fx > 0) {
