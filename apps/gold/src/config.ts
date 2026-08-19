@@ -29,10 +29,9 @@ export const dailyLookbackDays = Math.max(
 export const goldApiToken = (process.env.GOLD_API_TOKEN || '').trim()
 
 /**
- * USD/CNY 重拉间隔。汇率是慢变量，默认 6 小时（对齐 Free 日更 + 省配额）；
- * 失败时沿用缓存，不阻断金价采价。
+ * USD/CNY 重拉间隔。默认 30 分钟；失败时沿用缓存，不阻断金价采价。
  */
 export const fxRefreshIntervalMs = Math.max(
   60_000,
-  Number(process.env.FX_REFRESH_INTERVAL_MS || 21_600_000)
+  Number(process.env.FX_REFRESH_INTERVAL_MS || 1_800_000)
 )
