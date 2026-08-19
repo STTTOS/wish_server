@@ -38,51 +38,57 @@ function asPositiveRate(n: unknown): number | null {
   return Number.isFinite(v) && v > 0 ? v : null
 }
 
-/**
- * 可选：ExchangeRate-API 正式档（有 KEY 时优先）。
- * https://www.exchangerate-api.com/docs/standard-requests
- */
-async function fetchFxExchangeRateApiKey(): Promise<FxQuote | null> {
-  const key = (process.env.EXCHANGE_RATE_API_KEY || '').trim()
-  if (!key) return null
-  const data = (await fetchJson(
-    `https://v6.exchangerate-api.com/v6/${encodeURIComponent(key)}/latest/USD`
-  )) as {
-    result?: string;
-    rates?: { CNY?: number };
-    time_last_update_utc?: string;
-  }
-  if (data.result && data.result !== 'success') return null
-  const rate = asPositiveRate(data.rates?.CNY)
-  if (rate == null) return null
-  return {
-    rate,
-    source: 'exchangerate-api',
-    updatedAt: data.time_last_update_utc ?? null
-  }
-}
+type ChinamoneySpotRow = {
+  ccyPair?: string;
+  bidPrc?: string | number;
+  askPrc?: string | number;
+  midprice?: string | number;
+  time?: string;
+};
 
 /**
- * 开放端点（无需 key）：与正式档同系 mid，日更；作无 key 时的主源。
- * 不宜当作「唯一官方价」，但比单一 currency-api 更稳、对照市价更近。
+ * 中国货币网「人民币外汇即期报价」页面同源 JSON（非官方 CMDS）。
+ * mid 优先；否则 (bid+ask)/2。对标在岸价，比境外 mid 更贴近百度/积存金对照。
+ * https://www.chinamoney.com.cn/chinese/mkdatapfx/
  */
-async function fetchFxOpenErApi(): Promise<FxQuote | null> {
-  const data = (await fetchJson('https://open.er-api.com/v6/latest/USD')) as {
-    result?: string;
-    rates?: { CNY?: number };
-    time_last_update_utc?: string;
-  }
-  if (data.result && data.result !== 'success') return null
-  const rate = asPositiveRate(data.rates?.CNY)
+async function fetchFxChinamoney(): Promise<FxQuote | null> {
+  const url =
+    'https://www.chinamoney.com.cn/r/cms/www/chinamoney/data/fx/rfx-sp-quot.json'
+  const body = new URLSearchParams({ t: String(Date.now()) })
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Origin: 'https://www.chinamoney.com.cn',
+      Referer: 'https://www.chinamoney.com.cn/chinese/mkdatapfx/'
+    },
+    body,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = (await res.json()) as { records?: ChinamoneySpotRow[] }
+  const row = (data.records ?? []).find(
+    (r) => String(r.ccyPair || '').replace(/\s/g, '') === 'USD/CNY'
+  )
+  if (!row) return null
+
+  const mid = asPositiveRate(row.midprice)
+  const bid = asPositiveRate(row.bidPrc)
+  const ask = asPositiveRate(row.askPrc)
+  let rate = mid
+  if (rate == null && bid != null && ask != null) rate = (bid + ask) / 2
+  else if (rate == null) rate = bid ?? ask
   if (rate == null) return null
-  return {
-    rate,
-    source: 'open.er-api',
-    updatedAt: data.time_last_update_utc ?? null
-  }
+
+  const updatedAt =
+    typeof row.time === 'string' && row.time.trim() ? row.time.trim() : null
+  return { rate, source: 'chinamoney', updatedAt }
 }
 
-/** 原主源：fawazahmed0 currency-api（偶发 403 / 粘滞，作兜底） */
+/** 兜底：fawazahmed0 currency-api */
 async function fetchFxCurrencyApi(): Promise<FxQuote | null> {
   const data = (await fetchJson(
     'https://latest.currency-api.pages.dev/v1/currencies/usd.json'
@@ -92,32 +98,16 @@ async function fetchFxCurrencyApi(): Promise<FxQuote | null> {
   return { rate, source: 'currency-api', updatedAt: null }
 }
 
-/** ECB 系日参考（Frankfurter）；CNY 可用性视上游，作末位兜底 */
-async function fetchFxFrankfurter(): Promise<FxQuote | null> {
-  const data = (await fetchJson(
-    'https://api.frankfurter.app/latest?from=USD&to=CNY'
-  )) as { rates?: { CNY?: number }; date?: string }
-  const rate = asPositiveRate(data.rates?.CNY)
-  if (rate == null) return null
-  return {
-    rate,
-    source: 'frankfurter',
-    updatedAt: data.date ?? null
-  }
-}
-
 type FxFetcher = () => Promise<FxQuote | null>;
 
 /**
- * USD/CNY 多源级联：有 KEY → 正式档；否则 open.er-api → currency-api → frankfurter。
+ * USD/CNY：货币网即期（爬虫）→ currency-api。
  * 任一成功即返回；全部失败返回 null（poller 沿用缓存）。
  */
 export async function fetchUsdCny(): Promise<FxQuote | null> {
   const chain: { name: string; run: FxFetcher }[] = [
-    { name: 'exchangerate-api-key', run: fetchFxExchangeRateApiKey },
-    { name: 'open.er-api', run: fetchFxOpenErApi },
-    { name: 'currency-api', run: fetchFxCurrencyApi },
-    { name: 'frankfurter', run: fetchFxFrankfurter }
+    { name: 'chinamoney', run: fetchFxChinamoney },
+    { name: 'currency-api', run: fetchFxCurrencyApi }
   ]
   for (const { name, run } of chain) {
     try {
