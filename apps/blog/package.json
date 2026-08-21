@@ -32,9 +32,7 @@
     "prettier-config": "workspace:*"
   },
   "lint-staged": {
-    "**/*.{js,jsx,ts,tsx}": "eslint",
-    "**/*.{js,jsx,ts,tsx,less,md,json}": [
-      "pnpm run prettier"
-    ]
+    "**/*.{js,jsx,ts,tsx}": "eslint --fix --cache --ext .ts,.tsx,.js,.jsx",
+    "**/*.{js,jsx,ts,tsx,less,md,json}": "prettier --write"
   }
 }
