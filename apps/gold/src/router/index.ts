@@ -46,6 +46,7 @@ function toDailyDto(row: {
   high: number;
   low: number;
   close: number;
+  usdCnyClose: number | null;
   source: string;
 }) {
   return {
@@ -55,6 +56,7 @@ function toDailyDto(row: {
     high: row.high,
     low: row.low,
     close: row.close,
+    usdCnyClose: row.usdCnyClose,
     source: row.source
   }
 }

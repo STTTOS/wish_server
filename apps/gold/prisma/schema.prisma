@@ -31,6 +31,8 @@ model DailyBar {
   high      Float
   low       Float
   close     Float
+  /// 当日收盘 USD/CNY：tick 日=最后有效 Tick.usdCny；currency-api 日=同日 usd.cny 快照
+  usdCnyClose Float?
   source    String   @db.VarChar(64)
   updatedAt DateTime @updatedAt
 

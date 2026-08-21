@@ -15,6 +15,7 @@
 - **有 tick 覆盖的日子**：以 `tick:*` 滚出来的 OHLC 为准（比 currency-api 单点近似准）。
 - **跨日 / 00:01 / sync 前**：若昨日是 `tick:*`，标成 `tick:final` 冻结，之后不再改 OHLC。
 - **currency-api upsert**：不覆盖任何 `tick:` / `tick:final`，也不用它写「今天」。仅补没有 tick 的历史缺口。
+- **日终汇率 `usdCnyClose`**：tick 日=该本地日最后有效 `Tick.usdCny`；currency-api 日=同日 `usd.json` 的 `usd.cny`。桌面大尺度图用该字段折算元/克，**不用**当日现汇率。sync 结束会回填缺字段行。
 - **日终质量**：冻结后写入 `DailyQuality`（覆盖率/断档/冻结态/与 currency 偏差），不存波段特征全量。
 
 ## 本地

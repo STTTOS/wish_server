@@ -106,7 +106,7 @@ async function persistQuote() {
   lastError = null
 
   try {
-    await rollTodayFromSpot(quote.usdOz, quote.source)
+    await rollTodayFromSpot(quote.usdOz, quote.source, quote.usdCny)
   } catch (err) {
     logger.warn('roll today daily bar failed', err)
   }
