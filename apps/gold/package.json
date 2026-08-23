@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit --skipLibCheck",
+    "test": "node -r ts-node/register/transpile-only --test src/utils/goldTradingDay.test.ts",
     "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"node --env-file=.env -r ts-node/register/transpile-only ./src/index.ts\"",
     "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
     "lint": "eslint --cache --ext .ts ./src",

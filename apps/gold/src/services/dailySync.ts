@@ -1,6 +1,11 @@
 import { dailyLookbackDays } from '../config'
 import { logger } from '../logger'
 import prisma from '../models'
+import {
+  tradingDayBoundsMs,
+  tradingDayKeyFromTs,
+  tradingDayStartMs
+} from '../utils/goldTradingDay'
 
 export type DailyBarRow = {
   date: string;
@@ -45,15 +50,6 @@ function dateKeyToTs(dateKey: string): number {
 }
 
 /** 服务器本地日历日 [00:00, 次日 00:00) → epoch ms */
-function localDateKeyBoundsMs(dateKey: string): {
-  from: number;
-  toExcl: number;
-} {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const from = new Date(y!, m! - 1, d!, 0, 0, 0, 0).getTime()
-  return { from, toExcl: from + 86_400_000 }
-}
-
 function isTickSourced(source: string): boolean {
   return source === TICK_FINAL_SOURCE || source.startsWith('tick:')
 }
@@ -80,12 +76,12 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 /**
- * 本地日最后一条有效 Tick.usdCny（与日线 close 对齐的收盘汇率）。
+ * 交易日最后一条有效 Tick.usdCny（与日线 close 对齐的收盘汇率）。
  */
 export async function closeFxFromTicks(
   dateKey: string
 ): Promise<number | null> {
-  const { from, toExcl } = localDateKeyBoundsMs(dateKey)
+  const { from, toExcl } = tradingDayBoundsMs(dateKey)
   const row = await prisma.tick.findFirst({
     where: {
       ts: { gte: BigInt(from), lt: BigInt(toExcl) },
@@ -230,12 +226,13 @@ export async function freezeDailyBarIfTick(dateKey: string): Promise<boolean> {
   return true
 }
 
-/** 冻结「昨天」（相对本地日历日） */
+/** 冻结上一交易日（UTC 22:00 日界） */
 export async function freezeYesterdayDailyBar(
-  now = new Date()
+  now: number | Date = Date.now()
 ): Promise<boolean> {
-  const yesterday = shiftDateKey(localDateKey(now), -1)
-  return freezeDailyBarIfTick(yesterday)
+  const ts = now instanceof Date ? now.getTime() : now
+  const prev = shiftDateKey(tradingDayKeyFromTs(ts), -1)
+  return freezeDailyBarIfTick(prev)
 }
 
 /**
@@ -287,7 +284,7 @@ async function upsertBars(bars: DailyBarRow[]): Promise<{
   upserted: number;
   skippedProtected: number;
 }> {
-  const today = localDateKey()
+  const today = tradingDayKeyFromTs(Date.now())
   let upserted = 0
   let skippedProtected = 0
   for (const b of bars) {
@@ -352,7 +349,7 @@ export async function syncDailyHistory(): Promise<DailySyncResult> {
   )
 
   const before = await meta()
-  const today = localDateKey()
+  const today = tradingDayKeyFromTs(Date.now())
   const needBootstrap = before.count < 400
 
   let result: DailySyncResult
@@ -432,18 +429,19 @@ export async function syncDailyHistory(): Promise<DailySyncResult> {
   return result
 }
 
-/** 上次用 tick 滚过的本地日，用于跨日时冻结前一日 */
+/** 上次用 tick 滚过的交易日，用于跨日时冻结前一日 */
 let lastRolledDate: string | null = null
 
-/** 用现货 tick 滚动更新当日 OHLC + 收盘汇率；跨日时冻结昨日 */
+/** 用现货 tick 滚动更新当日 OHLC + 收盘汇率；跨交易日时冻结前一日 */
 export async function rollTodayFromSpot(
   usdOz: number,
   source: string,
   usdCny?: number | null
 ) {
   if (!(usdOz > 0)) return
-  const date = localDateKey()
-  const ts = dateKeyToTs(date)
+  const now = Date.now()
+  const date = tradingDayKeyFromTs(now)
+  const ts = tradingDayStartMs(now)
   const fx = asPositiveFx(usdCny)
 
   if (lastRolledDate && date !== lastRolledDate) {
@@ -485,4 +483,4 @@ export async function rollTodayFromSpot(
   })
 }
 
-export { localDateKey, shiftDateKey }
+export { shiftDateKey, tradingDayKeyFromTs }

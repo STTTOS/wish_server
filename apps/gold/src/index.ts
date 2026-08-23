@@ -34,22 +34,30 @@ async function bootstrap() {
     logger.warn('daily quality bootstrap failed', err)
   )
 
-  // 每天 00:01 冻结昨日 tick 日线 + 写日终质量快照
-  cron.schedule('1 0 * * *', () => {
-    void (async () => {
-      try {
-        const froze = await freezeYesterdayDailyBar()
-        if (froze) logger.info('daily freeze cron', 'yesterday → tick:final')
-      } catch (err) {
-        logger.error('daily freeze cron failed', err)
-      }
-      try {
-        await runYesterdayDailyQuality()
-      } catch (err) {
-        logger.error('daily quality cron failed', err)
-      }
-    })()
-  })
+  // 每个交易日 UTC 22:01 冻结上一 tick 日线 + 写日终质量快照
+  cron.schedule(
+    '1 22 * * *',
+    () => {
+      void (async () => {
+        try {
+          const froze = await freezeYesterdayDailyBar()
+          if (froze)
+            logger.info(
+              'daily freeze cron',
+              'previous trading day → tick:final'
+            )
+        } catch (err) {
+          logger.error('daily freeze cron failed', err)
+        }
+        try {
+          await runYesterdayDailyQuality()
+        } catch (err) {
+          logger.error('daily quality cron failed', err)
+        }
+      })()
+    },
+    { timezone: 'UTC' }
+  )
 
   // 每天 06:30 / 18:30（服务器本地时区）增量补日线
   cron.schedule('30 6,18 * * *', () => {

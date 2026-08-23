@@ -5,8 +5,13 @@
 import { pollIntervalMs } from '../config'
 import { logger } from '../logger'
 import prisma from '../models'
-import { TICK_FINAL_SOURCE, localDateKey, shiftDateKey } from './dailySync'
+import {
+  TICK_FINAL_SOURCE,
+  shiftDateKey,
+  tradingDayKeyFromTs
+} from './dailySync'
 import { isGoldMarketOpen, openMsInRange } from './marketHours'
+import { tradingDayBoundsMs } from '../utils/goldTradingDay'
 
 const GAP_MS = 45_000
 const DAY_MS = 86_400_000
@@ -30,13 +35,12 @@ export type DailyQualityRow = {
   partialDay?: boolean;
 };
 
-function dateKeyToLocalDayRange(dateKey: string): {
+function dateKeyToTradingDayRange(dateKey: string): {
   start: number;
   endExclusive: number;
 } {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const start = new Date(y!, m! - 1, d!, 0, 0, 0, 0).getTime()
-  return { start, endExclusive: start + DAY_MS }
+  const { from, toExcl } = tradingDayBoundsMs(dateKey)
+  return { start: from, endExclusive: toExcl }
 }
 
 async function fetchCurrencyCloseUsd(date: string): Promise<number | null> {
@@ -105,15 +109,14 @@ function toDto(
 /**
  * 计算并 upsert 某日质量快照。
  * 期望条数只计开市毫秒 / 间隔；周末休市不计入分母。
- * 今天：只计到 now 的开市时长（进行中覆盖率）。
- * 北京日历：周六约 0–6 点、周一约 6 点后、周日全休。
+ * 伦敦金交易日（UTC 22:00 日界）；今天只计到 now 的开市时长（进行中覆盖率）。
  */
 export async function upsertDailyQuality(
   dateKey: string
 ): Promise<DailyQualityRow> {
-  const today = localDateKey()
+  const today = tradingDayKeyFromTs(Date.now())
   const partialDay = dateKey === today
-  const { start, endExclusive } = dateKeyToLocalDayRange(dateKey)
+  const { start, endExclusive } = dateKeyToTradingDayRange(dateKey)
   const interval = Math.max(1000, pollIntervalMs)
   const now = Date.now()
   const rangeEnd = partialDay
@@ -232,8 +235,8 @@ export async function upsertDailyQuality(
 
 /** 冻结后写昨日质量；启动时可补最近几天缺口 */
 export async function runYesterdayDailyQuality(): Promise<DailyQualityRow> {
-  const yesterday = shiftDateKey(localDateKey(), -1)
-  const row = await upsertDailyQuality(yesterday)
+  const prev = shiftDateKey(tradingDayKeyFromTs(Date.now()), -1)
+  const row = await upsertDailyQuality(prev)
   logger.info(
     'daily quality',
     `${row.date} coverage=${row.coveragePct.toFixed(1)}% gaps=${row.gapCount}`
@@ -249,7 +252,7 @@ export async function listDailyQuality(opts?: {
   /** 默认 true：列表时现算并 upsert 今天，便于刷新看进行中覆盖率 */
   includeToday?: boolean;
 }): Promise<DailyQualityRow[]> {
-  const today = localDateKey()
+  const today = tradingDayKeyFromTs(Date.now())
   const includeToday = opts?.includeToday !== false
 
   if (opts?.date && /^\d{4}-\d{2}-\d{2}$/.test(opts.date)) {
