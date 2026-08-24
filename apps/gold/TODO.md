@@ -1,9 +1,9 @@
 # Gold 服务后续 TODO（未做项）
 
 > 防止遗忘。原则：**先确认 Tick 原料可信，再沉淀分析结果。**  
-> 已做：Tick 采集（墙上时钟）、周末休市停采（UTC 五 22:00→ 日 22:00）、**日线按 UTC 22:00 交易日界聚合**（与 london-gold 对齐；历史 currency-api 不迁移）、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality`（开市时长期望）、`PollLog` 采价失败/skip。
+> 已做：Tick 采集（墙上时钟）、周末休市停采（UTC 五 22:00→ 日 22:00）、**休市短睡 ≤30s + UTC 五/日 22:00 cron 踢醒**（禁止一次睡到开盘）、**日线按 UTC 22:00 交易日界聚合**（与 london-gold 对齐；历史 currency-api 不迁移）、日线冻结、`/api/features/swing`（现算不落库）、`DailyQuality`（开市时长期望）、`PollLog` 采价失败/skip。
 
-最后更新：2026-08-23
+最后更新：2026-08-24
 
 ---
 

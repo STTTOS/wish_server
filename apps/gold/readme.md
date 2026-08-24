@@ -4,6 +4,8 @@
 
 现货 Tick **只认 gold-api**（失败记 PollLog，不写近似价）。**USD/CNY** 默认每 **30 分钟**重拉（`FX_REFRESH_INTERVAL_MS`），级联：中国货币网即期（页面同源 JSON，非 CMDS）→ `currency-api`；失败沿用缓存。`currency-api` 仍用于 **历史日线补洞**，不作汇率主源。
 
+**周末采价**：休市用短睡轮询（默认 ≤30s，`CLOSED_POLL_INTERVAL_MS`），**禁止**一次 `setTimeout` 睡到开盘（定时器只在内存，重启也不会恢复）。另用 cron（UTC）双保险：周五 22:00 收盘踢一脚、周日 22:00 开盘踢一脚。
+
 ## 为何也要日线
 
 - 桌面端策略 / 周月季图依赖日线 OHLC，本地种子 + 客户端直拉 currency-api 慢且易断。

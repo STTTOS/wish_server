@@ -35,3 +35,12 @@ export const fxRefreshIntervalMs = Math.max(
   60_000,
   Number(process.env.FX_REFRESH_INTERVAL_MS || 1_800_000)
 )
+
+/**
+ * 休市时短睡间隔（禁止一次 setTimeout 睡到开盘）。
+ * 默认 30s；可用 CLOSED_POLL_INTERVAL_MS 覆盖。
+ */
+export const closedPollIntervalMs = Math.max(
+  5_000,
+  Number(process.env.CLOSED_POLL_INTERVAL_MS || 30_000)
+)

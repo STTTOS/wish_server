@@ -8,7 +8,7 @@ import {
   syncDailyHistory
 } from './services/dailySync'
 import { runYesterdayDailyQuality } from './services/dailyQuality'
-import { startPricePoller } from './services/poller'
+import { kickPricePoller, startPricePoller } from './services/poller'
 
 async function bootstrap() {
   if (!process.env.DATABASE_URL) {
@@ -32,6 +32,24 @@ async function bootstrap() {
   // 启动补写昨日质量（若尚无）
   void runYesterdayDailyQuality().catch((err) =>
     logger.warn('daily quality bootstrap failed', err)
+  )
+
+  // UTC 周五 22:00：周末收盘对齐（踢一脚进入短睡休市）
+  cron.schedule(
+    '0 22 * * 5',
+    () => {
+      kickPricePoller('cron: Fri 22:00 UTC weekend close')
+    },
+    { timezone: 'UTC' }
+  )
+
+  // UTC 周日 22:00：周末开盘对齐（双保险，避免短睡/定时器漂移漏采）
+  cron.schedule(
+    '0 22 * * 0',
+    () => {
+      kickPricePoller('cron: Sun 22:00 UTC weekend open')
+    },
+    { timezone: 'UTC' }
   )
 
   // 每个交易日 UTC 22:01 冻结上一 tick 日线 + 写日终质量快照

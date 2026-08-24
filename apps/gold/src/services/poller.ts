@@ -1,4 +1,8 @@
-import { fxRefreshIntervalMs, pollIntervalMs } from '../config'
+import {
+  closedPollIntervalMs,
+  fxRefreshIntervalMs,
+  pollIntervalMs
+} from '../config'
 import { logger } from '../logger'
 import prisma from '../models'
 import { rollTodayFromSpot } from './dailySync'
@@ -17,6 +21,8 @@ let startedAt = 0
 /** 下一轮预计发起时刻（墙上） */
 let nextDueAt = 0
 let lastQuoteAt = 0
+/** 上一轮是否休市：用于开盘瞬间打 resume 日志 */
+let wasClosed = false
 
 export function getPollerStatus() {
   const now = Date.now()
@@ -24,6 +30,7 @@ export function getPollerStatus() {
   return {
     running: startedAt > 0,
     intervalMs: pollIntervalMs,
+    closedPollIntervalMs,
     fxRefreshIntervalMs,
     lastQuoteAt: lastQuoteAt || null,
     lastFxAt: lastFxAt || null,
@@ -72,7 +79,6 @@ async function persistQuote() {
   const quote = await fetchQuote(fx)
   if (quote.usdCny != null && quote.usdCny > 0) {
     cachedFx = quote.usdCny
-    // fetchQuote 可能只用了传入缓存；成功写入时若刚刷新过则 lastFxAt 已新
     if (lastFxAt <= 0) lastFxAt = Date.now()
   }
 
@@ -133,20 +139,40 @@ async function tickOnce() {
 
 function arm(delayMs: number) {
   if (timer) clearTimeout(timer)
-  nextDueAt = Date.now() + delayMs
+  const wait = Math.max(0, delayMs)
+  nextDueAt = Date.now() + wait
   timer = setTimeout(() => {
     void runRound()
-  }, delayMs)
+  }, wait)
 }
 
-/** 休市：不请求上游，睡到下次开市（最多一次睡到点） */
+/**
+ * 休市：不请求上游。
+ * 短睡轮询（默认 ≤30s），禁止一次 setTimeout 睡到开盘（重启也不会恢复长定时器）。
+ */
 async function skipWhileClosed(): Promise<boolean> {
   const now = Date.now()
   if (isGoldMarketOpen(now)) return false
+
   const openAt = nextMarketOpenAt(now)
-  const waitMs = Math.max(pollIntervalMs, openAt - now)
+  const untilOpen = Math.max(0, openAt - now)
+  const waitMs = Math.min(
+    closedPollIntervalMs,
+    Math.max(pollIntervalMs, untilOpen || closedPollIntervalMs)
+  )
+
   lastError = 'skip: market closed (Fri 22:00 UTC → Sun 22:00 UTC)'
-  logger.info(lastError, { nextOpenAt: openAt, waitMs })
+  // 进入休市首轮打 info；之后靠 PollLog 合并计数，避免刷屏
+  if (!wasClosed) {
+    logger.info(lastError, {
+      nextOpenAt: openAt,
+      waitMs,
+      closedPollIntervalMs,
+      mode: 'short-sleep'
+    })
+  }
+  wasClosed = true
+
   await recordPollEvent('skip', lastError).catch((e) =>
     logger.warn('record poll event failed', e)
   )
@@ -154,14 +180,23 @@ async function skipWhileClosed(): Promise<boolean> {
   return true
 }
 
-/** 墙上时钟：本轮耗时从 interval 里扣，使发起间隔 ≈ interval（请求慢于 interval 则立刻下一轮） */
+function noteMarketResumeIfNeeded() {
+  if (!wasClosed) return
+  wasClosed = false
+  logger.info('poller resume: market open', {
+    at: new Date().toISOString(),
+    closedPollIntervalMs
+  })
+}
+
+/** 墙上时钟：本轮耗时从 interval 里扣，使发起间隔 ≈ interval */
 async function runRound() {
   if (!startedAt) return
   if (await skipWhileClosed()) return
+  noteMarketResumeIfNeeded()
   const t0 = Date.now()
   await tickOnce()
   if (!startedAt) return
-  // 本轮结束后若已进入休市，下一轮交给 skipWhileClosed 对齐开盘
   if (!isGoldMarketOpen(Date.now())) {
     await skipWhileClosed()
     return
@@ -174,8 +209,9 @@ async function runRound() {
 export function startPricePoller() {
   if (startedAt) return
   startedAt = Date.now()
+  wasClosed = false
   logger.info(
-    `price poller start interval=${pollIntervalMs}ms fxRefresh=${fxRefreshIntervalMs}ms (wall-clock)`
+    `price poller start interval=${pollIntervalMs}ms closedSleep≤${closedPollIntervalMs}ms fxRefresh=${fxRefreshIntervalMs}ms (wall-clock + short-sleep)`
   )
   void runRound()
 }
@@ -186,4 +222,22 @@ export function stopPricePoller() {
   startedAt = 0
   nextDueAt = 0
   lastFxAt = 0
+  wasClosed = false
+}
+
+/**
+ * 立刻打断当前等待并跑一轮（cron / 开盘对齐用）。
+ * 不持久化：进程重启后靠 startPricePoller + 短睡即可自愈。
+ */
+export function kickPricePoller(reason: string) {
+  if (!startedAt) {
+    startPricePoller()
+    logger.info('price poller kicked (was stopped)', { reason })
+    return
+  }
+  if (timer) clearTimeout(timer)
+  timer = null
+  nextDueAt = Date.now()
+  logger.info('price poller kicked', { reason })
+  void runRound()
 }
