@@ -61,3 +61,9 @@ export function tradingDayBoundsMs(dateKey: string): {
 export function isSameTradingDay(a: number, b: number): boolean {
   return tradingDayKeyFromTs(a) === tradingDayKeyFromTs(b)
 }
+
+/** dateKey 收盘 UTC 日历日的星期（0=Sun … 6=Sat） */
+export function tradingDayCloseWeekdayUtc(dateKey: string): number {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  return new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay()
+}

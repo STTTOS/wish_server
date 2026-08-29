@@ -1,28 +1,70 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
 
+import { isGoldMarketOpen } from '../services/marketHours'
 import {
   tradingDayBoundsMs,
   tradingDayKeyFromTs,
   tradingDayStartMs
 } from './goldTradingDay'
 
-describe('goldTradingDay', () => {
-  it('labels session before UTC 22:00 as closing on that calendar day', () => {
-    const ts = Date.UTC(2026, 7, 22, 7, 51, 0)
-    assert.equal(tradingDayStartMs(ts), Date.UTC(2026, 7, 21, 22, 0, 0, 0))
-    assert.equal(tradingDayKeyFromTs(ts), '2026-08-22')
-  })
+type TradingDayCase = {
+  name: string;
+  tsIso: string;
+  expectStartIso: string;
+  expectKey: string;
+};
 
-  it('rolls to next trading day after UTC 22:00', () => {
-    const ts = Date.UTC(2026, 7, 22, 23, 0, 0)
-    assert.equal(tradingDayStartMs(ts), Date.UTC(2026, 7, 22, 22, 0, 0, 0))
-    assert.equal(tradingDayKeyFromTs(ts), '2026-08-23')
-  })
+type ChartTsCase = {
+  name: string;
+  dateKey: string;
+  expectStartIso: string;
+  expectEndExclIso?: string;
+};
 
-  it('bounds match session start/end', () => {
-    const { from, toExcl } = tradingDayBoundsMs('2026-08-22')
-    assert.equal(from, Date.UTC(2026, 7, 21, 22, 0, 0, 0))
-    assert.equal(toExcl, Date.UTC(2026, 7, 22, 22, 0, 0, 0))
-  })
+type MarketOpenCase = {
+  name: string;
+  tsIso: string;
+  open: boolean;
+};
+
+type Fixtures = {
+  tradingDay: TradingDayCase[];
+  chartTs: ChartTsCase[];
+  marketOpen: MarketOpenCase[];
+};
+
+const fixtures = JSON.parse(
+  readFileSync(
+    join(__dirname, '../fixtures/gold-calendar.fixtures.json'),
+    'utf8'
+  )
+) as Fixtures
+
+describe('goldTradingDay (shared fixtures)', () => {
+  for (const c of fixtures.tradingDay) {
+    it(c.name, () => {
+      const ts = Date.parse(c.tsIso)
+      assert.equal(tradingDayStartMs(ts), Date.parse(c.expectStartIso))
+      assert.equal(tradingDayKeyFromTs(ts), c.expectKey)
+    })
+  }
+
+  for (const c of fixtures.chartTs) {
+    it(c.name, () => {
+      const { from, toExcl } = tradingDayBoundsMs(c.dateKey)
+      assert.equal(from, Date.parse(c.expectStartIso))
+      if (c.expectEndExclIso) {
+        assert.equal(toExcl, Date.parse(c.expectEndExclIso))
+      }
+    })
+  }
+
+  for (const c of fixtures.marketOpen) {
+    it(`marketOpen: ${c.name}`, () => {
+      assert.equal(isGoldMarketOpen(Date.parse(c.tsIso)), c.open)
+    })
+  }
 })

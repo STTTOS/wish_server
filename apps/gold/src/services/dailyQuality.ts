@@ -11,10 +11,58 @@ import {
   tradingDayKeyFromTs
 } from './dailySync'
 import { isGoldMarketOpen, openMsInRange } from './marketHours'
-import { tradingDayBoundsMs } from '../utils/goldTradingDay'
+import {
+  tradingDayBoundsMs,
+  tradingDayCloseWeekdayUtc
+} from '../utils/goldTradingDay'
 
 const GAP_MS = 45_000
 const DAY_MS = 86_400_000
+
+export type DailyQualityNoteInput = {
+  dateKey: string;
+  marketClosedDay: boolean;
+  partialDay: boolean;
+  openMs: number;
+  tickCount: number;
+  coveragePct: number;
+  gapCount: number;
+  dailyBarFrozen: boolean;
+  dailyBarSource: string | null;
+};
+
+/** 备注文案：半日开市仅用于 UTC 收盘日为周一（周末后首日 / 周一晚开） */
+export function buildDailyQualityNotes(input: DailyQualityNoteInput): string[] {
+  const notes: string[] = []
+  const {
+    dateKey,
+    marketClosedDay,
+    partialDay,
+    openMs,
+    tickCount,
+    coveragePct,
+    gapCount,
+    dailyBarFrozen,
+    dailyBarSource
+  } = input
+
+  if (marketClosedDay) notes.push('休市')
+  else if (
+    tradingDayCloseWeekdayUtc(dateKey) === 1 &&
+    openMs < DAY_MS - 60_000
+  ) {
+    notes.push('半日开市')
+  }
+  if (partialDay && !marketClosedDay) notes.push('进行中')
+  if (tickCount === 0 && !marketClosedDay) notes.push('无 tick')
+  else if (!marketClosedDay && coveragePct < 50) notes.push('覆盖偏低')
+  if (gapCount > 0) notes.push(`断档${gapCount}次`)
+  if (dailyBarFrozen) notes.push('已冻结')
+  else if (dailyBarSource?.startsWith('tick:')) notes.push('tick日线未冻结')
+  else if (dailyBarSource?.startsWith('currency-api'))
+    notes.push('仅currency日线')
+  return notes
+}
 
 export type DailyQualityRow = {
   date: string;
@@ -183,17 +231,17 @@ export async function upsertDailyQuality(
     logger.warn('daily quality currency fetch failed', dateKey, err)
   }
 
-  const notes: string[] = []
-  if (marketClosedDay) notes.push('休市')
-  else if (openMs < DAY_MS - 60_000) notes.push('半日开市')
-  if (partialDay && !marketClosedDay) notes.push('进行中')
-  if (tickCount === 0 && !marketClosedDay) notes.push('无 tick')
-  else if (!marketClosedDay && coveragePct < 50) notes.push('覆盖偏低')
-  if (gapCount > 0) notes.push(`断档${gapCount}次`)
-  if (dailyBarFrozen) notes.push('已冻结')
-  else if (dailyBarSource?.startsWith('tick:')) notes.push('tick日线未冻结')
-  else if (dailyBarSource?.startsWith('currency-api'))
-    notes.push('仅currency日线')
+  const notes = buildDailyQualityNotes({
+    dateKey,
+    marketClosedDay,
+    partialDay,
+    openMs,
+    tickCount,
+    coveragePct,
+    gapCount,
+    dailyBarFrozen,
+    dailyBarSource
+  })
 
   const row = await prisma.dailyQuality.upsert({
     where: { date: dateKey },

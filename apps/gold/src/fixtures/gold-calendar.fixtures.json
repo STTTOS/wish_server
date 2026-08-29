@@ -1,0 +1,88 @@
+{
+  "$schemaComment": "方案一：共享日历/休市边界夹具。london-gold 与 wish_mono_server/apps/gold 各持一份，内容必须字节级一致（改一边务必同步另一边）。",
+  "syncPaths": [
+    "london-gold/electron/__fixtures__/gold-calendar.fixtures.json",
+    "wish_mono_server/apps/gold/src/fixtures/gold-calendar.fixtures.json"
+  ],
+  "tradingDay": [
+    {
+      "name": "before UTC 22:00 labels closing calendar day",
+      "tsIso": "2026-08-22T07:51:00.000Z",
+      "expectStartIso": "2026-08-21T22:00:00.000Z",
+      "expectKey": "2026-08-22"
+    },
+    {
+      "name": "after UTC 22:00 rolls to next trading day",
+      "tsIso": "2026-08-22T23:00:00.000Z",
+      "expectStartIso": "2026-08-22T22:00:00.000Z",
+      "expectKey": "2026-08-23"
+    },
+    {
+      "name": "before rollover hour uses previous session",
+      "tsIso": "2026-08-21T20:00:00.000Z",
+      "expectStartIso": "2026-08-20T22:00:00.000Z",
+      "expectKey": "2026-08-21"
+    },
+    {
+      "name": "Beijing early morning still previous trading day label",
+      "tsIso": "2026-08-25T18:25:00.000Z",
+      "expectStartIso": "2026-08-24T22:00:00.000Z",
+      "expectKey": "2026-08-25"
+    }
+  ],
+  "chartTs": [
+    {
+      "name": "dateKey anchors at session start",
+      "dateKey": "2026-08-25",
+      "expectStartIso": "2026-08-24T22:00:00.000Z"
+    },
+    {
+      "name": "bounds for 2026-08-22",
+      "dateKey": "2026-08-22",
+      "expectStartIso": "2026-08-21T22:00:00.000Z",
+      "expectEndExclIso": "2026-08-22T22:00:00.000Z"
+    }
+  ],
+  "marketOpen": [
+    {
+      "name": "Fri midday UTC still open",
+      "tsIso": "2026-08-28T12:00:00.000Z",
+      "open": true
+    },
+    {
+      "name": "Fri 21:59 UTC still open",
+      "tsIso": "2026-08-28T21:59:00.000Z",
+      "open": true
+    },
+    {
+      "name": "Fri 22:00 UTC weekend close",
+      "tsIso": "2026-08-28T22:00:00.000Z",
+      "open": false
+    },
+    {
+      "name": "Sat morning UTC closed",
+      "tsIso": "2026-08-29T03:54:00.000Z",
+      "open": false
+    },
+    {
+      "name": "Sat 22:00 UTC still closed",
+      "tsIso": "2026-08-29T22:00:00.000Z",
+      "open": false
+    },
+    {
+      "name": "Sun 21:59 UTC still closed",
+      "tsIso": "2026-08-30T21:59:00.000Z",
+      "open": false
+    },
+    {
+      "name": "Sun 22:00 UTC reopen",
+      "tsIso": "2026-08-30T22:00:00.000Z",
+      "open": true
+    },
+    {
+      "name": "Mon morning UTC open",
+      "tsIso": "2026-08-31T08:00:00.000Z",
+      "open": true
+    }
+  ]
+}
