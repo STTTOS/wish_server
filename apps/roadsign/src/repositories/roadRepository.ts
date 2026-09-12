@@ -31,6 +31,26 @@ export const roadRepository = {
     })
   },
 
+  renameWithSigns(
+    id: number,
+    fromName: string,
+    data: { name?: string; sort?: number }
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.road.update({
+        where: { id },
+        data
+      })
+      if (data.name && data.name !== fromName) {
+        await tx.roadSign.updateMany({
+          where: { roadName: fromName },
+          data: { roadName: data.name }
+        })
+      }
+      return updated
+    })
+  },
+
   delete(id: number) {
     return prisma.road.delete({ where: { id } })
   },

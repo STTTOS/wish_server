@@ -67,14 +67,14 @@ export async function updateRoadFacade(
     }
   }
 
-  const row = await roadRepository.update(validated.data.id, {
-    name: validated.data.name,
-    sort: validated.data.sort
-  })
-
-  if (validated.data.name && validated.data.name !== existing.name) {
-    await roadRepository.renameSignsRoad(existing.name, validated.data.name)
-  }
+  const row = await roadRepository.renameWithSigns(
+    validated.data.id,
+    existing.name,
+    {
+      name: validated.data.name,
+      sort: validated.data.sort
+    }
+  )
 
   return ok(presentRoad(row))
 }

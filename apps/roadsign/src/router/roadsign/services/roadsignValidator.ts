@@ -169,7 +169,7 @@ function parseWriteBody(
   if (!name.ok) return name
 
   const roadName = parseOptionalString(body.roadName, {
-    maxLength: 120,
+    maxLength: 100,
     field: '路名',
     required: true
   })
