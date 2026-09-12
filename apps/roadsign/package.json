@@ -1,0 +1,36 @@
+{
+  "version": "1.0.0",
+  "private": true,
+  "description": "昌都路牌点位与照片管理后台",
+  "name": "@wishufree/roadsign-server",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "dev": "npm run db:sync && nodemon -w ./src --ext .ts --exec \"node --env-file=.env -r ts-node/register/transpile-only ./src/index.ts\"",
+    "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
+    "lint": "eslint --cache --ext .ts ./src",
+    "lint:fix": "eslint --fix --cache --ext .ts ./src",
+    "pre-commit-check": "npm run lint && npm run typecheck && npm run build",
+    "db:gui": "npx prisma studio",
+    "db:migrate--dev": "npx prisma migrate dev",
+    "db:migrate--prod": "npx prisma migrate deploy --schema=./prisma/schema.prisma",
+    "db:generate": "npx prisma generate",
+    "db:sync": "npm run db:migrate--prod && npm run db:generate",
+    "copy-env": "cp ./.local.env .env",
+    "setup": "pnpm run copy-env && pnpm run db:sync"
+  },
+  "author": "三分",
+  "license": "ISC",
+  "dependencies": {
+    "@wishufree/cos-upload": "workspace:*"
+  },
+  "devDependencies": {
+    "eslint-config-custom": "workspace:*",
+    "prettier-config": "workspace:*",
+    "tsconfig": "workspace:*"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx,less,md,json}": "prettier --write",
+    "**/*.{js,jsx,ts,tsx}": "eslint --fix --cache --ext .ts,.tsx,.js,.jsx"
+  }
+}

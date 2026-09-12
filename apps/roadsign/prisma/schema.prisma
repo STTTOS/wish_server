@@ -1,0 +1,57 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma/roadsign-client"
+}
+
+enum RoadSignType {
+  existing
+  planned
+}
+
+enum RoadSignStatus {
+  todo
+  doing
+  done
+}
+
+/// 路牌朝向（阅读方向）
+enum RoadSignDirection {
+  ew
+  we
+  ns
+  sn
+}
+
+enum RoadSignLevel {
+  l1
+  l2
+}
+
+/// 昌都路牌点位
+model RoadSign {
+  id          Int               @id @default(autoincrement())
+  name        String            @db.VarChar(200)
+  description String            @default("") @db.VarChar(1000)
+  extra       String            @default("") @db.Text
+  lng         Float
+  lat         Float
+  type        RoadSignType
+  status      RoadSignStatus    @default(todo)
+  direction   RoadSignDirection
+  level       RoadSignLevel
+  /// 路牌主图：{ id, kind, url, originalUrl, name? } | null
+  signPhoto   Json?
+  /// 附带照片数组
+  extraPhotos Json              @default("[]")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([name])
+}

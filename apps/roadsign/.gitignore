@@ -1,0 +1,11 @@
+dist
+node_modules
+.eslintcache
+logs
+static
+.env
+
+# lock文件
+yarn.lock
+package-lock.json
+yarn-error.log
