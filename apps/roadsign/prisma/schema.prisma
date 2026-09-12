@@ -32,10 +32,24 @@ enum RoadSignLevel {
   l2
 }
 
+/// 昌都市区道路名录（下拉字典）
+model Road {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sort])
+  @@index([name])
+}
+
 /// 昌都路牌点位
 model RoadSign {
   id          Int               @id @default(autoincrement())
   name        String            @db.VarChar(200)
+  /// 所属道路（对应 Road.name）
+  roadName    String            @default("") @db.VarChar(100)
   description String            @default("") @db.VarChar(1000)
   extra       String            @default("") @db.Text
   lng         Float
@@ -54,4 +68,5 @@ model RoadSign {
   @@index([status])
   @@index([type])
   @@index([name])
+  @@index([roadName])
 }

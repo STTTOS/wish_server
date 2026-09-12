@@ -15,6 +15,7 @@
     "db:migrate--prod": "npx prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:generate": "npx prisma generate",
     "db:sync": "npm run db:migrate--prod && npm run db:generate",
+    "db:seed": "node --env-file=.env -r ts-node/register/transpile-only ./src/scripts/runSeedRoads.ts",
     "copy-env": "cp ./.local.env .env",
     "setup": "pnpm run copy-env && pnpm run db:sync"
   },

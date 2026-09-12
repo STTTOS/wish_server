@@ -4,6 +4,7 @@ import { mkdir } from 'fs/promises'
 import { port } from './config'
 import { createApp } from './app'
 import { logger } from './logger'
+import { ensureRoadSeed } from './scripts/seedRoads'
 
 const staticOriginDir = join(__dirname, '../static/origin')
 const publicDir = join(__dirname, '../public')
@@ -15,6 +16,7 @@ async function bootstrap() {
 
   await mkdir(staticOriginDir, { recursive: true })
   await mkdir(publicDir, { recursive: true })
+  await ensureRoadSeed()
 
   const app = createApp()
   app.listen(Number(port), () => {

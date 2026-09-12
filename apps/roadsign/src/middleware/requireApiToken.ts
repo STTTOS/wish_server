@@ -16,7 +16,9 @@ function isPublicRead(ctx: Context): boolean {
   if (ctx.path === '/api/health' || ctx.path === '/health') return true
   if (ctx.method !== 'GET') return false
   return (
-    ctx.path === '/api/roadsign/list' || ctx.path === '/api/roadsign/detail'
+    ctx.path === '/api/roadsign/list' ||
+    ctx.path === '/api/roadsign/detail' ||
+    ctx.path === '/api/road/list'
   )
 }
 

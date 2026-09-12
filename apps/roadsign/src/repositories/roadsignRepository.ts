@@ -33,6 +33,7 @@ function toExtraPhotosJson(photos: RoadSignWriteData['extraPhotos']) {
 function toWriteInput(data: RoadSignWriteData) {
   return {
     name: data.name,
+    roadName: data.roadName,
     description: data.description,
     extra: data.extra,
     type: data.type,
@@ -52,10 +53,12 @@ export const roadsignRepository = {
     if (query.keyword) {
       where.OR = [
         { name: { contains: query.keyword } },
+        { roadName: { contains: query.keyword } },
         { description: { contains: query.keyword } },
         { extra: { contains: query.keyword } }
       ]
     }
+    if (query.roadName) where.roadName = query.roadName
     if (query.statuses.length === 1) {
       where.status = query.statuses[0]
     } else if (query.statuses.length > 1) {

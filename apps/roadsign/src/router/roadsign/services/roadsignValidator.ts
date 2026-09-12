@@ -21,6 +21,7 @@ const MAX_EXTRA_PHOTOS = 20
 
 export type RoadSignWriteData = {
   name: string
+  roadName: string
   description: string
   extra: string
   type: SignType
@@ -37,6 +38,7 @@ export type RoadSignUpdateData = RoadSignWriteData & { id: number }
 
 export type RoadSignListQuery = {
   keyword?: string
+  roadName?: string
   statuses: SignStatus[]
   type?: SignType
   direction?: SignDirection
@@ -166,6 +168,13 @@ function parseWriteBody(
   })
   if (!name.ok) return name
 
+  const roadName = parseOptionalString(body.roadName, {
+    maxLength: 120,
+    field: '路名',
+    required: true
+  })
+  if (!roadName.ok) return roadName
+
   const description = parseOptionalString(body.description, {
     maxLength: 1000,
     field: '描述'
@@ -201,6 +210,7 @@ function parseWriteBody(
 
   return ok({
     name: name.data,
+    roadName: roadName.data,
     description: description.data,
     extra: extra.data,
     type: type.data,
@@ -248,6 +258,7 @@ function parseCsvOrList(value: unknown): string[] {
 export function validateRoadSignListQuery(query: {
   keyword?: unknown
   q?: unknown
+  roadName?: unknown
   status?: unknown
   type?: unknown
   direction?: unknown
@@ -259,6 +270,12 @@ export function validateRoadSignListQuery(query: {
   const keyword =
     typeof keywordRaw === 'string' && keywordRaw.trim()
       ? keywordRaw.trim()
+      : undefined
+
+  const roadNameRaw = asSingle(query.roadName)
+  const roadName =
+    typeof roadNameRaw === 'string' && roadNameRaw.trim()
+      ? roadNameRaw.trim()
       : undefined
 
   const statuses: SignStatus[] = []
@@ -317,6 +334,7 @@ export function validateRoadSignListQuery(query: {
 
   return ok({
     keyword,
+    roadName,
     statuses,
     type: isSignType(typeRaw) ? typeRaw : undefined,
     direction: isSignDirection(directionRaw) ? directionRaw : undefined,

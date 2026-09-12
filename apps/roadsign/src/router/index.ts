@@ -1,3 +1,4 @@
+import './road'
 import './health'
 import './common'
 import './roadsign'

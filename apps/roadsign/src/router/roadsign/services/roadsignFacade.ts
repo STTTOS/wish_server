@@ -5,6 +5,7 @@ import { withList } from '../../../utils/response'
 import { ok, fail } from '../../../utils/apiResult'
 import { presentRoadSign } from './roadsignPresenter'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { roadRepository } from '../../../repositories/roadRepository'
 import { roadsignRepository } from '../../../repositories/roadsignRepository'
 import {
   validateRoadSignId,
@@ -12,6 +13,14 @@ import {
   validateRoadSignUpdate,
   validateRoadSignListQuery
 } from './roadsignValidator'
+
+async function assertRoadExists(roadName: string): Promise<ApiResult<null>> {
+  const road = await roadRepository.findByName(roadName)
+  if (!road) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '路名不存在，请先在道路管理中添加')
+  }
+  return ok(null)
+}
 
 export async function listRoadSignsFacade(query: Record<string, unknown>) {
   const validated = validateRoadSignListQuery(query)
@@ -40,6 +49,9 @@ export async function createRoadSignFacade(
   const validated = validateRoadSignCreate(body)
   if (!validated.ok) return validated
 
+  const roadOk = await assertRoadExists(validated.data.roadName)
+  if (!roadOk.ok) return roadOk
+
   const record = await roadsignRepository.create(validated.data)
   return ok(presentRoadSign(record))
 }
@@ -54,6 +66,9 @@ export async function updateRoadSignFacade(
   if (!existing) {
     return fail(HTTP_STATUS.NOT_FOUND, '路牌不存在')
   }
+
+  const roadOk = await assertRoadExists(validated.data.roadName)
+  if (!roadOk.ok) return roadOk
 
   const record = await roadsignRepository.update(validated.data)
   return ok(presentRoadSign(record))

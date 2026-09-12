@@ -21,6 +21,7 @@ export type SignPhoto = {
 export type RoadSignView = {
   id: string
   name: string
+  roadName: string
   description: string
   extra: string
   type: SignType

@@ -40,6 +40,7 @@ export function presentRoadSign(row: RoadSign): RoadSignView {
   return {
     id: String(row.id),
     name: row.name,
+    roadName: row.roadName || '',
     description: row.description,
     extra: row.extra,
     type: row.type,
