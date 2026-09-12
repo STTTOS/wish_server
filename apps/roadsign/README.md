@@ -28,8 +28,10 @@ pnpm --filter @wishufree/roadsign-server dev
 | POST | `/api/common/upload_image`  | 单张：`file` → `{ url, originalUrl, filename }`                                 |
 | POST | `/api/common/upload_images` | 批量：`file` 多文件                                                             |
 
-配置了 `ROADSIGN_API_TOKEN` 后：列表 / 详情 / health 可匿名；写操作与上传需 `Authorization: Bearer <token>` 或 `X-Roadsign-Token`。
+配置了 `ROADSIGN_API_TOKEN` 后：列表 / 详情 / health 可匿名；写操作与上传需 `Authorization: Bearer <token>` 或 `X-Roadsign-Token`。前端用同值 `VITE_ROADSIGN_API_TOKEN`。
 
 部署域名：**roadsign.wishufree.com** → `localhost:7505`。nginx 模板见 `deploy/nginx/roadsign.wishufree.com.conf`。
+
+前端（changduNav）构建后用 `npm run push-origin` 同步到本机 `apps/roadsign/public`（与 mart-web → mart/public 相同）。生产同域访问 `/api`，无需再配 `VITE_API_BASE`。
 
 照片字段与前端一致：`signPhoto` 0~1 张，`extraPhotos` 多张，每张 `{ id, kind, url, originalUrl, name? }`。列表默认展示压缩图 `url`。

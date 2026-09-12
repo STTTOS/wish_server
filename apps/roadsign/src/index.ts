@@ -6,6 +6,7 @@ import { createApp } from './app'
 import { logger } from './logger'
 
 const staticOriginDir = join(__dirname, '../static/origin')
+const publicDir = join(__dirname, '../public')
 
 async function bootstrap() {
   if (!process.env.DATABASE_URL) {
@@ -13,6 +14,7 @@ async function bootstrap() {
   }
 
   await mkdir(staticOriginDir, { recursive: true })
+  await mkdir(publicDir, { recursive: true })
 
   const app = createApp()
   app.listen(Number(port), () => {

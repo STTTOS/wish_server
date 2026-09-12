@@ -3,6 +3,7 @@ node_modules
 .eslintcache
 logs
 static
+public
 .env
 
 # lock文件

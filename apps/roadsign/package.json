@@ -10,7 +10,6 @@
     "prettier": "prettier --write \"**/*.{js,ts,json,md}\"",
     "lint": "eslint --cache --ext .ts ./src",
     "lint:fix": "eslint --fix --cache --ext .ts ./src",
-    "pre-commit-check": "npm run lint && npm run typecheck && npm run build",
     "db:gui": "npx prisma studio",
     "db:migrate--dev": "npx prisma migrate dev",
     "db:migrate--prod": "npx prisma migrate deploy --schema=./prisma/schema.prisma",

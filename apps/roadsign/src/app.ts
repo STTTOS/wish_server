@@ -4,6 +4,7 @@ import cors from '@koa/cors'
 import mount from 'koa-mount'
 import koaBody from 'koa-body'
 import serve from 'koa-static'
+import historyApiFallback from 'koa2-connect-history-api-fallback'
 
 import router from './router'
 import { logger } from './logger'
@@ -33,6 +34,14 @@ export function createApp() {
     }
   })
 
+  // SPA：未匹配文件回退 index.html；API 白名单
+  app.use(
+    historyApiFallback({
+      index: '/public/index.html',
+      whiteList: ['^/api']
+    })
+  )
+
   app.use(
     cors({
       origin(ctx) {
@@ -42,6 +51,25 @@ export function createApp() {
     })
   )
 
+  app.use(async (ctx, next) => {
+    await next()
+    const path = ctx.path
+    const isHtmlEntry =
+      path === '/' ||
+      path === '/index.html' ||
+      path === '/public/index.html' ||
+      (typeof ctx.type === 'string' && ctx.type.includes('html'))
+    if (isHtmlEntry) {
+      ctx.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    }
+  })
+
+  app.use(
+    mount('/', serve(join(__dirname, '../public'), { maxAge: cacheTime }))
+  )
+  app.use(
+    mount('/public', serve(join(__dirname, '../public'), { maxAge: cacheTime }))
+  )
   app.use(
     mount('/static', serve(join(__dirname, '../static'), { maxAge: cacheTime }))
   )
