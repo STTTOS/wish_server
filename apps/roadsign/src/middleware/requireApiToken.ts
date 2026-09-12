@@ -18,7 +18,8 @@ function isPublicRead(ctx: Context): boolean {
   return (
     ctx.path === '/api/roadsign/list' ||
     ctx.path === '/api/roadsign/detail' ||
-    ctx.path === '/api/road/list'
+    ctx.path === '/api/road/list' ||
+    ctx.path === '/api/common/static_map'
   )
 }
 

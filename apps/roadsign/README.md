@@ -27,8 +27,11 @@ pnpm --filter @wishufree/roadsign-server dev
 | POST | `/api/roadsign/delete`      | 删除（body/query `id`）                                                         |
 | POST | `/api/common/upload_image`  | 单张：`file` → `{ url, originalUrl, filename }`                                 |
 | POST | `/api/common/upload_images` | 批量：`file` 多文件                                                             |
+| GET  | `/api/common/static_map`    | 代理高德静态地图（需 `AMAP_WEB_KEY`）；透传 location/zoom/markers/paths 等      |
 
-配置了 `ROADSIGN_API_TOKEN` 后：列表 / 详情 / health 可匿名；写操作与上传需 `Authorization: Bearer <token>` 或 `X-Roadsign-Token`。前端用同值 `VITE_ROADSIGN_API_TOKEN`。
+配置了 `ROADSIGN_API_TOKEN` 后：列表 / 详情 / health / `static_map` 可匿名；写操作与上传需 `Authorization: Bearer <token>` 或 `X-Roadsign-Token`。前端用同值 `VITE_ROADSIGN_API_TOKEN`。
+
+Excel 卫星底图：在 `.env` 配置 **Web 服务** 类型 Key `AMAP_WEB_KEY=`（与 JS API Key 不同）。未配置时导出回退网格示意图。
 
 部署域名：**roadsign.wishufree.com** → `localhost:7505`。nginx 模板见 `deploy/nginx/roadsign.wishufree.com.conf`。
 
