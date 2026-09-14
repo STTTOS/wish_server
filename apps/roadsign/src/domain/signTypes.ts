@@ -1,6 +1,15 @@
 export const SIGN_TYPES = ['existing', 'planned'] as const
 export const SIGN_STATUSES = ['todo', 'doing', 'done'] as const
-export const SIGN_DIRECTIONS = ['ew', 'we', 'ns', 'sn'] as const
+export const SIGN_DIRECTIONS = [
+  'ew',
+  'we',
+  'ns',
+  'sn',
+  'ew_one',
+  'we_one',
+  'ns_one',
+  'sn_one'
+] as const
 export const SIGN_LEVELS = ['l1', 'l2'] as const
 export const PHOTO_KINDS = ['sign', 'extra'] as const
 

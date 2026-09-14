@@ -19,12 +19,16 @@ enum RoadSignStatus {
   done
 }
 
-/// 路牌朝向（阅读方向）
+/// 路牌朝向：ew/we/ns/sn 为双向，*_one 为单向
 enum RoadSignDirection {
   ew
   we
   ns
   sn
+  ew_one
+  we_one
+  ns_one
+  sn_one
 }
 
 enum RoadSignLevel {
