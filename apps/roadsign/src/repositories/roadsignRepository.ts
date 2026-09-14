@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/roadsign-client'
+import type { SignDirection } from '../domain/signTypes'
 import type {
   RoadSignListQuery,
   RoadSignWriteData,
@@ -100,5 +101,24 @@ export const roadsignRepository = {
 
   delete(id: number) {
     return prisma.roadSign.delete({ where: { id } })
+  },
+
+  findByNameRoadDirection(
+    name: string,
+    roadName: string,
+    direction: SignDirection
+  ) {
+    return prisma.roadSign.findMany({
+      where: { name, roadName, direction }
+    })
+  },
+
+  /** 仅更新指定 id 的距离（附近对向） */
+  syncOneWayDistanceByIds(ids: number[], distanceM: number) {
+    if (ids.length === 0) return Promise.resolve({ count: 0 })
+    return prisma.roadSign.updateMany({
+      where: { id: { in: ids } },
+      data: { distanceM }
+    })
   }
 }

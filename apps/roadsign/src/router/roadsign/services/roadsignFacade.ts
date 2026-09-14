@@ -8,6 +8,11 @@ import { HTTP_STATUS } from '../../../constants/httpStatus'
 import { roadRepository } from '../../../repositories/roadRepository'
 import { roadsignRepository } from '../../../repositories/roadsignRepository'
 import {
+  haversineMeters,
+  ONE_WAY_PAIR_RADIUS_M,
+  oneWayOppositeDirection
+} from '../../../domain/signTypes'
+import {
   validateRoadSignId,
   validateRoadSignCreate,
   validateRoadSignUpdate,
@@ -20,6 +25,33 @@ async function assertRoadExists(roadName: string): Promise<ApiResult<null>> {
     return fail(HTTP_STATUS.BAD_REQUEST, '路名不存在，请先在道路管理中添加')
   }
   return ok(null)
+}
+
+async function syncOneWayDistanceIfNeeded(data: {
+  name: string
+  roadName: string
+  direction: RoadSignView['direction']
+  distanceM: number | null
+  lng: number
+  lat: number
+}) {
+  if (data.distanceM == null) return
+  const opposite = oneWayOppositeDirection(data.direction)
+  if (!opposite) return
+  const candidates = await roadsignRepository.findByNameRoadDirection(
+    data.name,
+    data.roadName,
+    opposite
+  )
+  const ids = candidates
+    .filter(
+      (row) =>
+        haversineMeters(data.lng, data.lat, row.lng, row.lat) <=
+        ONE_WAY_PAIR_RADIUS_M
+    )
+    .map((row) => row.id)
+  if (ids.length === 0) return
+  await roadsignRepository.syncOneWayDistanceByIds(ids, data.distanceM)
 }
 
 export async function listRoadSignsFacade(query: Record<string, unknown>) {
@@ -53,6 +85,7 @@ export async function createRoadSignFacade(
   if (!roadOk.ok) return roadOk
 
   const record = await roadsignRepository.create(validated.data)
+  await syncOneWayDistanceIfNeeded(validated.data)
   return ok(presentRoadSign(record))
 }
 
@@ -71,6 +104,7 @@ export async function updateRoadSignFacade(
   if (!roadOk.ok) return roadOk
 
   const record = await roadsignRepository.update(validated.data)
+  await syncOneWayDistanceIfNeeded(validated.data)
   return ok(presentRoadSign(record))
 }
 
