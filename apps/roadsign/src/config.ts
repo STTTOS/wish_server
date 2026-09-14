@@ -4,7 +4,15 @@ export const apiPrefix = '/api'
 
 export const cacheTime = 30 * 24 * 60 * 60
 
+/** 可选：脚本/运维用静态 Token，等同管理员 */
 export const roadsignApiToken = (process.env.ROADSIGN_API_TOKEN || '').trim()
+
+/** 管理员账号（默认 admin / yuanfang） */
+export const adminUsername = (process.env.ROADSIGN_ADMIN_USER || 'admin').trim()
+export const adminPassword = process.env.ROADSIGN_ADMIN_PASSWORD || 'yuanfang'
+export const jwtSecret = (
+  process.env.ROADSIGN_JWT_SECRET || 'roadsign-jwt-dev-secret'
+).trim()
 
 /** 高德 Web 服务 Key（静态地图）；未配置时导出回退到网格示意图 */
 export const amapWebKey = (process.env.AMAP_WEB_KEY || '').trim()

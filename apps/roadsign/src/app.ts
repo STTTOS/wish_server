@@ -11,8 +11,8 @@ import { logger } from './logger'
 import { cacheTime } from './config'
 import response from './utils/response'
 import { HTTP_STATUS } from './constants/httpStatus'
+import { requireAuth } from './middleware/requireAuth'
 import { mapPrismaError } from './utils/mapPrismaError'
-import { requireApiToken } from './middleware/requireApiToken'
 import { createTraceIdMiddleware } from './middleware/traceId'
 
 export function createApp() {
@@ -80,7 +80,7 @@ export function createApp() {
       urlencoded: true
     })
   )
-  app.use(requireApiToken)
+  app.use(requireAuth)
   app.use(router.routes())
   app.use(router.allowedMethods())
 

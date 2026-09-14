@@ -1,3 +1,4 @@
+import './auth'
 import './road'
 import './health'
 import './common'
