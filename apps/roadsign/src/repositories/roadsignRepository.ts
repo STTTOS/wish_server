@@ -113,7 +113,7 @@ export const roadsignRepository = {
     })
   },
 
-  /** 仅更新指定 id 的距离（附近对向） */
+  /** 仅更新指定 id 的距离（同名同路对向） */
   syncOneWayDistanceByIds(ids: number[], distanceM: number) {
     if (ids.length === 0) return Promise.resolve({ count: 0 })
     return prisma.roadSign.updateMany({

@@ -5,13 +5,9 @@ import { withList } from '../../../utils/response'
 import { ok, fail } from '../../../utils/apiResult'
 import { presentRoadSign } from './roadsignPresenter'
 import { HTTP_STATUS } from '../../../constants/httpStatus'
+import { oneWayOppositeDirection } from '../../../domain/signTypes'
 import { roadRepository } from '../../../repositories/roadRepository'
 import { roadsignRepository } from '../../../repositories/roadsignRepository'
-import {
-  haversineMeters,
-  ONE_WAY_PAIR_RADIUS_M,
-  oneWayOppositeDirection
-} from '../../../domain/signTypes'
 import {
   validateRoadSignId,
   validateRoadSignCreate,
@@ -32,8 +28,6 @@ async function syncOneWayDistanceIfNeeded(data: {
   roadName: string
   direction: RoadSignView['direction']
   distanceM: number | null
-  lng: number
-  lat: number
 }) {
   if (data.distanceM == null) return
   const opposite = oneWayOppositeDirection(data.direction)
@@ -43,13 +37,7 @@ async function syncOneWayDistanceIfNeeded(data: {
     data.roadName,
     opposite
   )
-  const ids = candidates
-    .filter(
-      (row) =>
-        haversineMeters(data.lng, data.lat, row.lng, row.lat) <=
-        ONE_WAY_PAIR_RADIUS_M
-    )
-    .map((row) => row.id)
+  const ids = candidates.map((row) => row.id)
   if (ids.length === 0) return
   await roadsignRepository.syncOneWayDistanceByIds(ids, data.distanceM)
 }
