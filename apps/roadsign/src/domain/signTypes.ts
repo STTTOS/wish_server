@@ -12,6 +12,12 @@ export const SIGN_DIRECTIONS = [
 ] as const
 export const SIGN_LEVELS = ['l1', 'l2'] as const
 export const PHOTO_KINDS = ['sign', 'extra'] as const
+export const ONE_WAY_DIRECTIONS = [
+  'ew_one',
+  'we_one',
+  'ns_one',
+  'sn_one'
+] as const
 
 export type SignType = (typeof SIGN_TYPES)[number]
 export type SignStatus = (typeof SIGN_STATUSES)[number]
@@ -36,6 +42,8 @@ export type RoadSignView = {
   type: SignType
   status: SignStatus
   direction: SignDirection
+  /** 单向指向距离（米）；双向为空 */
+  distanceM: number | null
   level: SignLevel
   signPhoto: SignPhoto | null
   extraPhotos: SignPhoto[]
@@ -78,4 +86,8 @@ export function isPhotoKind(value: unknown): value is PhotoKind {
     typeof value === 'string' &&
     (PHOTO_KINDS as readonly string[]).includes(value)
   )
+}
+
+export function isOneWayDirection(value: SignDirection): boolean {
+  return (ONE_WAY_DIRECTIONS as readonly string[]).includes(value)
 }

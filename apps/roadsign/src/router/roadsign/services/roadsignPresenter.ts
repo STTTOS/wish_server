@@ -46,6 +46,7 @@ export function presentRoadSign(row: RoadSign): RoadSignView {
     type: row.type,
     status: row.status,
     direction: row.direction,
+    distanceM: row.distanceM,
     level: row.level,
     signPhoto: presentPhoto(row.signPhoto, 'sign'),
     extraPhotos: presentExtraPhotos(row.extraPhotos),

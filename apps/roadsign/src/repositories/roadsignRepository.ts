@@ -39,6 +39,7 @@ function toWriteInput(data: RoadSignWriteData) {
     type: data.type,
     status: data.status,
     direction: data.direction,
+    distanceM: data.distanceM,
     level: data.level,
     lng: data.lng,
     lat: data.lat,

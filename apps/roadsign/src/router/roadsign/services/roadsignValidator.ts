@@ -14,7 +14,8 @@ import {
   isPhotoKind,
   isSignLevel,
   isSignStatus,
-  isSignDirection
+  isSignDirection,
+  isOneWayDirection
 } from '../../../domain/signTypes'
 
 const MAX_EXTRA_PHOTOS = 20
@@ -27,6 +28,7 @@ export type RoadSignWriteData = {
   type: SignType
   status: SignStatus
   direction: SignDirection
+  distanceM: number | null
   level: SignLevel
   signPhoto: SignPhoto | null
   extraPhotos: SignPhoto[]
@@ -148,6 +150,20 @@ function parseExtraPhotos(value: unknown): ApiResult<SignPhoto[]> {
   return ok(photos)
 }
 
+function parseDistanceM(
+  value: unknown,
+  direction: SignDirection
+): ApiResult<number | null> {
+  if (!isOneWayDirection(direction)) return ok(null)
+  const raw = asSingle(value)
+  if (raw === undefined || raw === null || raw === '') return ok(null)
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n <= 0 || n > 999999) {
+    return fail(HTTP_STATUS.BAD_REQUEST, '指向距离请填写 1～999999 的米数')
+  }
+  return ok(Math.round(n))
+}
+
 function parseEnum<T extends string>(
   value: unknown,
   check: (v: unknown) => v is T,
@@ -196,6 +212,9 @@ function parseWriteBody(
   const direction = parseEnum(body.direction, isSignDirection, '方向无效')
   if (!direction.ok) return direction
 
+  const distanceM = parseDistanceM(body.distanceM, direction.data)
+  if (!distanceM.ok) return distanceM
+
   const level = parseEnum(body.level, isSignLevel, '路牌级别无效')
   if (!level.ok) return level
 
@@ -216,6 +235,7 @@ function parseWriteBody(
     type: type.data,
     status: status.data,
     direction: direction.data,
+    distanceM: distanceM.data,
     level: level.data,
     signPhoto: signPhoto.data,
     extraPhotos: extraPhotos.data,

@@ -61,6 +61,8 @@ model RoadSign {
   type        RoadSignType
   status      RoadSignStatus    @default(todo)
   direction   RoadSignDirection
+  /// 单向指向距离（米）；双向为空
+  distanceM   Int?
   level       RoadSignLevel
   /// 路牌主图：{ id, kind, url, originalUrl, name? } | null
   signPhoto   Json?
