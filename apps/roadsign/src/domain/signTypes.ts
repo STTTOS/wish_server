@@ -1,4 +1,4 @@
-export const SIGN_TYPES = ['existing', 'planned'] as const
+export const SIGN_TYPES = ['existing', 'planned', 'pending'] as const
 export const SIGN_STATUSES = ['todo', 'doing', 'done'] as const
 export const SIGN_DIRECTIONS = [
   'ew',
