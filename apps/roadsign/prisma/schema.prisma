@@ -77,3 +77,10 @@ model RoadSign {
   @@index([name])
   @@index([roadName])
 }
+
+/// 管理员当前登录会话：新登录会覆盖 sessionId，旧 JWT 立即失效
+model AdminSession {
+  username  String   @id @db.VarChar(64)
+  sessionId String   @db.VarChar(64)
+  updatedAt DateTime @updatedAt
+}

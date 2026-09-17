@@ -3,8 +3,11 @@ import { apiPrefix } from '../../config'
 import response from '../../utils/response'
 import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
+import { extractToken } from '../../middleware/requireAuth'
 import {
+  isApiToken,
   signAdminToken,
+  revokeUserToken,
   validateAdminCredentials
 } from '../../services/authToken'
 
@@ -21,18 +24,22 @@ router.post(authApi('/login'), async (ctx) => {
   }
   const username =
     typeof body.username === 'string' ? body.username.trim() : 'admin'
-  const token = signAdminToken(username)
+  const token = await signAdminToken(username)
   response.success(
     ctx,
     {
       token,
       user: { username, role: 'admin' as const }
     },
-    '登录成功'
+    '登录成功，其他设备已下线'
   )
 })
 
 router.post(authApi('/logout'), async (ctx) => {
+  const token = extractToken(ctx)
+  if (token && !isApiToken(token)) {
+    await revokeUserToken(token)
+  }
   response.success(ctx, null, '已退出登录')
 })
 

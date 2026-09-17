@@ -6,34 +6,63 @@ import {
   adminUsername,
   roadsignApiToken
 } from '../config'
+import {
+  matchAdminSession,
+  revokeAdminSession,
+  rotateAdminSession
+} from './adminSession'
 
 export type AuthUser = {
   username: string
   role: 'admin'
 }
 
+type AdminJwtPayload = {
+  username?: string
+  role?: string
+  sessionId?: string
+}
+
+export type UserTokenCheck =
+  | { ok: true; user: AuthUser }
+  | { ok: false; reason: 'invalid' | 'kicked' }
+
 const TOKEN_TTL = '7d'
 
-export function signAdminToken(username: string): string {
-  return jwt.sign({ username, role: 'admin' }, jwtSecret, {
+export async function signAdminToken(username: string): Promise<string> {
+  const sessionId = await rotateAdminSession(username)
+  return jwt.sign({ username, role: 'admin', sessionId }, jwtSecret, {
     expiresIn: TOKEN_TTL
   })
 }
 
-export function verifyUserToken(token: string): AuthUser | null {
+export async function checkUserToken(token: string): Promise<UserTokenCheck> {
   try {
-    const payload = jwt.verify(token, jwtSecret) as {
-      username?: string
-      role?: string
+    const payload = jwt.verify(token, jwtSecret) as AdminJwtPayload
+    if (payload.role !== 'admin' || !payload.username || !payload.sessionId) {
+      return { ok: false, reason: 'invalid' }
     }
-    if (payload.role !== 'admin' || !payload.username) return null
-    return { username: payload.username, role: 'admin' }
+    if (!(await matchAdminSession(payload.username, payload.sessionId))) {
+      return { ok: false, reason: 'kicked' }
+    }
+    return { ok: true, user: { username: payload.username, role: 'admin' } }
   } catch {
-    return null
+    return { ok: false, reason: 'invalid' }
   }
 }
 
-/** 静态 API Token（脚本/运维）视为管理员 */
+export async function revokeUserToken(token: string): Promise<void> {
+  try {
+    const payload = jwt.verify(token, jwtSecret) as AdminJwtPayload
+    if (payload.username && payload.sessionId) {
+      await revokeAdminSession(payload.username, payload.sessionId)
+    }
+  } catch {
+    /* 过期或伪造 token：无需处理 */
+  }
+}
+
+/** 静态 API Token（脚本/运维）视为管理员，不受单端登录约束 */
 export function isApiToken(token: string): boolean {
   return Boolean(roadsignApiToken) && token === roadsignApiToken
 }

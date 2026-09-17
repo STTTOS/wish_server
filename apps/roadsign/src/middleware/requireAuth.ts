@@ -5,7 +5,7 @@ import { HTTP_STATUS } from '../constants/httpStatus'
 import {
   isApiToken,
   type AuthUser,
-  verifyUserToken
+  checkUserToken
 } from '../services/authToken'
 
 declare module 'koa' {
@@ -15,7 +15,7 @@ declare module 'koa' {
   }
 }
 
-function extractToken(ctx: Context): string {
+export function extractToken(ctx: Context): string {
   const header = ctx.get('authorization') || ''
   if (header.toLowerCase().startsWith('bearer ')) {
     return header.slice(7).trim()
@@ -51,8 +51,20 @@ export async function requireAuth(ctx: Context, next: Next) {
       isAdmin = true
       user = { username: 'api-token', role: 'admin' }
     } else {
-      user = verifyUserToken(token)
-      isAdmin = Boolean(user)
+      const checked = await checkUserToken(token)
+      if (checked.ok) {
+        user = checked.user
+        isAdmin = true
+      } else if (!isPublicPath(ctx) && checked.reason === 'kicked') {
+        ctx.state.user = null
+        ctx.state.isAdmin = false
+        response.error(
+          ctx,
+          HTTP_STATUS.UNAUTHORIZED,
+          '账号已在其他设备登录，请重新登录'
+        )
+        return
+      }
     }
   }
 
