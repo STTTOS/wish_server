@@ -9,6 +9,7 @@ export {
 export { computePotOdds, computeMdfHint } from './potOdds'
 export { classifyBoardTexture } from './boardTexture'
 export { buildDecisionSnapshot } from './buildSnapshotFields'
+export { roleToPositionBucket, stageToStreet } from './position'
 export { scoreDecisionNode } from './scoreNode'
 export {
   aggregateHandTech,

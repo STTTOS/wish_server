@@ -21,6 +21,7 @@ import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import { applyStyleStatsForHandSafe } from '../../../../styleStats/applyStyleStatsForHand'
+import { projectDecisionSkillForHandSafe } from '../../../../decisionSkill/projectFromHand'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -528,6 +529,7 @@ async function handleHandEnded(
     })
 
     await applyStyleStatsForHandSafe(currentMatchId)
+    await projectDecisionSkillForHandSafe(currentMatchId)
 
     let matchOverview: WsMatchOverview = {
       wagerList: [],
