@@ -37,7 +37,6 @@ test('deriveStyleTags: loose passive fish with leaks', () => {
   assert.ok(keys.includes('leak_calling_station'))
   assert.ok(keys.includes('leak_vpip_high'))
   assert.ok(keys.includes('leak_limp'))
-  assert.ok(!keys.includes('leak_chart'))
   assert.ok(keys.includes('leak_skill_low'))
 })
 

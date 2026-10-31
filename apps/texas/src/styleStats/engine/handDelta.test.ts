@@ -1,24 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { skillFromCounters } from './skill'
 import { estimateHuEquity } from './equity'
 import { emptyHandStyleDelta } from './types'
 import { axesFromCounters } from './fromCounters'
 import { computeHandStyleDeltas } from './handDelta'
-import { isHoleInChart, normalizeHoleLabel } from './chartRanges'
-
-test('normalizeHoleLabel: pairs and suited', () => {
-  assert.equal(normalizeHoleLabel(['ha', 'sa']), 'aa')
-  assert.equal(normalizeHoleLabel(['ha', 'hk']), 'AKs')
-  assert.equal(normalizeHoleLabel(['ha', 'sk']), 'AKo')
-})
-
-test('isHoleInChart: UTG tight vs BTN wide', () => {
-  assert.equal(isHoleInChart(['h2', 's7'], 'utg'), false)
-  assert.equal(isHoleInChart(['ha', 'sk'], 'utg'), true)
-  assert.equal(isHoleInChart(['h9', 'h8'], 'btn'), true)
-})
 
 test('computeHandStyleDeltas: limp call is VPIP not PFR', () => {
   const map = computeHandStyleDeltas({
@@ -228,7 +214,7 @@ test('computeHandStyleDeltas: open raise is PFR and cbet opp', () => {
   assert.equal(d1.redlineBb > 0, true)
 })
 
-test('axesFromCounters and skillFromCounters produce finite scores', () => {
+test('axesFromCounters produce finite rates', () => {
   const c = {
     ...emptyHandStyleDelta(),
     hands: 100,
@@ -243,12 +229,6 @@ test('axesFromCounters and skillFromCounters produce finite scores', () => {
     sawFlopHands: 40,
     wtsdHands: 10,
     wsdWonHands: 6,
-    realizedWagerBb: 50,
-    allInAdjWagerBb: 40,
-    allInEquitySum: 6,
-    allInEquityCount: 10,
-    chartOkVpipHands: 20,
-    chartKnownVpipHands: 25,
     limpHands: 2,
     redlineBb: 30,
     bluelineBb: 10
@@ -256,64 +236,7 @@ test('axesFromCounters and skillFromCounters produce finite scores', () => {
   const axes = axesFromCounters(c)
   assert.equal(axes.axisVpip, 25)
   assert.equal(axes.axisPfr, 20)
-  const skill = skillFromCounters(c)
-  assert.ok(skill.skillScore >= 0 && skill.skillScore <= 100)
-  assert.ok(skill.skillL2 > 0)
-})
-
-test('skillL3: negative redline is not rewarded via abs share', () => {
-  const losingFolds = skillFromCounters({
-    ...emptyHandStyleDelta(),
-    hands: 100,
-    redlineBb: -200,
-    bluelineBb: -10,
-    chartKnownVpipHands: 0
-  })
-  const winningFolds = skillFromCounters({
-    ...emptyHandStyleDelta(),
-    hands: 100,
-    redlineBb: 200,
-    bluelineBb: 10,
-    chartKnownVpipHands: 0
-  })
-  assert.ok(winningFolds.skillL3 > losingFolds.skillL3)
-  assert.ok(losingFolds.skillL3 < 55)
-})
-
-test('skillL1: no all-in equity sample does not inject default 55 pad', () => {
-  const a = skillFromCounters({
-    ...emptyHandStyleDelta(),
-    hands: 100,
-    allInAdjWagerBb: 0,
-    allInEquityCount: 0,
-    chartKnownVpipHands: 0
-  })
-  // adj bb/100 = 0 → scoreAdj = 50
-  assert.equal(a.skillL1, 50)
-})
-
-test('skillL2: unknown holes use neutral chart rate (not zero)', () => {
-  const skill = skillFromCounters({
-    ...emptyHandStyleDelta(),
-    hands: 100,
-    vpipHands: 80,
-    chartOkVpipHands: 0,
-    chartKnownVpipHands: 0,
-    limpHands: 10
-  })
-  assert.ok(skill.skillL2 > 20)
-})
-
-test('skillL2: loose fish still above floor when some chart hits', () => {
-  const skill = skillFromCounters({
-    ...emptyHandStyleDelta(),
-    hands: 100,
-    vpipHands: 90,
-    chartOkVpipHands: 18,
-    chartKnownVpipHands: 90,
-    limpHands: 35
-  })
-  assert.ok(skill.skillL2 > 0)
+  assert.equal(axes.axis3Bet, 10)
 })
 
 test('estimateHuEquity: AA vs 72o on empty board favors AA', () => {

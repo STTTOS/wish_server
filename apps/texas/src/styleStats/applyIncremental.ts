@@ -28,8 +28,6 @@ const counterFieldsFromDelta = (d: HandStyleDelta) => ({
   allInAdjWagerBb: d.allInAdjWagerBb,
   allInEquitySum: d.allInEquitySum,
   allInEquityCount: d.allInEquityCount,
-  chartOkVpipHands: d.chartOkVpipHands,
-  chartKnownVpipHands: d.chartKnownVpipHands,
   limpHands: d.limpHands,
   redlineBb: d.redlineBb,
   bluelineBb: d.bluelineBb
@@ -54,8 +52,6 @@ const toCounters = (row: {
   allInAdjWagerBb: number
   allInEquitySum: number
   allInEquityCount: number
-  chartOkVpipHands: number
-  chartKnownVpipHands: number
   limpHands: number
   redlineBb: number
   bluelineBb: number
@@ -76,14 +72,12 @@ const toCounters = (row: {
   allInAdjWagerBb: row.allInAdjWagerBb,
   allInEquitySum: row.allInEquitySum,
   allInEquityCount: row.allInEquityCount,
-  chartOkVpipHands: row.chartOkVpipHands,
-  chartKnownVpipHands: row.chartKnownVpipHands,
   limpHands: row.limpHands,
   redlineBb: row.redlineBb,
   bluelineBb: row.bluelineBb
 })
 
-/** 轴缓存；旧 L1–L4 技术分已迁至 decisionSkill / PlayerTechStat */
+/** 轴缓存；技术分见 PlayerTechStat */
 const derivedCache = (c: StyleCounters) => {
   const axes = axesFromCounters(c)
   return {
@@ -93,22 +87,12 @@ const derivedCache = (c: StyleCounters) => {
     axisAfq: axes.axisAfq,
     axisCbet: axes.axisCbet,
     axisWtsd: axes.axisWtsd,
-    axisWsd: axes.axisWsd,
-    skillScore: null as number | null,
-    skillL1: null as number | null,
-    skillL2: null as number | null,
-    skillL3: null as number | null,
-    skillL4: null as number | null
+    axisWsd: axes.axisWsd
   }
 }
 
-const populationAvgCache = (c: StyleCounters, avgSkill: number | null) => {
-  const a = populationAveragesFromCounters(c)
-  return { ...a, avgSkill }
-}
-
 /**
- * 将一手 delta 写入用户 scope 行 + 全站 population；刷新缓存轴/技术分。
+ * 将一手 delta 写入用户 scope 行 + 全站 population；刷新缓存轴。
  */
 export const applyHandStyleDeltas = async (
   tx: Tx,
@@ -193,9 +177,6 @@ const upsertPlayerDelta = async (
     allInAdjWagerBb: existing.allInAdjWagerBb + delta.allInAdjWagerBb,
     allInEquitySum: existing.allInEquitySum + delta.allInEquitySum,
     allInEquityCount: existing.allInEquityCount + delta.allInEquityCount,
-    chartOkVpipHands: existing.chartOkVpipHands + delta.chartOkVpipHands,
-    chartKnownVpipHands:
-      existing.chartKnownVpipHands + delta.chartKnownVpipHands,
     limpHands: existing.limpHands + delta.limpHands,
     redlineBb: existing.redlineBb + delta.redlineBb,
     bluelineBb: existing.bluelineBb + delta.bluelineBb
@@ -242,8 +223,6 @@ const upsertPopulationDelta = async (
       allInAdjWagerBb: 0,
       allInEquitySum: 0,
       allInEquityCount: 0,
-      chartOkVpipHands: 0,
-      chartKnownVpipHands: 0,
       limpHands: 0,
       redlineBb: 0,
       bluelineBb: 0
@@ -276,20 +255,16 @@ const upsertPopulationDelta = async (
       allInAdjWagerBb: 0,
       allInEquitySum: 0,
       allInEquityCount: 0,
-      chartOkVpipHands: 0,
-      chartKnownVpipHands: 0,
       limpHands: 0,
       redlineBb: 0,
       bluelineBb: 0
     }
-    const avgs = populationAvgCache(popCounters, null)
+    const avgs = populationAveragesFromCounters(popCounters)
     await tx.stylePopulationStat.create({
       data: {
         id: scope,
         statsVersion: STYLE_STATS_VERSION,
         ...opportunity,
-        skillEligibleUsers: 0,
-        skillScoreSum: 0,
         ...avgs
       }
     })
@@ -313,18 +288,12 @@ const upsertPopulationDelta = async (
     allInAdjWagerBb: 0,
     allInEquitySum: 0,
     allInEquityCount: 0,
-    chartOkVpipHands: 0,
-    chartKnownVpipHands: 0,
     limpHands: 0,
     redlineBb: 0,
     bluelineBb: 0
   }
 
-  const avgSkill =
-    existing.skillEligibleUsers > 0
-      ? existing.skillScoreSum / existing.skillEligibleUsers
-      : null
-  const avgs = populationAvgCache(popCounters, avgSkill)
+  const avgs = populationAveragesFromCounters(popCounters)
 
   await tx.stylePopulationStat.update({
     where: { id: scope },

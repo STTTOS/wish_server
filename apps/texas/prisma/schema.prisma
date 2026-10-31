@@ -373,26 +373,18 @@ model PlayerStyleStat {
   allInEquitySum   Float @default(0)
   allInEquityCount Int   @default(0)
 
-  chartOkVpipHands    Int @default(0)
-  /// 入池且洞牌可解析的手数（L2 分母；缺洞牌不计入）
-  chartKnownVpipHands Int @default(0)
-  limpHands           Int @default(0)
+  limpHands Int @default(0)
 
   redlineBb  Float @default(0)
   bluelineBb Float @default(0)
 
-  axisVpip   Float?
-  axisPfr    Float?
-  axis3Bet   Float?
-  axisAfq    Float?
-  axisCbet   Float?
-  axisWtsd   Float?
-  axisWsd    Float?
-  skillScore Float?
-  skillL1    Float?
-  skillL2    Float?
-  skillL3    Float?
-  skillL4    Float?
+  axisVpip Float?
+  axisPfr  Float?
+  axis3Bet Float?
+  axisAfq  Float?
+  axisCbet Float?
+  axisWtsd Float?
+  axisWsd  Float?
 
   lastMatchId Int?
   updatedAt   DateTime @updatedAt
@@ -415,7 +407,7 @@ model StyleStatAppliedHand {
   @@map("style_stat_applied_hand")
 }
 
-/// 全站牌风参考（机会加权分子分母 + 达标用户技术分合计）
+  /// 全站牌风参考（机会加权分子分母；技术分见 PlayerTechStat）
 model StylePopulationStat {
   /// `all` | `standard` | …
   id String @id @db.VarChar(16)
@@ -439,17 +431,13 @@ model StylePopulationStat {
   wtsdHands    Int @default(0)
   wsdWonHands  Int @default(0)
 
-  skillEligibleUsers Int   @default(0)
-  skillScoreSum      Float @default(0)
-
-  avgVpip  Float?
-  avgPfr   Float?
-  avg3Bet  Float?
-  avgAfq   Float?
-  avgCbet  Float?
-  avgWtsd  Float?
-  avgWsd   Float?
-  avgSkill Float?
+  avgVpip Float?
+  avgPfr  Float?
+  avg3Bet Float?
+  avgAfq  Float?
+  avgCbet Float?
+  avgWtsd Float?
+  avgWsd  Float?
 
   updatedAt DateTime @updatedAt
 

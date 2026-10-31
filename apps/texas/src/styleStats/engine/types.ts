@@ -18,9 +18,6 @@ export type HandStyleDelta = {
   allInAdjWagerBb: number
   allInEquitySum: number
   allInEquityCount: number
-  chartOkVpipHands: number
-  /** 入池且洞牌可解析；L2 合规率分母 */
-  chartKnownVpipHands: number
   limpHands: number
   redlineBb: number
   bluelineBb: number
@@ -36,14 +33,6 @@ export type StyleAxes = {
   axisCbet: number | null
   axisWtsd: number | null
   axisWsd: number | null
-}
-
-export type SkillBreakdown = {
-  skillL1: number
-  skillL2: number
-  skillL3: number
-  skillL4: number
-  skillScore: number
 }
 
 export type StyleAction = {
@@ -92,8 +81,6 @@ export const emptyHandStyleDelta = (): HandStyleDelta => ({
   allInAdjWagerBb: 0,
   allInEquitySum: 0,
   allInEquityCount: 0,
-  chartOkVpipHands: 0,
-  chartKnownVpipHands: 0,
   limpHands: 0,
   redlineBb: 0,
   bluelineBb: 0

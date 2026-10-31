@@ -48,12 +48,6 @@ export type UserStyleRadarDto = {
     decision: number | null
     /** 结构健康分 */
     structure: number | null
-    /** @deprecated 兼容旧前端；等同 decision */
-    l1: number | null
-    /** @deprecated 兼容旧前端；等同 structure */
-    l2: number | null
-    l3: number | null
-    l4: number | null
     rank: number | null
     rankOf: number | null
   }
@@ -218,10 +212,6 @@ export const getUserStyleRadar = async (
       score: playerTech,
       decision,
       structure,
-      l1: decision,
-      l2: structure,
-      l3: null,
-      l4: null,
       rank: skillRank,
       rankOf: skillRankOf
     }

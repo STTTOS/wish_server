@@ -14,7 +14,7 @@
 | **2 Schema**          | `DecisionSkillSnapshot` + 用户聚合 `PlayerTechStat`（或扩 style 表）；迁移     | 1 commit |
 | **3 投影**            | 手结束从 domain/结算投影快照（排除盲注、无洞牌字段）                           | 1 commit |
 | **4 异步评分 + 接线** | 评分队列/同步钩子；雷达 skill → PlayerTech；榜用新分                           | 1 commit |
-| **5 清理**            | 删除技术分用 L1–L4/chart 路径、洞牌相关计数写入与标签、死代码                  | 1 commit |
+| **5 清理** ✅         | 删除技术分用 L1–L4/chart 路径、洞牌相关计数写入与标签、死代码                  | 1 commit |
 
 每批：**pre-commit-check → husky commit**。
 
