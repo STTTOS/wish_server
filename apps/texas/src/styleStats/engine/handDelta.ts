@@ -81,8 +81,10 @@ export const computeHandStyleDeltas = (
     if (did3) d.threeBetHands = 1
 
     const foldedPre = myPre.some((a) => a.actionType === 'fold')
+    // AFq（对齐常见 PT）：(bet+raise+allIn)/(同集合+call+check)；不含 fold
     const myPost = postflop.filter((a) => a.userId === seat.userId)
     for (const a of myPost) {
+      if (a.actionType === 'fold') continue
       d.afqActions += 1
       if (isAggressive(a.actionType)) d.afqAggressive += 1
     }

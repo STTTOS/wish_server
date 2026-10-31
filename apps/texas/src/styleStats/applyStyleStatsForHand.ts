@@ -35,6 +35,7 @@ export const applyStyleStatsForHand = async (matchId: number) => {
       boardThroughStage: true,
       room: { select: { tableType: true } },
       records: {
+        where: { source: 'action' },
         orderBy: { id: 'asc' },
         select: {
           userId: true,
@@ -51,12 +52,18 @@ export const applyStyleStatsForHand = async (matchId: number) => {
           wager: true,
           isFold: true,
           isAllIn: true,
-          rankCategory: true
+          sevenTwoBonusPaid: true,
+          sevenTwoBonusReceived: true
         }
       }
     }
   })
   if (!matchRow) return
+
+  // 摊牌 = 仍有 ≥2 人未弃牌。勿用 rankCategory：fold_win 在已发公牌时 Core 仍会给未弃牌者写牌力。
+  const nonFoldCount = matchRow.playerMatchRecords.filter(
+    (p) => !p.isFold
+  ).length
 
   const input: StyleHandInput = {
     matchId,
@@ -73,10 +80,12 @@ export const applyStyleStatsForHand = async (matchId: number) => {
       userId: p.userId,
       role: p.role,
       handPokes: parsePokes(p.handPokes),
-      wager: p.wager,
+      // 去掉 27o 局外奖励，保留底池净输赢
+      wager:
+        p.wager - (p.sevenTwoBonusReceived ?? 0) + (p.sevenTwoBonusPaid ?? 0),
       isFold: p.isFold,
       isAllIn: p.isAllIn,
-      wentToShowdown: !p.isFold && p.rankCategory != null
+      wentToShowdown: !p.isFold && nonFoldCount >= 2
     }))
   }
 

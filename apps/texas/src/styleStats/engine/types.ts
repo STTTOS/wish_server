@@ -58,7 +58,7 @@ export type StyleSeat = {
   wager: number
   isFold: boolean
   isAllIn: boolean
-  /** 是否进入摊牌比牌（非弃牌独赢） */
+  /** 是否进入摊牌比牌（≥2 人未弃牌；fold_win 为 false） */
   wentToShowdown: boolean
 }
 

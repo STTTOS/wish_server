@@ -62,6 +62,133 @@ test('computeHandStyleDeltas: limp call is VPIP not PFR', () => {
   assert.equal(d1.chartOkVpipHands, 1)
 })
 
+test('computeHandStyleDeltas: AFq excludes fold from denominator', () => {
+  const map = computeHandStyleDeltas({
+    matchId: 5,
+    lowestBetAmount: 2,
+    boardPokes: ['h2', 'd3', 'c4'],
+    boardThroughStage: 'flop',
+    actions: [
+      { userId: 1, actionType: 'raise', amount: 6, stage: 'pre_flop' },
+      { userId: 2, actionType: 'call', amount: 4, stage: 'pre_flop' },
+      { userId: 1, actionType: 'bet', amount: 4, stage: 'flop' },
+      { userId: 2, actionType: 'fold', amount: 0, stage: 'flop' }
+    ],
+    seats: [
+      {
+        userId: 1,
+        role: 'btn',
+        handPokes: ['ha', 'hk'],
+        wager: 10,
+        isFold: false,
+        isAllIn: false,
+        wentToShowdown: false
+      },
+      {
+        userId: 2,
+        role: 'bb',
+        handPokes: ['s2', 'c7'],
+        wager: -10,
+        isFold: true,
+        isAllIn: false,
+        wentToShowdown: false
+      }
+    ]
+  })
+  const d2 = map.get(2)!
+  assert.equal(d2.afqActions, 0)
+  assert.equal(d2.afqAggressive, 0)
+  const d1 = map.get(1)!
+  assert.equal(d1.afqActions, 1)
+  assert.equal(d1.afqAggressive, 1)
+})
+
+test('computeHandStyleDeltas: postflop fold_win is sawFlop but not WTSD', () => {
+  const map = computeHandStyleDeltas({
+    matchId: 3,
+    lowestBetAmount: 2,
+    boardPokes: ['h2', 'd3', 'c4'],
+    boardThroughStage: 'flop',
+    actions: [
+      { userId: 1, actionType: 'raise', amount: 6, stage: 'pre_flop' },
+      { userId: 2, actionType: 'call', amount: 4, stage: 'pre_flop' },
+      { userId: 1, actionType: 'bet', amount: 8, stage: 'flop' },
+      { userId: 2, actionType: 'fold', amount: 0, stage: 'flop' }
+    ],
+    seats: [
+      {
+        userId: 1,
+        role: 'btn',
+        handPokes: ['ha', 'hk'],
+        wager: 14,
+        isFold: false,
+        isAllIn: false,
+        wentToShowdown: false
+      },
+      {
+        userId: 2,
+        role: 'bb',
+        handPokes: ['s2', 'c7'],
+        wager: -14,
+        isFold: true,
+        isAllIn: false,
+        wentToShowdown: false
+      }
+    ]
+  })
+  const d1 = map.get(1)!
+  assert.equal(d1.sawFlopHands, 1)
+  assert.equal(d1.wtsdHands, 0)
+  assert.equal(d1.wsdWonHands, 0)
+  assert.equal(d1.redlineBb > 0, true)
+  assert.equal(d1.bluelineBb, 0)
+})
+
+test('computeHandStyleDeltas: showdown counts WTSD and W$SD from pot wager', () => {
+  const map = computeHandStyleDeltas({
+    matchId: 4,
+    lowestBetAmount: 2,
+    boardPokes: ['h2', 'd3', 'c4', 's5', 'h6'],
+    boardThroughStage: 'river',
+    actions: [
+      { userId: 1, actionType: 'raise', amount: 6, stage: 'pre_flop' },
+      { userId: 2, actionType: 'call', amount: 4, stage: 'pre_flop' },
+      { userId: 1, actionType: 'check', amount: 0, stage: 'flop' },
+      { userId: 2, actionType: 'check', amount: 0, stage: 'flop' },
+      { userId: 1, actionType: 'check', amount: 0, stage: 'turn' },
+      { userId: 2, actionType: 'check', amount: 0, stage: 'turn' },
+      { userId: 1, actionType: 'check', amount: 0, stage: 'river' },
+      { userId: 2, actionType: 'check', amount: 0, stage: 'river' }
+    ],
+    seats: [
+      {
+        userId: 1,
+        role: 'btn',
+        handPokes: ['ha', 'sa'],
+        wager: 6,
+        isFold: false,
+        isAllIn: false,
+        wentToShowdown: true
+      },
+      {
+        userId: 2,
+        role: 'bb',
+        handPokes: ['h2', 'c7'],
+        wager: -6,
+        isFold: false,
+        isAllIn: false,
+        wentToShowdown: true
+      }
+    ]
+  })
+  const d1 = map.get(1)!
+  const d2 = map.get(2)!
+  assert.equal(d1.wtsdHands, 1)
+  assert.equal(d1.wsdWonHands, 1)
+  assert.equal(d2.wtsdHands, 1)
+  assert.equal(d2.wsdWonHands, 0)
+})
+
 test('computeHandStyleDeltas: open raise is PFR and cbet opp', () => {
   const map = computeHandStyleDeltas({
     matchId: 2,

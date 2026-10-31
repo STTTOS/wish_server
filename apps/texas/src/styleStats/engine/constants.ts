@@ -1,5 +1,8 @@
-/** 牌风口径版本；bump 后需 backfill */
-export const STYLE_STATS_VERSION = 1
+/**
+ * 牌风口径版本；变更须 bump 并跑 backfill:style-stats
+ * v2 排除贴盲；v3 摊牌人数/27o wager；v4 AFq 分母不含 fold
+ */
+export const STYLE_STATS_VERSION = 4
 
 /** 技术分 / 全站 skill 均值纳入门槛（手数） */
 export const SKILL_SAMPLE_HANDS = 50
