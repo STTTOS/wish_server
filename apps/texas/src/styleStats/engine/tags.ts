@@ -21,8 +21,6 @@ export type DeriveStyleTagsInput = {
   skill: number | null
   popAvgSkill: number | null
   limpHands: number
-  chartOkVpipHands: number
-  chartKnownVpipHands: number
 }
 
 const TAG_MIN_HANDS = 50
@@ -126,20 +124,6 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
       tone: 'leak',
       hint: `约 ${(limpRate * 100).toFixed(0)}% 手数为 limp 入池。`
     })
-  }
-
-  if (input.chartKnownVpipHands >= 30) {
-    const chartRate = input.chartOkVpipHands / input.chartKnownVpipHands
-    if (chartRate < 0.35) {
-      tags.push({
-        key: 'leak_chart',
-        label: '选牌偏散',
-        tone: 'leak',
-        hint: `已知洞牌入池中仅约 ${(chartRate * 100).toFixed(
-          0
-        )}% 落在座位参考表内。`
-      })
-    }
   }
 
   if (

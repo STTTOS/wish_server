@@ -13,9 +13,7 @@ test('deriveStyleTags: insufficient sample only', () => {
     wsd: 40,
     skill: 20,
     popAvgSkill: 50,
-    limpHands: 5,
-    chartOkVpipHands: 0,
-    chartKnownVpipHands: 0
+    limpHands: 5
   })
   assert.equal(tags.length, 1)
   assert.equal(tags[0]?.key, 'sample_insufficient')
@@ -31,18 +29,15 @@ test('deriveStyleTags: loose passive fish with leaks', () => {
     wsd: 41.1,
     skill: 24,
     popAvgSkill: 50,
-    limpHands: 120,
-    chartOkVpipHands: 40,
-    chartKnownVpipHands: 400
+    limpHands: 120
   })
   const keys = tags.map((t) => t.key)
   assert.ok(!keys.includes('sample_ok'))
-  // 90.6 VPIP, pfrRatio≈0.515 → 松被动（&lt;0.55）
   assert.ok(keys.includes('style_fish'))
   assert.ok(keys.includes('leak_calling_station'))
   assert.ok(keys.includes('leak_vpip_high'))
   assert.ok(keys.includes('leak_limp'))
-  assert.ok(keys.includes('leak_chart'))
+  assert.ok(!keys.includes('leak_chart'))
   assert.ok(keys.includes('leak_skill_low'))
 })
 
@@ -56,9 +51,7 @@ test('deriveStyleTags: tight aggressive', () => {
     wsd: 55,
     skill: 62,
     popAvgSkill: 50,
-    limpHands: 5,
-    chartOkVpipHands: 40,
-    chartKnownVpipHands: 45
+    limpHands: 5
   })
   assert.ok(tags.some((t) => t.key === 'style_tight_aggro'))
   assert.ok(!tags.some((t) => t.key === 'sample_ok'))
@@ -75,9 +68,7 @@ test('deriveStyleTags: vpip leak is absolute not vs pop', () => {
     wsd: 56,
     skill: 50,
     popAvgSkill: 50,
-    limpHands: 2000,
-    chartOkVpipHands: 100,
-    chartKnownVpipHands: 500
+    limpHands: 2000
   })
   assert.ok(tags.some((t) => t.key === 'leak_vpip_high'))
   assert.ok(tags.some((t) => t.key === 'style_fish'))
@@ -93,9 +84,7 @@ test('deriveStyleTags: loose + ratio 0.52 is 松被动 not 常规', () => {
     wsd: 50,
     skill: 40,
     popAvgSkill: 40,
-    limpHands: 10,
-    chartOkVpipHands: 200,
-    chartKnownVpipHands: 300
+    limpHands: 10
   })
   assert.ok(tags.some((t) => t.key === 'style_fish'))
   assert.ok(!tags.some((t) => t.key === 'style_reg'))

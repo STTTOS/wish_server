@@ -1,7 +1,6 @@
 import type { Stage } from '@prisma/texas-client'
 
 import { estimateHuEquity } from './equity'
-import { isHoleInChart, normalizeHoleLabel } from './chartRanges'
 import {
   type StyleAction,
   emptyHandStyleDelta,
@@ -58,12 +57,6 @@ export const computeHandStyleDeltas = (
 
     const limp = vpip && !pfr && myPre.some((a) => a.actionType === 'call')
     if (limp) d.limpHands = 1
-
-    // 选牌：仅洞牌可解析时计入；缺洞牌既不奖也不罚
-    if (vpip && normalizeHoleLabel(seat.handPokes)) {
-      d.chartKnownVpipHands = 1
-      if (isHoleInChart(seat.handPokes, seat.role)) d.chartOkVpipHands = 1
-    }
 
     // 3-bet：扫 preflop；自己行动时若此前已有他人加注次数>=1
     let raisesByOthers = 0

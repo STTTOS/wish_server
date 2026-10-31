@@ -59,7 +59,6 @@ test('computeHandStyleDeltas: limp call is VPIP not PFR', () => {
   assert.equal(d1.vpipHands, 1)
   assert.equal(d1.pfrHands, 0)
   assert.equal(d1.limpHands, 1)
-  assert.equal(d1.chartOkVpipHands, 1)
 })
 
 test('computeHandStyleDeltas: AFq excludes fold from denominator', () => {

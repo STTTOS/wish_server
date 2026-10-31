@@ -146,9 +146,7 @@ export const getUserStyleRadar = async (
     wsd: player?.axisWsd ?? null,
     skill: playerTech,
     popAvgSkill: avgTech,
-    limpHands: player?.limpHands ?? 0,
-    chartOkVpipHands: 0,
-    chartKnownVpipHands: 0
+    limpHands: player?.limpHands ?? 0
   })
 
   const axes: StyleRadarAxisDto[] = [

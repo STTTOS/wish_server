@@ -3,8 +3,6 @@ import type { Prisma } from '@prisma/texas-client'
 import {
   STYLE_SCOPE_ALL,
   axesFromCounters,
-  skillFromCounters,
-  SKILL_SAMPLE_HANDS,
   type StyleCounters,
   STYLE_STATS_VERSION,
   type HandStyleDelta,
@@ -85,9 +83,9 @@ const toCounters = (row: {
   bluelineBb: row.bluelineBb
 })
 
+/** 轴缓存；旧 L1–L4 技术分已迁至 decisionSkill / PlayerTechStat */
 const derivedCache = (c: StyleCounters) => {
   const axes = axesFromCounters(c)
-  const skill = skillFromCounters(c)
   return {
     axisVpip: axes.axisVpip,
     axisPfr: axes.axisPfr,
@@ -96,11 +94,11 @@ const derivedCache = (c: StyleCounters) => {
     axisCbet: axes.axisCbet,
     axisWtsd: axes.axisWtsd,
     axisWsd: axes.axisWsd,
-    skillScore: skill.skillScore,
-    skillL1: skill.skillL1,
-    skillL2: skill.skillL2,
-    skillL3: skill.skillL3,
-    skillL4: skill.skillL4
+    skillScore: null as number | null,
+    skillL1: null as number | null,
+    skillL2: null as number | null,
+    skillL3: null as number | null,
+    skillL4: null as number | null
   }
 }
 
@@ -175,20 +173,9 @@ const upsertPlayerDelta = async (
         ...cache
       }
     })
-    if (scope === STYLE_SCOPE_ALL) {
-      await patchPopulationSkillSum(tx, {
-        scope,
-        oldHands: 0,
-        newHands: counters.hands,
-        oldSkill: null,
-        newSkill: cache.skillScore
-      })
-    }
     return
   }
 
-  const oldSkill = existing.skillScore
-  const oldHands = existing.hands
   const merged = toCounters({
     hands: existing.hands + delta.hands,
     vpipHands: existing.vpipHands + delta.vpipHands,
@@ -224,16 +211,6 @@ const upsertPlayerDelta = async (
       statsVersion: STYLE_STATS_VERSION
     }
   })
-
-  if (scope === STYLE_SCOPE_ALL) {
-    await patchPopulationSkillSum(tx, {
-      scope,
-      oldHands,
-      newHands: merged.hands,
-      oldSkill,
-      newSkill: cache.skillScore
-    })
-  }
 }
 
 const upsertPopulationDelta = async (
@@ -367,43 +344,5 @@ const upsertPopulationDelta = async (
       statsVersion: STYLE_STATS_VERSION,
       ...avgs
     }
-  })
-}
-
-const patchPopulationSkillSum = async (
-  tx: Tx,
-  args: {
-    scope: string
-    oldHands: number
-    newHands: number
-    oldSkill: number | null
-    newSkill: number
-  }
-) => {
-  const { scope, oldHands, newHands, oldSkill, newSkill } = args
-  const pop = await tx.stylePopulationStat.findUnique({ where: { id: scope } })
-  if (!pop) return
-
-  let skillEligibleUsers = pop.skillEligibleUsers
-  let skillScoreSum = pop.skillScoreSum
-  const was = oldHands >= SKILL_SAMPLE_HANDS
-  const now = newHands >= SKILL_SAMPLE_HANDS
-
-  if (!was && now) {
-    skillEligibleUsers += 1
-    skillScoreSum += newSkill
-  } else if (was && now) {
-    skillScoreSum += newSkill - (oldSkill ?? newSkill)
-  } else if (was && !now) {
-    skillEligibleUsers = Math.max(0, skillEligibleUsers - 1)
-    skillScoreSum -= oldSkill ?? 0
-  }
-
-  const avgSkill =
-    skillEligibleUsers > 0 ? skillScoreSum / skillEligibleUsers : null
-
-  await tx.stylePopulationStat.update({
-    where: { id: scope },
-    data: { skillEligibleUsers, skillScoreSum, avgSkill }
   })
 }
