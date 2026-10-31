@@ -736,6 +736,7 @@ async function processTexasDomainEvent(
             actionType: 'bet' as ActionType,
             amount: post.amount,
             stage: 'pre_flop',
+            source: 'blind',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq
@@ -763,6 +764,7 @@ async function processTexasDomainEvent(
             actionType: 'bet' as ActionType,
             amount: post.amount,
             stage: 'pre_flop',
+            source: 'blind',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq
@@ -808,6 +810,7 @@ async function processTexasDomainEvent(
             actionType: e.payload.actionType as ActionType,
             amount,
             stage: e.payload.street,
+            source: 'action',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq

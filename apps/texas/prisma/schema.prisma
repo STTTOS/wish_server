@@ -451,6 +451,12 @@ enum ActionType {
   call
 }
 
+/// BetRecord 来源：贴盲 vs 自愿行动（VPIP 等只计 action）
+enum BetRecordSource {
+  blind
+  action
+}
+
 enum Stage {
   pre_flop
   flop
@@ -610,6 +616,8 @@ model BetRecord {
   amount     Float      @default(0)
   // 记录用户在哪个阶段发生的行为
   stage      Stage
+  /// 贴盲 / 自愿行动；统计口径以此为准
+  source     BetRecordSource @default(action)
 
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
@@ -623,6 +631,7 @@ model BetRecord {
   domainEventSeq Int
 
   @@unique([matchId, domainHandId, domainEventSeq, userId])
+  @@index([source])
 }
 
 // 记录游戏胜利的玩家
