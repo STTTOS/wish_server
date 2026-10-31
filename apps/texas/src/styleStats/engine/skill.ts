@@ -16,7 +16,7 @@ const scoreAvgEquity = (avgEq: number): number => clamp(avgEq * 100 + 10)
  * L1 40%：去跑马战绩 + 全下平均 equity（样本少则降权 equity）
  * L2 30%：选牌合规 / limp 惩罚
  * L3 22%：红线「赚到的」占比 + 红线带符号健康度
- * L4 8%：极端打法漏洞扣分（默认高分）
+ * L4 8%：打法健康度（默认满分；踩离谱规则则降低）
  */
 export const skillFromCounters = (c: StyleCounters): SkillBreakdown => {
   const hands = Math.max(c.hands, 1)
