@@ -1,10 +1,13 @@
 import type { Stage } from '@prisma/texas-client'
 
+import { Prisma } from '@prisma/texas-client'
+
 import prisma from '../models'
 import { logger } from '../logger'
 import { applyHandStyleDeltas } from './applyIncremental'
 import {
   STYLE_SCOPE_ALL,
+  STYLE_STATS_VERSION,
   type StyleHandInput,
   computeHandStyleDeltas
 } from './engine'
@@ -94,6 +97,20 @@ export const applyStyleStatsForHand = async (matchId: number) => {
   const scopes = [STYLE_SCOPE_ALL, tableType]
 
   await prisma.$transaction(async (tx) => {
+    try {
+      await tx.styleStatAppliedHand.create({
+        data: { matchId, statsVersion: STYLE_STATS_VERSION }
+      })
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        // 同一 match 已增量过，跳过防双计
+        return
+      }
+      throw err
+    }
     await applyHandStyleDeltas(tx, { matchId, scopes, deltas })
   })
 }

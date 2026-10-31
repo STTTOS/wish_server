@@ -14,10 +14,11 @@ export const rebuildStyleStatsFromMatches = async (opts?: {
   const clearFirst = opts?.clearFirst ?? true
 
   if (clearFirst) {
+    await prisma.styleStatAppliedHand.deleteMany({})
     await prisma.playerStyleStat.deleteMany({})
     await prisma.stylePopulationStat.deleteMany({})
     logger.info(
-      '[styleStats] cleared player_style_stat / style_population_stat'
+      '[styleStats] cleared applied_hand / player_style_stat / style_population_stat'
     )
   }
 

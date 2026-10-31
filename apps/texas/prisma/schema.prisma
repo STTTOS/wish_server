@@ -401,6 +401,16 @@ model PlayerStyleStat {
   @@map("player_style_stat")
 }
 
+/// 牌风物化已处理手数（同一 matchId 只增量一次）
+model StyleStatAppliedHand {
+  matchId      Int      @id
+  match        Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  statsVersion Int
+  appliedAt    DateTime @default(now())
+
+  @@map("style_stat_applied_hand")
+}
+
 /// 全站牌风参考（机会加权分子分母 + 达标用户技术分合计）
 model StylePopulationStat {
   /// `all` | `standard` | …
@@ -575,6 +585,7 @@ model Match {
   roomChipTopUpsAfterMatch RoomChipTopUp[]
   /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
   domainEvents             MatchDomainEvent[]
+  styleStatAppliedHand     StyleStatAppliedHand?
 }
 
 /// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）
