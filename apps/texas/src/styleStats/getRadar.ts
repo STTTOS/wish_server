@@ -42,7 +42,39 @@ export type UserStyleRadarDto = {
     l2: number | null
     l3: number | null
     l4: number | null
+    /** 同 scope、手数≥SKILL_SAMPLE_HANDS 且有技术分的玩家池中的名次（同分并列，1=最高） */
+    rank: number | null
+    /** 排名池人数 */
+    rankOf: number | null
   }
+}
+
+/** 技术分排名：仅统计达标样本；分数更高者名次更前；同分并列同名次 */
+const skillRankAmongEligible = async (
+  scope: string,
+  score: number | null,
+  hands: number
+): Promise<{ rank: number | null; rankOf: number | null }> => {
+  if (score == null || hands < SKILL_SAMPLE_HANDS) {
+    return { rank: null, rankOf: null }
+  }
+  const [better, rankOf] = await Promise.all([
+    playerStyleStat.count({
+      where: {
+        scope,
+        hands: { gte: SKILL_SAMPLE_HANDS },
+        skillScore: { gt: score }
+      }
+    }),
+    playerStyleStat.count({
+      where: {
+        scope,
+        hands: { gte: SKILL_SAMPLE_HANDS },
+        NOT: { skillScore: null }
+      }
+    })
+  ])
+  return { rank: better + 1, rankOf }
 }
 
 const sampleStatusForHands = (
@@ -73,6 +105,12 @@ export const getUserStyleRadar = async (
 
   const hands = player?.hands ?? 0
   const sampleStatus = sampleStatusForHands(hands)
+  const skillScore = player?.skillScore ?? null
+  const { rank: skillRank, rankOf: skillRankOf } = await skillRankAmongEligible(
+    scope,
+    skillScore,
+    hands
+  )
   const tags = deriveStyleTags({
     hands,
     sampleStatus,
@@ -80,7 +118,7 @@ export const getUserStyleRadar = async (
     pfr: player?.axisPfr ?? null,
     wtsd: player?.axisWtsd ?? null,
     wsd: player?.axisWsd ?? null,
-    skill: player?.skillScore ?? null,
+    skill: skillScore,
     popAvgSkill: pop?.avgSkill ?? null,
     limpHands: player?.limpHands ?? 0,
     chartOkVpipHands: player?.chartOkVpipHands ?? 0,
@@ -91,7 +129,7 @@ export const getUserStyleRadar = async (
     {
       key: 'skill',
       label: '技术分',
-      value: player?.skillScore ?? null,
+      value: skillScore,
       avg: pop?.avgSkill ?? null
     },
     {
@@ -150,11 +188,13 @@ export const getUserStyleRadar = async (
     tags,
     axes,
     skill: {
-      score: player?.skillScore ?? null,
+      score: skillScore,
       l1: player?.skillL1 ?? null,
       l2: player?.skillL2 ?? null,
       l3: player?.skillL3 ?? null,
-      l4: player?.skillL4 ?? null
+      l4: player?.skillL4 ?? null,
+      rank: skillRank,
+      rankOf: skillRankOf
     }
   }
 }
