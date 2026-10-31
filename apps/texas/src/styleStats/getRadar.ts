@@ -1,7 +1,9 @@
 import { user, playerStyleStat, stylePopulationStat } from '../models'
 import {
+  type StyleTag,
   RADAR_MIN_HANDS,
   STYLE_SCOPE_ALL,
+  deriveStyleTags,
   SKILL_SAMPLE_HANDS,
   STYLE_STATS_VERSION
 } from './engine'
@@ -32,6 +34,7 @@ export type UserStyleRadarDto = {
   sampleStatus: 'insufficient' | 'reference' | 'ok'
   statsVersion: number
   updatedAt: string | null
+  tags: StyleTag[]
   axes: StyleRadarAxisDto[]
   skill: {
     score: number | null
@@ -69,6 +72,21 @@ export const getUserStyleRadar = async (
   ])
 
   const hands = player?.hands ?? 0
+  const sampleStatus = sampleStatusForHands(hands)
+  const tags = deriveStyleTags({
+    hands,
+    sampleStatus,
+    vpip: player?.axisVpip ?? null,
+    pfr: player?.axisPfr ?? null,
+    wtsd: player?.axisWtsd ?? null,
+    wsd: player?.axisWsd ?? null,
+    skill: player?.skillScore ?? null,
+    popAvgSkill: pop?.avgSkill ?? null,
+    limpHands: player?.limpHands ?? 0,
+    chartOkVpipHands: player?.chartOkVpipHands ?? 0,
+    chartKnownVpipHands: player?.chartKnownVpipHands ?? 0
+  })
+
   const axes: StyleRadarAxisDto[] = [
     {
       key: 'skill',
@@ -126,9 +144,10 @@ export const getUserStyleRadar = async (
     username: profile.username,
     scope,
     hands,
-    sampleStatus: sampleStatusForHands(hands),
+    sampleStatus,
     statsVersion: player?.statsVersion ?? STYLE_STATS_VERSION,
     updatedAt: player?.updatedAt?.toISOString() ?? null,
+    tags,
     axes,
     skill: {
       score: player?.skillScore ?? null,

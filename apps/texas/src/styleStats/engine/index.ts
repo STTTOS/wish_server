@@ -14,6 +14,7 @@ export {
   addCounters
 } from './fromCounters'
 export { skillFromCounters } from './skill'
+export { deriveStyleTags, type StyleTag, type StyleTagTone } from './tags'
 export {
   emptyHandStyleDelta,
   type HandStyleDelta,
