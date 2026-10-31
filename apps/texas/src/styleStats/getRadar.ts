@@ -10,7 +10,8 @@ import {
   RADAR_MIN_HANDS,
   STYLE_SCOPE_ALL,
   deriveStyleTags,
-  STYLE_STATS_VERSION
+  STYLE_STATS_VERSION,
+  derivePlayStyleArchetype
 } from './engine'
 
 export type StyleRadarAxisKey =
@@ -39,6 +40,9 @@ export type UserStyleRadarDto = {
   sampleStatus: 'insufficient' | 'reference' | 'ok'
   statsVersion: number
   updatedAt: string | null
+  /** 打法特征（互斥：紧凶/紧被动/松凶/松被动/常规） */
+  playStyle: StyleTag | null
+  /** 样本状态 + 漏洞标签（不含打法特征） */
   tags: StyleTag[]
   axes: StyleRadarAxisDto[]
   skill: {
@@ -131,7 +135,7 @@ export const getUserStyleRadar = async (
   })
   const avgTech = techAvgRow._avg.playerTech ?? null
 
-  const tags = deriveStyleTags({
+  const tagInput = {
     hands,
     sampleStatus,
     vpip: player?.axisVpip ?? null,
@@ -141,7 +145,9 @@ export const getUserStyleRadar = async (
     skill: playerTech,
     popAvgSkill: avgTech,
     limpHands: player?.limpHands ?? 0
-  })
+  }
+  const playStyle = derivePlayStyleArchetype(tagInput)
+  const tags = deriveStyleTags(tagInput)
 
   const axes: StyleRadarAxisDto[] = [
     {
@@ -206,6 +212,7 @@ export const getUserStyleRadar = async (
       tech?.updatedAt?.toISOString() ??
       player?.updatedAt?.toISOString() ??
       null,
+    playStyle,
     tags,
     axes,
     skill: {

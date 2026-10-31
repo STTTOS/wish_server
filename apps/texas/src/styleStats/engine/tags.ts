@@ -1,5 +1,5 @@
 /**
- * 运维雷达风格标签：读时由物化轴/计数派生，不落库。
+ * 运维雷达：打法特征（互斥）+ 样本/漏洞标签（可读时派生，不落库）。
  */
 
 export type StyleTagTone = 'sample' | 'style' | 'leak'
@@ -26,7 +26,62 @@ export type DeriveStyleTagsInput = {
 const TAG_MIN_HANDS = 50
 
 /**
- * 从已物化指标派生标签。样本不足时只回样本标签。
+ * 打法特征（互斥五选一）：VPIP 松紧 × PFR/VPIP 主动度。
+ * 样本不足或手数不够时返回 null。
+ */
+export const derivePlayStyleArchetype = (
+  input: Pick<DeriveStyleTagsInput, 'hands' | 'sampleStatus' | 'vpip' | 'pfr'>
+): StyleTag | null => {
+  if (input.sampleStatus === 'insufficient') return null
+  if (input.hands < TAG_MIN_HANDS) return null
+
+  const vpip = input.vpip
+  const pfr = input.pfr
+  if (vpip == null || pfr == null) return null
+
+  const pfrRatio = vpip > 0 ? pfr / vpip : 1
+  if (vpip <= 28 && pfrRatio >= 0.7) {
+    return {
+      key: 'style_tight_aggro',
+      label: '紧凶',
+      tone: 'style',
+      hint: '入池偏紧且加注比例高（PFR/VPIP≥70%）。'
+    }
+  }
+  if (vpip <= 28 && pfrRatio < 0.55) {
+    return {
+      key: 'style_passive_tight',
+      label: '紧被动',
+      tone: 'style',
+      hint: '入池偏紧，翻前较少主动加注（PFR/VPIP<55%）。'
+    }
+  }
+  if (vpip >= 40 && pfrRatio >= 0.7) {
+    return {
+      key: 'style_lag',
+      label: '松凶',
+      tone: 'style',
+      hint: '入池偏松，且入池多靠加注（PFR/VPIP≥70%）。'
+    }
+  }
+  if (vpip >= 40 && pfrRatio < 0.55) {
+    return {
+      key: 'style_fish',
+      label: '松被动',
+      tone: 'style',
+      hint: '入池很松且加注占比偏低（PFR/VPIP<55%），偏 limp / 冷跟。'
+    }
+  }
+  return {
+    key: 'style_reg',
+    label: '常规',
+    tone: 'style',
+    hint: '松紧与主动度落在中间带（未到紧/松×凶/被动的极端）。'
+  }
+}
+
+/**
+ * 样本状态 + 漏洞类标签（不含打法特征；特征见 derivePlayStyleArchetype）。
  */
 export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
   const tags: StyleTag[] = []
@@ -48,53 +103,10 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
       hint: '手数尚少，标签仅供参考。'
     })
   }
-  // sampleStatus === 'ok'：不再挂「可信样本」标签（表头样本状态已有「可信」）
 
   if (input.hands < TAG_MIN_HANDS) return tags
 
   const vpip = input.vpip
-  const pfr = input.pfr
-  if (vpip != null && pfr != null) {
-    // PFR/VPIP：≥0.7 偏主动，<0.55 偏被动（对齐常见 HUD 分类）
-    const pfrRatio = vpip > 0 ? pfr / vpip : 1
-    if (vpip <= 28 && pfrRatio >= 0.7) {
-      tags.push({
-        key: 'style_tight_aggro',
-        label: '紧凶',
-        tone: 'style',
-        hint: '入池偏紧且加注比例高（PFR/VPIP≥70%）。'
-      })
-    } else if (vpip <= 28 && pfrRatio < 0.55) {
-      tags.push({
-        key: 'style_passive_tight',
-        label: '紧被动',
-        tone: 'style',
-        hint: '入池偏紧，翻前较少主动加注（PFR/VPIP<55%）。'
-      })
-    } else if (vpip >= 40 && pfrRatio >= 0.7) {
-      tags.push({
-        key: 'style_lag',
-        label: '松凶',
-        tone: 'style',
-        hint: '入池偏松，且入池多靠加注（PFR/VPIP≥70%）。'
-      })
-    } else if (vpip >= 40 && pfrRatio < 0.55) {
-      tags.push({
-        key: 'style_fish',
-        label: '松被动',
-        tone: 'style',
-        hint: '入池很松且加注占比偏低（PFR/VPIP<55%），偏 limp / 冷跟。'
-      })
-    } else {
-      tags.push({
-        key: 'style_reg',
-        label: '常规',
-        tone: 'style',
-        hint: '松紧与主动度落在中间带（未到紧/松×凶/被动的极端）。'
-      })
-    }
-  }
-
   const wtsd = input.wtsd
   const wsd = input.wsd
   if (wtsd != null && wsd != null && wtsd >= 35 && wsd < 45) {
@@ -106,7 +118,6 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
     })
   }
 
-  // 绝对值门槛（相对常规牌局），不是 vs 全站均值；本站好友局整体偏松时仍可能触发
   if (vpip != null && vpip >= 55) {
     tags.push({
       key: 'leak_vpip_high',

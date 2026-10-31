@@ -11,7 +11,12 @@ export {
   populationAveragesFromCounters,
   addCounters
 } from './fromCounters'
-export { deriveStyleTags, type StyleTag, type StyleTagTone } from './tags'
+export {
+  derivePlayStyleArchetype,
+  deriveStyleTags,
+  type StyleTag,
+  type StyleTagTone
+} from './tags'
 export {
   emptyHandStyleDelta,
   type HandStyleDelta,

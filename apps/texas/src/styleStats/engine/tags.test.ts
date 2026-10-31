@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { deriveStyleTags } from './tags'
+import { deriveStyleTags, derivePlayStyleArchetype } from './tags'
 
 test('deriveStyleTags: insufficient sample only', () => {
   const tags = deriveStyleTags({
@@ -17,12 +17,21 @@ test('deriveStyleTags: insufficient sample only', () => {
   })
   assert.equal(tags.length, 1)
   assert.equal(tags[0]?.key, 'sample_insufficient')
+  assert.equal(
+    derivePlayStyleArchetype({
+      hands: 10,
+      sampleStatus: 'insufficient',
+      vpip: 90,
+      pfr: 40
+    }),
+    null
+  )
 })
 
-test('deriveStyleTags: loose passive fish with leaks', () => {
-  const tags = deriveStyleTags({
+test('derivePlayStyleArchetype: loose passive; tags are leaks only', () => {
+  const input = {
     hands: 500,
-    sampleStatus: 'ok',
+    sampleStatus: 'ok' as const,
     vpip: 90.6,
     pfr: 46.7,
     wtsd: 39.3,
@@ -30,17 +39,31 @@ test('deriveStyleTags: loose passive fish with leaks', () => {
     skill: 24,
     popAvgSkill: 50,
     limpHands: 120
-  })
+  }
+  const arch = derivePlayStyleArchetype(input)
+  assert.equal(arch?.key, 'style_fish')
+  assert.equal(arch?.label, '松被动')
+
+  const tags = deriveStyleTags(input)
   const keys = tags.map((t) => t.key)
-  assert.ok(!keys.includes('sample_ok'))
-  assert.ok(keys.includes('style_fish'))
+  assert.ok(!keys.includes('style_fish'))
+  assert.ok(!keys.some((k) => k.startsWith('style_')))
   assert.ok(keys.includes('leak_calling_station'))
   assert.ok(keys.includes('leak_vpip_high'))
   assert.ok(keys.includes('leak_limp'))
   assert.ok(keys.includes('leak_skill_low'))
 })
 
-test('deriveStyleTags: tight aggressive', () => {
+test('derivePlayStyleArchetype: tight aggressive', () => {
+  const arch = derivePlayStyleArchetype({
+    hands: 200,
+    sampleStatus: 'ok',
+    vpip: 22,
+    pfr: 18
+  })
+  assert.equal(arch?.key, 'style_tight_aggro')
+  assert.equal(arch?.label, '紧凶')
+
   const tags = deriveStyleTags({
     hands: 200,
     sampleStatus: 'ok',
@@ -52,9 +75,8 @@ test('deriveStyleTags: tight aggressive', () => {
     popAvgSkill: 50,
     limpHands: 5
   })
-  assert.ok(tags.some((t) => t.key === 'style_tight_aggro'))
-  assert.ok(!tags.some((t) => t.key === 'sample_ok'))
   assert.ok(!tags.some((t) => t.tone === 'leak'))
+  assert.ok(!tags.some((t) => t.tone === 'style'))
 })
 
 test('deriveStyleTags: vpip leak is absolute not vs pop', () => {
@@ -70,21 +92,34 @@ test('deriveStyleTags: vpip leak is absolute not vs pop', () => {
     limpHands: 2000
   })
   assert.ok(tags.some((t) => t.key === 'leak_vpip_high'))
-  assert.ok(tags.some((t) => t.key === 'style_fish'))
+  assert.equal(
+    derivePlayStyleArchetype({
+      hands: 6000,
+      sampleStatus: 'ok',
+      vpip: 60.3,
+      pfr: 6.3
+    })?.key,
+    'style_fish'
+  )
 })
 
-test('deriveStyleTags: loose + ratio 0.52 is 松被动 not 常规', () => {
-  const tags = deriveStyleTags({
+test('derivePlayStyleArchetype: loose + ratio 0.52 is 松被动 not 常规', () => {
+  const arch = derivePlayStyleArchetype({
     hands: 500,
     sampleStatus: 'ok',
     vpip: 90.6,
-    pfr: 46.7,
-    wtsd: 25,
-    wsd: 50,
-    skill: 40,
-    popAvgSkill: 40,
-    limpHands: 10
+    pfr: 46.7
   })
-  assert.ok(tags.some((t) => t.key === 'style_fish'))
-  assert.ok(!tags.some((t) => t.key === 'style_reg'))
+  assert.equal(arch?.key, 'style_fish')
+  assert.notEqual(arch?.key, 'style_reg')
+})
+
+test('derivePlayStyleArchetype: mid band is 常规', () => {
+  const arch = derivePlayStyleArchetype({
+    hands: 200,
+    sampleStatus: 'ok',
+    vpip: 32,
+    pfr: 20
+  })
+  assert.equal(arch?.key, 'style_reg')
 })
