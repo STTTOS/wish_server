@@ -262,6 +262,37 @@ test('axesFromCounters and skillFromCounters produce finite scores', () => {
   assert.ok(skill.skillL2 > 0)
 })
 
+test('skillL3: negative redline is not rewarded via abs share', () => {
+  const losingFolds = skillFromCounters({
+    ...emptyHandStyleDelta(),
+    hands: 100,
+    redlineBb: -200,
+    bluelineBb: -10,
+    chartKnownVpipHands: 0
+  })
+  const winningFolds = skillFromCounters({
+    ...emptyHandStyleDelta(),
+    hands: 100,
+    redlineBb: 200,
+    bluelineBb: 10,
+    chartKnownVpipHands: 0
+  })
+  assert.ok(winningFolds.skillL3 > losingFolds.skillL3)
+  assert.ok(losingFolds.skillL3 < 55)
+})
+
+test('skillL1: no all-in equity sample does not inject default 55 pad', () => {
+  const a = skillFromCounters({
+    ...emptyHandStyleDelta(),
+    hands: 100,
+    allInAdjWagerBb: 0,
+    allInEquityCount: 0,
+    chartKnownVpipHands: 0
+  })
+  // adj bb/100 = 0 → scoreAdj = 50
+  assert.equal(a.skillL1, 50)
+})
+
 test('skillL2: unknown holes use neutral chart rate (not zero)', () => {
   const skill = skillFromCounters({
     ...emptyHandStyleDelta(),

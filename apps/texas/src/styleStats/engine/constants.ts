@@ -1,8 +1,8 @@
 /**
  * 牌风口径版本；变更须 bump 并跑 backfill:style-stats
- * v2 排除贴盲；v3 摊牌/27o；v4 AFq 不含 fold；v5 L2 已知洞牌分母+软化
+ * v5 L2 已知洞牌；v6 L3 正红线份额+带符号；L1 equity 样本加权、河牌 HU 全下可算
  */
-export const STYLE_STATS_VERSION = 5
+export const STYLE_STATS_VERSION = 6
 
 /** 技术分 / 全站 skill 均值纳入门槛（手数） */
 export const SKILL_SAMPLE_HANDS = 50

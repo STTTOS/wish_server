@@ -142,7 +142,9 @@ const applyHuAllInAdj = (
   for (const s of seats) {
     if (s.isAllIn) allInIds.add(s.userId)
   }
-  if (allInIds.size !== 2 || boardPokes.length >= 5) return
+  // HU 全下即可算 equity（含河牌 need=0）；多人桌暂不估
+  if (allInIds.size !== 2) return
+  if (boardPokes.length > 5) return
 
   const ids = [...allInIds]
   const s1 = seats.find((s) => s.userId === ids[0])
