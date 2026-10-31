@@ -22,6 +22,7 @@ import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import { applyStyleStatsForHandSafe } from '../../../../styleStats/applyStyleStatsForHand'
 import { projectDecisionSkillForHandSafe } from '../../../../decisionSkill/projectFromHand'
+import { scoreDecisionSkillForHandSafe } from '../../../../decisionSkill/scoreProjectedHand'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -530,6 +531,7 @@ async function handleHandEnded(
 
     await applyStyleStatsForHandSafe(currentMatchId)
     await projectDecisionSkillForHandSafe(currentMatchId)
+    await scoreDecisionSkillForHandSafe(currentMatchId)
 
     let matchOverview: WsMatchOverview = {
       wagerList: [],
