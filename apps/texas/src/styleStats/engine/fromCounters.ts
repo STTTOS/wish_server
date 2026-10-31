@@ -48,6 +48,7 @@ export const addCounters = (
   allInEquitySum: a.allInEquitySum + b.allInEquitySum,
   allInEquityCount: a.allInEquityCount + b.allInEquityCount,
   chartOkVpipHands: a.chartOkVpipHands + b.chartOkVpipHands,
+  chartKnownVpipHands: a.chartKnownVpipHands + b.chartKnownVpipHands,
   limpHands: a.limpHands + b.limpHands,
   redlineBb: a.redlineBb + b.redlineBb,
   bluelineBb: a.bluelineBb + b.bluelineBb

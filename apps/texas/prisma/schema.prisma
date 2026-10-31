@@ -371,8 +371,10 @@ model PlayerStyleStat {
   allInEquitySum   Float @default(0)
   allInEquityCount Int   @default(0)
 
-  chartOkVpipHands Int @default(0)
-  limpHands        Int @default(0)
+  chartOkVpipHands    Int @default(0)
+  /// 入池且洞牌可解析的手数（L2 分母；缺洞牌不计入）
+  chartKnownVpipHands Int @default(0)
+  limpHands           Int @default(0)
 
   redlineBb  Float @default(0)
   bluelineBb Float @default(0)

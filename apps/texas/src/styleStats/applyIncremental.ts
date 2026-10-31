@@ -31,6 +31,7 @@ const counterFieldsFromDelta = (d: HandStyleDelta) => ({
   allInEquitySum: d.allInEquitySum,
   allInEquityCount: d.allInEquityCount,
   chartOkVpipHands: d.chartOkVpipHands,
+  chartKnownVpipHands: d.chartKnownVpipHands,
   limpHands: d.limpHands,
   redlineBb: d.redlineBb,
   bluelineBb: d.bluelineBb
@@ -56,6 +57,7 @@ const toCounters = (row: {
   allInEquitySum: number
   allInEquityCount: number
   chartOkVpipHands: number
+  chartKnownVpipHands: number
   limpHands: number
   redlineBb: number
   bluelineBb: number
@@ -77,6 +79,7 @@ const toCounters = (row: {
   allInEquitySum: row.allInEquitySum,
   allInEquityCount: row.allInEquityCount,
   chartOkVpipHands: row.chartOkVpipHands,
+  chartKnownVpipHands: row.chartKnownVpipHands,
   limpHands: row.limpHands,
   redlineBb: row.redlineBb,
   bluelineBb: row.bluelineBb
@@ -204,6 +207,8 @@ const upsertPlayerDelta = async (
     allInEquitySum: existing.allInEquitySum + delta.allInEquitySum,
     allInEquityCount: existing.allInEquityCount + delta.allInEquityCount,
     chartOkVpipHands: existing.chartOkVpipHands + delta.chartOkVpipHands,
+    chartKnownVpipHands:
+      existing.chartKnownVpipHands + delta.chartKnownVpipHands,
     limpHands: existing.limpHands + delta.limpHands,
     redlineBb: existing.redlineBb + delta.redlineBb,
     bluelineBb: existing.bluelineBb + delta.bluelineBb
@@ -261,6 +266,7 @@ const upsertPopulationDelta = async (
       allInEquitySum: 0,
       allInEquityCount: 0,
       chartOkVpipHands: 0,
+      chartKnownVpipHands: 0,
       limpHands: 0,
       redlineBb: 0,
       bluelineBb: 0
@@ -294,6 +300,7 @@ const upsertPopulationDelta = async (
       allInEquitySum: 0,
       allInEquityCount: 0,
       chartOkVpipHands: 0,
+      chartKnownVpipHands: 0,
       limpHands: 0,
       redlineBb: 0,
       bluelineBb: 0
@@ -330,6 +337,7 @@ const upsertPopulationDelta = async (
     allInEquitySum: 0,
     allInEquityCount: 0,
     chartOkVpipHands: 0,
+    chartKnownVpipHands: 0,
     limpHands: 0,
     redlineBb: 0,
     bluelineBb: 0

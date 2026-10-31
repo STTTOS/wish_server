@@ -249,6 +249,7 @@ test('axesFromCounters and skillFromCounters produce finite scores', () => {
     allInEquitySum: 6,
     allInEquityCount: 10,
     chartOkVpipHands: 20,
+    chartKnownVpipHands: 25,
     limpHands: 2,
     redlineBb: 30,
     bluelineBb: 10
@@ -258,6 +259,31 @@ test('axesFromCounters and skillFromCounters produce finite scores', () => {
   assert.equal(axes.axisPfr, 20)
   const skill = skillFromCounters(c)
   assert.ok(skill.skillScore >= 0 && skill.skillScore <= 100)
+  assert.ok(skill.skillL2 > 0)
+})
+
+test('skillL2: unknown holes use neutral chart rate (not zero)', () => {
+  const skill = skillFromCounters({
+    ...emptyHandStyleDelta(),
+    hands: 100,
+    vpipHands: 80,
+    chartOkVpipHands: 0,
+    chartKnownVpipHands: 0,
+    limpHands: 10
+  })
+  assert.ok(skill.skillL2 > 20)
+})
+
+test('skillL2: loose fish still above floor when some chart hits', () => {
+  const skill = skillFromCounters({
+    ...emptyHandStyleDelta(),
+    hands: 100,
+    vpipHands: 90,
+    chartOkVpipHands: 18,
+    chartKnownVpipHands: 90,
+    limpHands: 35
+  })
+  assert.ok(skill.skillL2 > 0)
 })
 
 test('estimateHuEquity: AA vs 72o on empty board favors AA', () => {

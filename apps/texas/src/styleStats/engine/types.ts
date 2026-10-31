@@ -19,6 +19,8 @@ export type HandStyleDelta = {
   allInEquitySum: number
   allInEquityCount: number
   chartOkVpipHands: number
+  /** 入池且洞牌可解析；L2 合规率分母 */
+  chartKnownVpipHands: number
   limpHands: number
   redlineBb: number
   bluelineBb: number
@@ -91,6 +93,7 @@ export const emptyHandStyleDelta = (): HandStyleDelta => ({
   allInEquitySum: 0,
   allInEquityCount: 0,
   chartOkVpipHands: 0,
+  chartKnownVpipHands: 0,
   limpHands: 0,
   redlineBb: 0,
   bluelineBb: 0

@@ -31,9 +31,14 @@ export const skillFromCounters = (c: StyleCounters): SkillBreakdown => {
     0.7 * scoreAdjBb100(adjBb100) + 0.3 * scoreAvgEquity(avgEq)
   )
 
-  const chartRate = c.vpipHands > 0 ? c.chartOkVpipHands / c.vpipHands : 0.7
+  // 合规率只用「已知洞牌的入池手」；无样本时给中性分，避免缺洞牌 → 全员 L2=0
+  const chartRate =
+    c.chartKnownVpipHands > 0
+      ? c.chartOkVpipHands / c.chartKnownVpipHands
+      : 0.55
   const limpRate = c.hands > 0 ? c.limpHands / c.hands : 0
-  const skillL2 = clamp(chartRate * 100 - limpRate * 80)
+  // 基线 15 + 合规主导 − limp 轻罚（原 limp×80 易把松池打到贴零）
+  const skillL2 = clamp(15 + chartRate * 85 - limpRate * 45)
 
   const absRed = Math.abs(c.redlineBb)
   const absBlue = Math.abs(c.bluelineBb)
