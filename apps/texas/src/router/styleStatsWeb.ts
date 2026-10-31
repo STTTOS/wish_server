@@ -1,5 +1,5 @@
 /**
- * Web 公开：牌风技术分排行（首页展示用）
+ * Web 公开：牌风技术分排行（首页 / 全站榜）
  */
 import router from './instance'
 import { apiPrefixWeb } from '../config'
@@ -18,6 +18,6 @@ router.post(styleStatsWebApi('/skill-leaders'), async (ctx) => {
       ? body.scope.trim()
       : STYLE_SCOPE_ALL
 
-  const list = await getSkillLeaders(limit, scope)
-  response.success(ctx, { list, scope })
+  const { list, total } = await getSkillLeaders(limit, scope)
+  response.success(ctx, { list, total, scope })
 })
