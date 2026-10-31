@@ -9,6 +9,7 @@ import './fortune'
 import './infraWeb'
 import './userOpsWeb'
 import './announcement'
+import './styleStatsWeb'
 import './runtimeSettingsWeb'
 import './matchDomainEventWeb'
 

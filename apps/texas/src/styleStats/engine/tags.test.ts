@@ -36,9 +36,9 @@ test('deriveStyleTags: loose passive fish with leaks', () => {
     chartKnownVpipHands: 400
   })
   const keys = tags.map((t) => t.key)
-  assert.ok(keys.includes('sample_ok'))
-  // 90.6 VPIP, pfrRatio≈0.515 → 常规（未到松被动 0.45）
-  assert.ok(keys.includes('style_reg') || keys.includes('style_lag'))
+  assert.ok(!keys.includes('sample_ok'))
+  // 90.6 VPIP, pfrRatio≈0.515 → 松被动（&lt;0.55）
+  assert.ok(keys.includes('style_fish'))
   assert.ok(keys.includes('leak_calling_station'))
   assert.ok(keys.includes('leak_vpip_high'))
   assert.ok(keys.includes('leak_limp'))
@@ -61,5 +61,42 @@ test('deriveStyleTags: tight aggressive', () => {
     chartKnownVpipHands: 45
   })
   assert.ok(tags.some((t) => t.key === 'style_tight_aggro'))
+  assert.ok(!tags.some((t) => t.key === 'sample_ok'))
   assert.ok(!tags.some((t) => t.tone === 'leak'))
+})
+
+test('deriveStyleTags: vpip leak is absolute not vs pop', () => {
+  const tags = deriveStyleTags({
+    hands: 6000,
+    sampleStatus: 'ok',
+    vpip: 60.3,
+    pfr: 6.3,
+    wtsd: 24,
+    wsd: 56,
+    skill: 50,
+    popAvgSkill: 50,
+    limpHands: 2000,
+    chartOkVpipHands: 100,
+    chartKnownVpipHands: 500
+  })
+  assert.ok(tags.some((t) => t.key === 'leak_vpip_high'))
+  assert.ok(tags.some((t) => t.key === 'style_fish'))
+})
+
+test('deriveStyleTags: loose + ratio 0.52 is 松被动 not 常规', () => {
+  const tags = deriveStyleTags({
+    hands: 500,
+    sampleStatus: 'ok',
+    vpip: 90.6,
+    pfr: 46.7,
+    wtsd: 25,
+    wsd: 50,
+    skill: 40,
+    popAvgSkill: 40,
+    limpHands: 10,
+    chartOkVpipHands: 200,
+    chartKnownVpipHands: 300
+  })
+  assert.ok(tags.some((t) => t.key === 'style_fish'))
+  assert.ok(!tags.some((t) => t.key === 'style_reg'))
 })

@@ -28,7 +28,8 @@ export const ADMIN_ONLY_PATHS = [
 export const PUBLIC_NO_AUTH_PATHS: ReadonlyArray<string | RegExp> = [
   /^\/api\/client\/user\/sign$/,
   /^\/api\/web\/user\/login/,
-  /^\/api\/client\/game\/config$/
+  /^\/api\/client\/game\/config$/,
+  /^\/api\/web\/style-stats\/skill-leaders$/
 ]
 
 /**
