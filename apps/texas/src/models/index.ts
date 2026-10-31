@@ -26,7 +26,10 @@ export const {
   userMailAttachment,
   playerStyleStat,
   stylePopulationStat,
-  styleStatAppliedHand
+  styleStatAppliedHand,
+  decisionSkillSnapshot,
+  decisionSkillAppliedHand,
+  playerTechStat
 } = prisma
 
 export default prisma

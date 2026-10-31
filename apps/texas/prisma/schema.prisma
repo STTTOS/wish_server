@@ -49,7 +49,9 @@ model User {
   itemBalances      UserItemBalance[]
   itemLedgers       UserItemLedger[]
   mails             UserMail[]
-  playerStyleStats  PlayerStyleStat[]
+  playerStyleStats        PlayerStyleStat[]
+  decisionSkillSnapshots  DecisionSkillSnapshot[]
+  playerTechStats         PlayerTechStat[]
 }
 
 /// 道具目录（系统级）：一行代表一种道具（如 `rename_card`）
@@ -586,8 +588,91 @@ model Match {
 
   roomChipTopUpsAfterMatch RoomChipTopUp[]
   /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
-  domainEvents             MatchDomainEvent[]
-  styleStatAppliedHand     StyleStatAppliedHand?
+  domainEvents               MatchDomainEvent[]
+  styleStatAppliedHand       StyleStatAppliedHand?
+  decisionSkillAppliedHand   DecisionSkillAppliedHand?
+  decisionSkillSnapshots     DecisionSkillSnapshot[]
+}
+
+/// 决策技术分：逐自愿行动快照（不含洞牌；盲注 isForced 可写但不评分）
+model DecisionSkillSnapshot {
+  id        BigInt @id @default(autoincrement())
+  matchId   Int
+  userId    Int
+  /// 本手内行动序（投影侧保证唯一）
+  actionIndex Int
+
+  schemaVersion   Int    @default(1)
+  strategyVersion String? @db.VarChar(32)
+
+  street          String @db.VarChar(16)
+  playersInHand   Int
+  heroPosition    String @db.VarChar(16)
+  heroStackBb     Float
+  potBb           Float
+  toCallBb        Float
+  spr             Float?
+  boardPokes      Json
+  boardTexture    String @db.VarChar(16)
+  lineTag         String @db.VarChar(24)
+  aggressorIsHero Boolean
+  actionType      String @db.VarChar(16)
+  actionSizeBb    Float
+  actionSizePotFrac Float?
+  isForced        Boolean @default(false)
+  potOdds         Float?
+
+  tier        String? @db.VarChar(16)
+  nodeScore   Float?
+  nodeWeight  Float?
+  scoreReason String? @db.VarChar(160)
+  dimension   String? @db.VarChar(16)
+  scoredAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId, actionIndex])
+  @@index([userId, matchId])
+  @@index([matchId])
+  @@map("decision_skill_snapshot")
+}
+
+/// 决策技术分：手数幂等（一手只投影/评分一次）
+model DecisionSkillAppliedHand {
+  matchId     Int      @id
+  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  techVersion Int
+  appliedAt   DateTime @default(now())
+
+  @@map("decision_skill_applied_hand")
+}
+
+/// 用户技术分物化（决策聚合 + 结构；不含结果层）
+model PlayerTechStat {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  scope  String @default("all") @db.VarChar(16)
+
+  techVersion  Int @default(1)
+  handsScored  Int @default(0)
+  nodesScored  Int @default(0)
+
+  decisionTech    Float?
+  structureScore  Float?
+  playerTech      Float?
+
+  lastMatchId Int?
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope])
+  @@index([playerTech])
+  @@index([handsScored])
+  @@map("player_tech_stat")
 }
 
 /// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）
