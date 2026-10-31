@@ -49,6 +49,7 @@ model User {
   itemBalances      UserItemBalance[]
   itemLedgers       UserItemLedger[]
   mails             UserMail[]
+  playerStyleStats  PlayerStyleStat[]
 }
 
 /// 道具目录（系统级）：一行代表一种道具（如 `rename_card`）
@@ -339,6 +340,118 @@ model UserRoomStat {
   @@unique([userId, roomId])
 }
 
+/// 牌风雷达物化计数（用户 × scope）。scope=`all` 为终身；亦可为 quick|standard|deep|custom。
+model PlayerStyleStat {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  /// 哨兵 `all` = 终身；桌型切片与 RoomTableType 同名字符串
+  scope  String @default("all") @db.VarChar(16)
+
+  statsVersion Int @default(1)
+  hands        Int @default(0)
+
+  vpipHands Int @default(0)
+  pfrHands  Int @default(0)
+
+  threeBetOpps  Int @default(0)
+  threeBetHands Int @default(0)
+
+  afqAggressive Int @default(0)
+  afqActions    Int @default(0)
+
+  cbetOpps  Int @default(0)
+  cbetHands Int @default(0)
+
+  sawFlopHands Int @default(0)
+  wtsdHands    Int @default(0)
+  wsdWonHands  Int @default(0)
+
+  realizedWagerBb  Float @default(0)
+  allInAdjWagerBb  Float @default(0)
+  allInEquitySum   Float @default(0)
+  allInEquityCount Int   @default(0)
+
+  chartOkVpipHands Int @default(0)
+  limpHands        Int @default(0)
+
+  redlineBb  Float @default(0)
+  bluelineBb Float @default(0)
+
+  axisVpip   Float?
+  axisPfr    Float?
+  axis3Bet   Float?
+  axisAfq    Float?
+  axisCbet   Float?
+  axisWtsd   Float?
+  axisWsd    Float?
+  skillScore Float?
+  skillL1    Float?
+  skillL2    Float?
+  skillL3    Float?
+  skillL4    Float?
+
+  lastMatchId Int?
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scope])
+  @@index([statsVersion, updatedAt])
+  @@index([hands])
+  @@map("player_style_stat")
+}
+
+/// 牌风物化已处理手数（同一 matchId 只增量一次）
+model StyleStatAppliedHand {
+  matchId      Int      @id
+  match        Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  statsVersion Int
+  appliedAt    DateTime @default(now())
+
+  @@map("style_stat_applied_hand")
+}
+
+/// 全站牌风参考（机会加权分子分母 + 达标用户技术分合计）
+model StylePopulationStat {
+  /// `all` | `standard` | …
+  id String @id @db.VarChar(16)
+
+  statsVersion Int @default(1)
+  hands        Int @default(0)
+
+  vpipHands Int @default(0)
+  pfrHands  Int @default(0)
+
+  threeBetOpps  Int @default(0)
+  threeBetHands Int @default(0)
+
+  afqAggressive Int @default(0)
+  afqActions    Int @default(0)
+
+  cbetOpps  Int @default(0)
+  cbetHands Int @default(0)
+
+  sawFlopHands Int @default(0)
+  wtsdHands    Int @default(0)
+  wsdWonHands  Int @default(0)
+
+  skillEligibleUsers Int   @default(0)
+  skillScoreSum      Float @default(0)
+
+  avgVpip  Float?
+  avgPfr   Float?
+  avg3Bet  Float?
+  avgAfq   Float?
+  avgCbet  Float?
+  avgWtsd  Float?
+  avgWsd   Float?
+  avgSkill Float?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("style_population_stat")
+}
+
 enum ActionType {
   check
   fold
@@ -346,6 +459,12 @@ enum ActionType {
   raise
   allIn
   call
+}
+
+/// BetRecord 来源：贴盲 vs 自愿行动（VPIP 等只计 action）
+enum BetRecordSource {
+  blind
+  action
 }
 
 enum Stage {
@@ -466,6 +585,7 @@ model Match {
   roomChipTopUpsAfterMatch RoomChipTopUp[]
   /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
   domainEvents             MatchDomainEvent[]
+  styleStatAppliedHand     StyleStatAppliedHand?
 }
 
 /// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）
@@ -507,6 +627,8 @@ model BetRecord {
   amount     Float      @default(0)
   // 记录用户在哪个阶段发生的行为
   stage      Stage
+  /// 贴盲 / 自愿行动；统计口径以此为准
+  source     BetRecordSource @default(action)
 
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
@@ -520,6 +642,7 @@ model BetRecord {
   domainEventSeq Int
 
   @@unique([matchId, domainHandId, domainEventSeq, userId])
+  @@index([source])
 }
 
 // 记录游戏胜利的玩家

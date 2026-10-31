@@ -11,6 +11,8 @@ import formatTime from '../utils/formatTime'
 import combinePath from '../utils/combinePath'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import response, { withList } from '../utils/response'
+import { STYLE_SCOPE_ALL } from '../styleStats/engine'
+import { getUserStyleRadar } from '../styleStats/getRadar'
 import { orderByForUserOpsList } from './userOpsListOrderBy'
 
 const userOpsWebApi = combinePath(apiPrefixWeb)('/user-ops')
@@ -159,4 +161,26 @@ router.post(userOpsWebApi('/detail'), async (ctx) => {
         }
       : null
   })
+})
+
+router.post(userOpsWebApi('/radar'), async (ctx) => {
+  if ((await assertWebAdmin(ctx)) == null) return
+
+  const { userId, scope } = (ctx.request.body ?? {}) as {
+    userId?: number
+    scope?: string
+  }
+  if (userId == null || !Number.isInteger(userId) || userId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'userId 参数错误')
+    return
+  }
+
+  const scopeKey =
+    typeof scope === 'string' && scope.trim() ? scope.trim() : STYLE_SCOPE_ALL
+  const radar = await getUserStyleRadar(userId, scopeKey)
+  if (!radar) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  response.success(ctx, radar)
 })

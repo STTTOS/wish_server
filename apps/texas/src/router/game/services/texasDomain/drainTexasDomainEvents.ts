@@ -20,6 +20,7 @@ import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
+import { applyStyleStatsForHandSafe } from '../../../../styleStats/applyStyleStatsForHand'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -526,6 +527,8 @@ async function handleHandEnded(
       }
     })
 
+    await applyStyleStatsForHandSafe(currentMatchId)
+
     let matchOverview: WsMatchOverview = {
       wagerList: [],
       billList: [],
@@ -733,6 +736,7 @@ async function processTexasDomainEvent(
             actionType: 'bet' as ActionType,
             amount: post.amount,
             stage: 'pre_flop',
+            source: 'blind',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq
@@ -760,6 +764,7 @@ async function processTexasDomainEvent(
             actionType: 'bet' as ActionType,
             amount: post.amount,
             stage: 'pre_flop',
+            source: 'blind',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq
@@ -805,6 +810,7 @@ async function processTexasDomainEvent(
             actionType: e.payload.actionType as ActionType,
             amount,
             stage: e.payload.street,
+            source: 'action',
             matchId,
             domainHandId: e.payload.handId,
             domainEventSeq: e.payload.seq

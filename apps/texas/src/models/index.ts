@@ -23,7 +23,10 @@ export const {
   userItemBalance,
   userItemLedger,
   userMail,
-  userMailAttachment
+  userMailAttachment,
+  playerStyleStat,
+  stylePopulationStat,
+  styleStatAppliedHand
 } = prisma
 
 export default prisma

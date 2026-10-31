@@ -19,6 +19,8 @@
     "db:watch": "nodemon -w prisma/schema.prisma --exec \"npm run db:sync\"",
     "copy-env": "cp ./.local.env .env",
     "backfill:match-settlement": "ts-node --transpile-only scripts/backfillMatchSettlementFromCore.ts",
+    "backfill:bet-record-source": "ts-node --transpile-only scripts/backfillBetRecordSource.ts",
+    "backfill:style-stats": "ts-node --transpile-only scripts/backfillStyleStats.ts",
     "publish": "npm run lint && npm run build && scp -r ./dist/* root@www.wishufree.com:/root/server/dist"
   },
   "author": "三分",
