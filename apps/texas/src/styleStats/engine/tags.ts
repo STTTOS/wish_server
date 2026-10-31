@@ -107,9 +107,9 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
   if (wtsd != null && wsd != null && wtsd >= 35 && wsd < 45) {
     tags.push({
       key: 'leak_calling_station',
-      label: '跟注站',
+      label: '爱跟到底',
       tone: 'leak',
-      hint: '看翻后常进摊牌，但摊牌胜率偏低。'
+      hint: '看翻后常跟到摊牌，但摊牌胜率偏低（打法漏洞）。'
     })
   }
 
