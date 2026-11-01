@@ -4,10 +4,11 @@ import prisma, { playerTechStat, playerStyleStat } from '../models'
 import {
   aggregateHandTech,
   combinePlayerTech,
-  scoreDecisionNode,
   PLAYER_TECH_VERSION,
   type DecisionStreet,
+  evaluateDecisionNode,
   type DecisionLineTag,
+  type NodeScoreResult,
   type DecisionSnapshot,
   type DecisionActionType,
   type HeroPositionBucket,
@@ -78,15 +79,16 @@ export const scoreDecisionSkillForHand = async (matchId: number) => {
   if (!snaps.length) return
 
   const now = new Date()
-  const scoresByUser = new Map<number, ReturnType<typeof scoreDecisionNode>[]>()
+  const scoresByUser = new Map<number, NodeScoreResult[]>()
 
   for (const row of snaps) {
     const snapshot = rowToSnapshot(row)
-    const scored = scoreDecisionNode(snapshot)
+    const evaluation = evaluateDecisionNode(snapshot)
+    const scored = evaluation.node
     await prisma.decisionSkillSnapshot.update({
       where: { id: row.id },
       data: {
-        strategyVersion: scored.strategyVersion,
+        strategyVersion: evaluation.strategyVersion,
         tier: scored.tier,
         nodeScore: scored.score,
         nodeWeight: scored.weight,

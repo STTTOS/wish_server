@@ -10,7 +10,16 @@ export { computePotOdds, computeMdfHint } from './potOdds'
 export { classifyBoardTexture } from './boardTexture'
 export { buildDecisionSnapshot } from './buildSnapshotFields'
 export { roleToPositionBucket, stageToStreet } from './position'
-export { scoreDecisionNode } from './scoreNode'
+export { scoreDecisionNode, evaluateDecisionNode } from './scoreNode'
+export {
+  getActiveStrategyProvider,
+  setActiveStrategyProvider,
+  resetActiveStrategyProvider,
+  rulesP0StrategyProvider,
+  type StrategyProvider,
+  type StrategyEvaluation,
+  type RecommendedAction
+} from './strategy'
 export {
   aggregateHandTech,
   aggregatePlayerTechFromHands,

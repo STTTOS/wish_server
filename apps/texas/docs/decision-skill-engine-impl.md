@@ -2,7 +2,8 @@
 
 > 依据：`decision-skill-engine-plan.md` review 决议  
 > 约束：**洞牌视为脏数据，一律忽略**（不落库、不评分、删除 chart/洞牌相关技术分路径）  
-> 全量 backfill：`npm run backfill:decision-skill`（建议先 style-stats）
+> 全量 backfill：`npm run backfill:decision-skill`（建议先 style-stats）  
+> 评分解耦：`StrategyProvider`（`engine/strategy/`）；编排只调 `evaluateDecisionNode`
 
 ---
 
