@@ -126,6 +126,7 @@ router.post(userOpsWebApi('/detail'), async (ctx) => {
         select: {
           showHistoryRecords: true,
           showRecordOverview: true,
+          showStyleRadar: true,
           autoCallOnOffline: true,
           createdAt: true,
           updatedAt: true

@@ -12,6 +12,8 @@ import router, { type DefaultState } from '../instance'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import prisma, { user, userSettings } from '../../models'
+import { STYLE_SCOPE_ALL } from '../../styleStats/engine'
+import { getPlayerCard } from '../../styleStats/getPlayerCard'
 import { recordAssetUsageOnSet } from '../../services/recordAssetUsageOnSet'
 import { getNicknameDisplayLengthError } from '../../utils/nicknameDisplayLength'
 import {
@@ -46,6 +48,7 @@ const userWebApi = combinePath(apiPrefixWeb)('/user')
 const DEFAULT_PRIVACY_SETTINGS = {
   showHistoryRecords: true,
   showRecordOverview: true,
+  showStyleRadar: false,
   autoCallOnOffline: false
 }
 const RENAME_CARD_CODE = 'rename_card'
@@ -727,6 +730,34 @@ router.post(userClientApi('/profile'), async (ctx) => {
 })
 
 /**
+ * 玩家名片（桌内点头像 / 个人主页雷达复用）。
+ * 荣誉与手数始终返回；八轴雷达 + 标签受 showStyleRadar（本人恒可见）。
+ * body: { userId?: number, scope?: string }
+ */
+router.post(userClientApi('/player-card'), async (ctx) => {
+  const viewerId = ctx.state.user?.id
+  if (!viewerId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const { userId, scope }: { userId?: number; scope?: string } =
+    ctx.request.body ?? {}
+  const targetUserId =
+    userId != null && !Number.isNaN(Number(userId)) && Number(userId) > 0
+      ? Number(userId)
+      : viewerId
+  const scopeKey =
+    typeof scope === 'string' && scope.trim() ? scope.trim() : STYLE_SCOPE_ALL
+
+  const card = await getPlayerCard(viewerId, targetUserId, scopeKey)
+  if (!card) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  response.success(ctx, card)
+})
+
+/**
  * 卡面（牌背）预设 key，body: { pokerBackgroundKey: string }
  */
 router.post(userClientApi('/setPokerBackground'), async (ctx) => {
@@ -1114,6 +1145,7 @@ router.post(userClientApi('/settings'), async (ctx) => {
     select: {
       showHistoryRecords: true,
       showRecordOverview: true,
+      showStyleRadar: true,
       autoCallOnOffline: true
     }
   })
@@ -1152,14 +1184,16 @@ router.post(userClientApi('/privacy'), async (ctx) => {
     where: { userId: Number(userId) },
     select: {
       showHistoryRecords: true,
-      showRecordOverview: true
+      showRecordOverview: true,
+      showStyleRadar: true
     }
   })
   response.success(
     ctx,
     settings ?? {
       showHistoryRecords: DEFAULT_PRIVACY_SETTINGS.showHistoryRecords,
-      showRecordOverview: DEFAULT_PRIVACY_SETTINGS.showRecordOverview
+      showRecordOverview: DEFAULT_PRIVACY_SETTINGS.showRecordOverview,
+      showStyleRadar: DEFAULT_PRIVACY_SETTINGS.showStyleRadar
     },
     '查询成功'
   )
@@ -1171,16 +1205,19 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
   const {
     showHistoryRecords,
     showRecordOverview,
+    showStyleRadar,
     autoCallOnOffline
   }: {
     showHistoryRecords?: boolean
     showRecordOverview?: boolean
+    showStyleRadar?: boolean
     autoCallOnOffline?: boolean
   } = ctx.request.body ?? {}
 
   const data: {
     showHistoryRecords?: boolean
     showRecordOverview?: boolean
+    showStyleRadar?: boolean
     autoCallOnOffline?: boolean
   } = {}
   if (typeof showHistoryRecords === 'boolean') {
@@ -1188,6 +1225,9 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
   }
   if (typeof showRecordOverview === 'boolean') {
     data.showRecordOverview = showRecordOverview
+  }
+  if (typeof showStyleRadar === 'boolean') {
+    data.showStyleRadar = showStyleRadar
   }
   if (typeof autoCallOnOffline === 'boolean') {
     data.autoCallOnOffline = autoCallOnOffline
@@ -1210,6 +1250,7 @@ router.post(userClientApi('/setSettings'), async (ctx) => {
     select: {
       showHistoryRecords: true,
       showRecordOverview: true,
+      showStyleRadar: true,
       autoCallOnOffline: true
     }
   })

@@ -154,6 +154,8 @@ model UserSettings {
   showHistoryRecords Boolean @default(true)
   // 是否展示战绩总览
   showRecordOverview Boolean @default(true)
+  /// 是否向他人展示数据雷达（八轴 + 打法/漏洞标签）；默认关闭
+  showStyleRadar     Boolean @default(false)
   // 离线是否自动跟注
   autoCallOnOffline  Boolean @default(false)
 
