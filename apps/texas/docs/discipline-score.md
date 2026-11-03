@@ -22,4 +22,5 @@
 ## API / UI
 
 - 雷达轴：`discipline`（纪律分）
-- 榜：`POST /api/web/style-stats/discipline-leaders`
+- 纪律榜：`POST /api/web/style-stats/discipline-leaders`
+- 积分榜（总输赢 BB）：`POST /api/web/style-stats/score-leaders`（`PlayerStyleStat.realizedWagerBb`）
