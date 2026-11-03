@@ -95,6 +95,23 @@ async function loadNoShowdownSingleWinnerByMatchId(
 /**
  * 查询当前用户的对局记录（分页）
  */
+/** 客户端历史战绩牌型筛选：全部 / 未成牌（翻前结束）/ RankCategory */
+const MATCH_LIST_RANK_FILTERS = [
+  'all',
+  'unmade',
+  'z',
+  'y',
+  'x',
+  'w',
+  'v',
+  'u',
+  't',
+  's',
+  'r',
+  'q'
+] as const
+type MatchListRankFilter = (typeof MATCH_LIST_RANK_FILTERS)[number]
+
 router.post(matchApi('/list'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
   const {
@@ -102,11 +119,14 @@ router.post(matchApi('/list'), async (ctx) => {
     pageSize = 10,
     roomId,
     type,
-    userId
+    userId,
+    rankFilter
   }: WithPaginationReq & {
     roomId?: number
     type?: string
     userId?: number
+    /** 全部牌型 | 未成牌(翻前结束) | 具体牌型字母 */
+    rankFilter?: string
   } = ctx.request.body ?? {}
 
   const targetUserId = parseTargetUserId(userId, viewerUserId)
@@ -137,6 +157,17 @@ router.post(matchApi('/list'), async (ctx) => {
     return
   }
 
+  const resolvedRankFilter: MatchListRankFilter =
+    rankFilter == null || rankFilter === ''
+      ? 'all'
+      : (rankFilter as MatchListRankFilter)
+  if (
+    !(MATCH_LIST_RANK_FILTERS as readonly string[]).includes(resolvedRankFilter)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'rankFilter 参数异常')
+    return
+  }
+
   const tableTypeFilter: RoomTableType | null =
     type && type !== 'all' ? (type as RoomTableType) : null
 
@@ -145,11 +176,17 @@ router.post(matchApi('/list'), async (ctx) => {
     ...(roomId ? { roomId } : null),
     ...(tableTypeFilter
       ? { room: { is: { tableType: tableTypeFilter } } }
+      : null),
+    ...(resolvedRankFilter === 'unmade'
+      ? { boardThroughStage: 'pre_flop' }
       : null)
   }
   const where: Prisma.PlayerMatchRecordWhereInput = {
     userId: targetUserId,
-    match: matchWhere
+    match: matchWhere,
+    ...(resolvedRankFilter !== 'all' && resolvedRankFilter !== 'unmade'
+      ? { rankCategory: resolvedRankFilter }
+      : null)
   }
 
   const [total, records] = await Promise.all([
