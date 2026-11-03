@@ -20,17 +20,36 @@ export type ScoreLeadersResult = {
   total: number
 }
 
+export type GetScoreLeadersOptions = {
+  limit?: number
+  scope?: string
+  /**
+   * 仅正分入榜（totalBb > 0）。
+   * App 积分榜使用；Web 全站榜默认 false 保留正负展示。
+   */
+  positiveOnly?: boolean
+}
+
 /**
  * 积分榜：按 PlayerStyleStat.realizedWagerBb（总输赢 BB）降序。
  */
 export const getScoreLeaders = async (
-  limit = 3,
-  scope: string = STYLE_SCOPE_ALL
+  limitOrOptions: number | GetScoreLeadersOptions = 3,
+  scopeArg: string = STYLE_SCOPE_ALL
 ): Promise<ScoreLeadersResult> => {
-  const take = Math.min(Math.max(1, Math.floor(limit) || 3), 100)
+  const opts: GetScoreLeadersOptions =
+    typeof limitOrOptions === 'number'
+      ? { limit: limitOrOptions, scope: scopeArg }
+      : limitOrOptions
+
+  const take = Math.min(Math.max(1, Math.floor(opts.limit ?? 3) || 3), 100)
+  const scope = opts.scope?.trim() || STYLE_SCOPE_ALL
+  const positiveOnly = opts.positiveOnly === true
+
   const where = {
     scope,
     hands: { gte: SCORE_SAMPLE_HANDS },
+    ...(positiveOnly ? { realizedWagerBb: { gt: 0 } } : {}),
     user: { deletedAt: null }
   }
 

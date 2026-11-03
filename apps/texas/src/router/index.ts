@@ -10,6 +10,7 @@ import './infraWeb'
 import './userOpsWeb'
 import './announcement'
 import './styleStatsWeb'
+import './styleStatsClient'
 import './runtimeSettingsWeb'
 import './matchDomainEventWeb'
 

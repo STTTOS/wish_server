@@ -20,5 +20,6 @@ export const MAINTENANCE_HTTP_WHITELIST_PATHS = [
   '/api/web/user/login',
   /** 官网首页公开榜单：维护中仍可展示 */
   '/api/web/style-stats/score-leaders',
-  '/api/web/style-stats/discipline-leaders'
+  '/api/web/style-stats/discipline-leaders',
+  '/api/client/style-stats/score-leaders'
 ] as const
