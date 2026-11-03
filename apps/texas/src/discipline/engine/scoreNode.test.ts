@@ -2,23 +2,18 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { computePotOdds } from './potOdds'
-import { scoreDecisionNode } from './scoreNode'
-import { classifyBoardTexture } from './boardTexture'
+import { scoreDisciplineNode } from './scoreNode'
 import { buildDecisionSnapshot } from './buildSnapshotFields'
 import {
-  aggregateHandTech,
-  combinePlayerTech,
-  structureScoreFromSignals,
-  aggregatePlayerTechFromHands
+  habitScoreFromSignals,
+  combineDisciplineScore,
+  aggregateHandDiscipline,
+  aggregatePlayerActionDiscipline
 } from './aggregate'
 
 test('computePotOdds: call 5 into pot 10 → 1/3', () => {
   assert.ok(Math.abs((computePotOdds(10, 5) ?? 0) - 5 / 15) < 1e-9)
   assert.equal(computePotOdds(10, 0), null)
-})
-
-test('classifyBoardTexture: three same suit → wet', () => {
-  assert.equal(classifyBoardTexture(['ha', 'h9', 'h2']), 'wet')
 })
 
 test('forced action is skip', () => {
@@ -29,21 +24,19 @@ test('forced action is skip', () => {
     street: 'preflop',
     playersInHand: 6,
     heroPosition: 'bb',
-    heroStackBb: 100,
     potBb: 1.5,
     toCallBb: 0,
     lineTag: 'unopened',
-    aggressorIsHero: false,
     actionType: 'call',
     actionSizeBb: 0.5,
     isForced: true
   })
-  const r = scoreDecisionNode(snap)
+  const r = scoreDisciplineNode(snap)
   assert.equal(r.tier, 'skip')
   assert.equal(r.score, null)
 })
 
-test('BTN unopened raise scores best', () => {
+test('BTN unopened raise is clean (no reward for aggression)', () => {
   const snap = buildDecisionSnapshot({
     matchId: 1,
     userId: 1,
@@ -51,19 +44,17 @@ test('BTN unopened raise scores best', () => {
     street: 'preflop',
     playersInHand: 3,
     heroPosition: 'btn',
-    heroStackBb: 100,
     potBb: 1.5,
     toCallBb: 1,
     lineTag: 'unopened',
-    aggressorIsHero: false,
     actionType: 'raise',
     actionSizeBb: 2.5,
     isForced: false
   })
-  assert.equal(scoreDecisionNode(snap).tier, 'best')
+  assert.equal(scoreDisciplineNode(snap).tier, 'clean')
 })
 
-test('unopened limp is mistake', () => {
+test('unopened limp is hard_leak', () => {
   const snap = buildDecisionSnapshot({
     matchId: 1,
     userId: 2,
@@ -71,19 +62,17 @@ test('unopened limp is mistake', () => {
     street: 'preflop',
     playersInHand: 5,
     heroPosition: 'mp',
-    heroStackBb: 80,
     potBb: 1.5,
     toCallBb: 1,
     lineTag: 'unopened',
-    aggressorIsHero: false,
     actionType: 'call',
     actionSizeBb: 1,
     isForced: false
   })
-  assert.equal(scoreDecisionNode(snap).tier, 'mistake')
+  assert.equal(scoreDisciplineNode(snap).tier, 'hard_leak')
 })
 
-test('bad pot odds call is mistake', () => {
+test('bad pot odds call is hard_leak or severe', () => {
   const snap = buildDecisionSnapshot({
     matchId: 1,
     userId: 3,
@@ -91,22 +80,19 @@ test('bad pot odds call is mistake', () => {
     street: 'river',
     playersInHand: 2,
     heroPosition: 'bb',
-    heroStackBb: 50,
     potBb: 10,
     toCallBb: 12,
-    boardPokes: ['sa', 'hk', 'c2', 'd7', 's3'],
     lineTag: 'vs_bet',
-    aggressorIsHero: false,
     actionType: 'call',
     actionSizeBb: 12,
     isForced: false
   })
-  const r = scoreDecisionNode(snap)
-  assert.equal(r.tier, 'mistake')
+  const r = scoreDisciplineNode(snap)
+  assert.ok(r.tier === 'hard_leak' || r.tier === 'severe')
   assert.equal(r.dimension, 'odds')
 })
 
-test('PFR dry flop cbet is best', () => {
+test('PFR flop bet is clean (not rewarded as skill)', () => {
   const snap = buildDecisionSnapshot({
     matchId: 1,
     userId: 1,
@@ -114,22 +100,19 @@ test('PFR dry flop cbet is best', () => {
     street: 'flop',
     playersInHand: 2,
     heroPosition: 'btn',
-    heroStackBb: 90,
     potBb: 6.5,
     toCallBb: 0,
-    boardPokes: ['sa', 'c7', 'd2'],
     lineTag: 'as_pfr',
-    aggressorIsHero: true,
     actionType: 'bet',
     actionSizeBb: 4,
     isForced: false
   })
-  assert.equal(scoreDecisionNode(snap).tier, 'best')
+  assert.equal(scoreDisciplineNode(snap).tier, 'clean')
 })
 
-test('aggregate hand and player tech', () => {
+test('aggregate hand and player discipline', () => {
   const nodes = [
-    scoreDecisionNode(
+    scoreDisciplineNode(
       buildDecisionSnapshot({
         matchId: 1,
         userId: 1,
@@ -137,17 +120,15 @@ test('aggregate hand and player tech', () => {
         street: 'preflop',
         playersInHand: 3,
         heroPosition: 'btn',
-        heroStackBb: 100,
         potBb: 1.5,
         toCallBb: 1,
         lineTag: 'unopened',
-        aggressorIsHero: false,
         actionType: 'raise',
         actionSizeBb: 2.5,
         isForced: false
       })
     ),
-    scoreDecisionNode(
+    scoreDisciplineNode(
       buildDecisionSnapshot({
         matchId: 1,
         userId: 1,
@@ -155,33 +136,35 @@ test('aggregate hand and player tech', () => {
         street: 'preflop',
         playersInHand: 6,
         heroPosition: 'bb',
-        heroStackBb: 100,
         potBb: 1.5,
         toCallBb: 0,
         lineTag: 'unopened',
-        aggressorIsHero: false,
         actionType: 'call',
         actionSizeBb: 0.5,
         isForced: true
       })
     )
   ]
-  const hand = aggregateHandTech(nodes)
+  const hand = aggregateHandDiscipline(nodes)
   assert.equal(hand.scoredNodes, 1)
   assert.equal(hand.skippedNodes, 1)
-  assert.ok(hand.handTech != null && hand.handTech >= 90)
+  assert.ok(hand.handDiscipline != null && hand.handDiscipline >= 99)
 
-  const player = aggregatePlayerTechFromHands([hand.handTech, 70, null])
+  const player = aggregatePlayerActionDiscipline([
+    hand.handDiscipline,
+    70,
+    null
+  ])
   assert.ok(player != null && player > 70 && player < 100)
 
-  const structure = structureScoreFromSignals({
+  const habit = habitScoreFromSignals({
     limpRate: 0.25,
     highVpip: true,
     callingStation: false,
     lowPfrRatio: true
   })
-  assert.ok(structure < 70)
+  assert.ok(habit < 70)
 
-  const tech = combinePlayerTech(player, { structureScore: structure })
-  assert.ok(tech != null && tech > 0 && tech <= 100)
+  const score = combineDisciplineScore(player, { habitScore: habit })
+  assert.ok(score != null && score > 0 && score <= 100)
 })

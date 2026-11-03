@@ -77,7 +77,7 @@ const toCounters = (row: {
   bluelineBb: row.bluelineBb
 })
 
-/** 轴缓存；技术分见 PlayerTechStat */
+/** 轴缓存；纪律分见 PlayerDisciplineStat */
 const derivedCache = (c: StyleCounters) => {
   const axes = axesFromCounters(c)
   return {

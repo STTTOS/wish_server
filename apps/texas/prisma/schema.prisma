@@ -50,8 +50,8 @@ model User {
   itemLedgers       UserItemLedger[]
   mails             UserMail[]
   playerStyleStats        PlayerStyleStat[]
-  decisionSkillSnapshots  DecisionSkillSnapshot[]
-  playerTechStats         PlayerTechStat[]
+  disciplineActionSnapshots  DisciplineActionSnapshot[]
+  playerDisciplineStats      PlayerDisciplineStat[]
 }
 
 /// 道具目录（系统级）：一行代表一种道具（如 `rename_card`）
@@ -407,7 +407,7 @@ model StyleStatAppliedHand {
   @@map("style_stat_applied_hand")
 }
 
-  /// 全站牌风参考（机会加权分子分母；技术分见 PlayerTechStat）
+  /// 全站牌风参考（机会加权分子分母；纪律分见 PlayerDisciplineStat）
 model StylePopulationStat {
   /// `all` | `standard` | …
   id String @id @db.VarChar(16)
@@ -578,37 +578,32 @@ model Match {
   /// texas-poker-core 领域事件磁带（回放 / 审计）；`createdAt` 可作思考时长等时间轴
   domainEvents               MatchDomainEvent[]
   styleStatAppliedHand       StyleStatAppliedHand?
-  decisionSkillAppliedHand   DecisionSkillAppliedHand?
-  decisionSkillSnapshots     DecisionSkillSnapshot[]
+  disciplineAppliedHand      DisciplineAppliedHand?
+  disciplineActionSnapshots  DisciplineActionSnapshot[]
 }
 
-/// 决策技术分：逐自愿行动快照（不含洞牌；盲注 isForced 可写但不评分）
-model DecisionSkillSnapshot {
+/// 纪律分：逐自愿行动快照（不含洞牌；盲注不落库）
+model DisciplineActionSnapshot {
   id        BigInt @id @default(autoincrement())
   matchId   Int
   userId    Int
   /// 本手内行动序（投影侧保证唯一）
   actionIndex Int
 
-  schemaVersion   Int    @default(1)
-  strategyVersion String? @db.VarChar(32)
+  schemaVersion Int     @default(2)
+  rulesVersion  String? @db.VarChar(32)
 
-  street          String @db.VarChar(16)
-  playersInHand   Int
-  heroPosition    String @db.VarChar(16)
-  heroStackBb     Float
-  potBb           Float
-  toCallBb        Float
-  spr             Float?
-  boardPokes      Json
-  boardTexture    String @db.VarChar(16)
-  lineTag         String @db.VarChar(24)
-  aggressorIsHero Boolean
-  actionType      String @db.VarChar(16)
-  actionSizeBb    Float
+  street            String @db.VarChar(16)
+  playersInHand     Int
+  heroPosition      String @db.VarChar(16)
+  potBb             Float
+  toCallBb          Float
+  lineTag           String @db.VarChar(24)
+  actionType        String @db.VarChar(16)
+  actionSizeBb      Float
   actionSizePotFrac Float?
-  isForced        Boolean @default(false)
-  potOdds         Float?
+  isForced          Boolean @default(false)
+  potOdds           Float?
 
   tier        String? @db.VarChar(16)
   nodeScore   Float?
@@ -625,32 +620,32 @@ model DecisionSkillSnapshot {
   @@unique([matchId, userId, actionIndex])
   @@index([userId, matchId])
   @@index([matchId])
-  @@map("decision_skill_snapshot")
+  @@map("discipline_action_snapshot")
 }
 
-/// 决策技术分：手数幂等（一手只投影/评分一次）
-model DecisionSkillAppliedHand {
-  matchId     Int      @id
-  match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  techVersion Int
-  appliedAt   DateTime @default(now())
+/// 纪律分：手数幂等（一手只投影/评分一次）
+model DisciplineAppliedHand {
+  matchId           Int      @id
+  match             Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  disciplineVersion Int
+  appliedAt         DateTime @default(now())
 
-  @@map("decision_skill_applied_hand")
+  @@map("discipline_applied_hand")
 }
 
-/// 用户技术分物化（决策聚合 + 结构；不含结果层）
-model PlayerTechStat {
+/// 用户纪律分物化（行动纪律 + 习惯纪律；不含输赢/技术优劣）
+model PlayerDisciplineStat {
   id     Int    @id @default(autoincrement())
   userId Int
   scope  String @default("all") @db.VarChar(16)
 
-  techVersion  Int @default(1)
-  handsScored  Int @default(0)
-  nodesScored  Int @default(0)
+  disciplineVersion Int @default(2)
+  handsScored       Int @default(0)
+  nodesScored       Int @default(0)
 
-  decisionTech    Float?
-  structureScore  Float?
-  playerTech      Float?
+  actionScore       Float?
+  habitScore        Float?
+  disciplineScore   Float?
 
   lastMatchId Int?
   updatedAt   DateTime @updatedAt
@@ -658,9 +653,9 @@ model PlayerTechStat {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, scope])
-  @@index([playerTech])
+  @@index([disciplineScore])
   @@index([handsScored])
-  @@map("player_tech_stat")
+  @@map("player_discipline_stat")
 }
 
 /// 与 Core `TexasDomainEvent` 对齐的 append-only 记录（细粒度含 PotUpdated 等）

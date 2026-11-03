@@ -27,17 +27,11 @@ export type HeroPositionBucket =
   | 'bb'
   | 'unknown'
 
-export type ScoreTier =
-  | 'best'
-  | 'correct'
-  | 'inaccuracy'
-  | 'mistake'
-  | 'blunder'
-  | 'skip'
+/** 纪律档位：干净 / 轻漏 / 硬漏 / 严重 / 不评分 */
+export type ScoreTier = 'clean' | 'soft_leak' | 'hard_leak' | 'severe' | 'skip'
 
 /**
- * 决策快照（评分契约）。不含洞牌 / equity / outs。
- * 落库与纯函数引擎共用此形状。
+ * 行动快照（纪律评分契约）。不含洞牌 / 公牌纹理 / SPR 等技术向字段。
  */
 export type DecisionSnapshot = {
   matchId: number
@@ -48,15 +42,9 @@ export type DecisionSnapshot = {
   street: DecisionStreet
   playersInHand: number
   heroPosition: HeroPositionBucket
-  heroStackBb: number
   potBb: number
   toCallBb: number
-  spr: number | null
-  boardPokes: string[]
-  /** dry | semi | wet | unknown */
-  boardTexture: 'dry' | 'semi' | 'wet' | 'unknown'
   lineTag: DecisionLineTag
-  aggressorIsHero: boolean
 
   actionType: DecisionActionType
   /** 本行动投入的增量 bb（call/bet/raise/allIn）；fold/check 为 0 */
@@ -75,18 +63,18 @@ export type NodeScoreResult = {
   score: number | null
   weight: number
   reason: string
-  strategyVersion: string
-  dimension: 'line' | 'odds' | 'aggression' | 'size' | 'none'
+  rulesVersion: string
+  dimension: 'limp' | 'odds' | 'size' | 'none'
 }
 
-export type HandTechAggregate = {
-  handTech: number | null
+export type HandDisciplineAggregate = {
+  handDiscipline: number | null
   scoredNodes: number
   skippedNodes: number
   totalWeight: number
 }
 
-export type StructureSignals = {
-  /** 0–100，越高越好；由频率类漏洞推导 */
-  structureScore: number
+export type HabitSignals = {
+  /** 0–100，越高越守纪律；由频率类习惯漏洞推导 */
+  habitScore: number
 }

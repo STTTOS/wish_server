@@ -1,15 +1,15 @@
 import type {
+  HabitSignals,
   NodeScoreResult,
-  StructureSignals,
-  HandTechAggregate
+  HandDisciplineAggregate
 } from './types'
 
-import { TECH_WEIGHTS } from './constants'
+import { DISCIPLINE_WEIGHTS } from './constants'
 
 /** 单手：可评分节点加权平均 */
-export const aggregateHandTech = (
+export const aggregateHandDiscipline = (
   nodes: NodeScoreResult[]
-): HandTechAggregate => {
+): HandDisciplineAggregate => {
   let scoredNodes = 0
   let skippedNodes = 0
   let wSum = 0
@@ -24,18 +24,18 @@ export const aggregateHandTech = (
     sSum += n.score * n.weight
   }
   return {
-    handTech: wSum > 0 ? sSum / wSum : null,
+    handDiscipline: wSum > 0 ? sSum / wSum : null,
     scoredNodes,
     skippedNodes,
     totalWeight: wSum
   }
 }
 
-/** 跨手：HandTech 等权平均（忽略 null 手） */
-export const aggregatePlayerTechFromHands = (
-  handTeches: Array<number | null>
+/** 跨手：HandDiscipline 等权平均（忽略 null 手） */
+export const aggregatePlayerActionDiscipline = (
+  handScores: Array<number | null>
 ): number | null => {
-  const xs = handTeches.filter(
+  const xs = handScores.filter(
     (x): x is number => x != null && Number.isFinite(x)
   )
   if (!xs.length) return null
@@ -43,22 +43,24 @@ export const aggregatePlayerTechFromHands = (
 }
 
 /**
- * 最终 PlayerTech = 决策聚合 × w_d + 结构分 × w_s
+ * 最终纪律分 = 行动纪律 × w_a + 习惯纪律 × w_h
  */
-export const combinePlayerTech = (
-  decisionTech: number | null,
-  structure: StructureSignals
+export const combineDisciplineScore = (
+  actionDiscipline: number | null,
+  habit: HabitSignals
 ): number | null => {
-  if (decisionTech == null) return null
-  const s = Math.max(0, Math.min(100, structure.structureScore))
-  return TECH_WEIGHTS.decision * decisionTech + TECH_WEIGHTS.structure * s
+  if (actionDiscipline == null) return null
+  const h = Math.max(0, Math.min(100, habit.habitScore))
+  return (
+    DISCIPLINE_WEIGHTS.action * actionDiscipline + DISCIPLINE_WEIGHTS.habit * h
+  )
 }
 
 /**
- * 结构分：由已有频率信号推导（不读洞牌）。
- * 输入为 0–1 风险项，越高越差。
+ * 习惯纪律：由频率信号推导（不读洞牌）。
+ * 输入为风险项，越高越差。
  */
-export const structureScoreFromSignals = (input: {
+export const habitScoreFromSignals = (input: {
   limpRate: number
   highVpip: boolean
   callingStation: boolean

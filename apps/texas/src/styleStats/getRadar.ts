@@ -1,9 +1,9 @@
-import { TECH_SAMPLE_HANDS } from '../decisionSkill/engine'
+import { DISCIPLINE_SAMPLE_HANDS } from '../discipline/engine'
 import {
   user,
-  playerTechStat,
   playerStyleStat,
-  stylePopulationStat
+  stylePopulationStat,
+  playerDisciplineStat
 } from '../models'
 import {
   type StyleTag,
@@ -22,7 +22,7 @@ export type StyleRadarAxisKey =
   | 'cbet'
   | 'wtsd'
   | 'wsd'
-  | 'skill'
+  | 'discipline'
 
 export type StyleRadarAxisDto = {
   key: StyleRadarAxisKey
@@ -45,39 +45,39 @@ export type UserStyleRadarDto = {
   /** 样本状态 + 漏洞标签（不含打法特征） */
   tags: StyleTag[]
   axes: StyleRadarAxisDto[]
-  skill: {
-    /** PlayerTech：决策 + 结构 */
+  discipline: {
+    /** 行动纪律 + 习惯纪律 */
     score: number | null
-    /** 决策聚合 HandTech 均值 */
-    decision: number | null
-    /** 结构健康分 */
-    structure: number | null
+    /** 行动纪律（单手节点加权均值的跨手平均） */
+    action: number | null
+    /** 习惯纪律 */
+    habit: number | null
     rank: number | null
     rankOf: number | null
   }
 }
 
-const techRankAmongEligible = async (
+const disciplineRankAmongEligible = async (
   scope: string,
   score: number | null,
   handsScored: number
 ): Promise<{ rank: number | null; rankOf: number | null }> => {
-  if (score == null || handsScored < TECH_SAMPLE_HANDS) {
+  if (score == null || handsScored < DISCIPLINE_SAMPLE_HANDS) {
     return { rank: null, rankOf: null }
   }
   const [better, rankOf] = await Promise.all([
-    playerTechStat.count({
+    playerDisciplineStat.count({
       where: {
         scope,
-        handsScored: { gte: TECH_SAMPLE_HANDS },
-        playerTech: { gt: score }
+        handsScored: { gte: DISCIPLINE_SAMPLE_HANDS },
+        disciplineScore: { gt: score }
       }
     }),
-    playerTechStat.count({
+    playerDisciplineStat.count({
       where: {
         scope,
-        handsScored: { gte: TECH_SAMPLE_HANDS },
-        NOT: { playerTech: null }
+        handsScored: { gte: DISCIPLINE_SAMPLE_HANDS },
+        NOT: { disciplineScore: null }
       }
     })
   ])
@@ -88,7 +88,7 @@ const sampleStatusForHands = (
   hands: number
 ): UserStyleRadarDto['sampleStatus'] => {
   if (hands < RADAR_MIN_HANDS) return 'insufficient'
-  if (hands < TECH_SAMPLE_HANDS * 2) return 'reference'
+  if (hands < DISCIPLINE_SAMPLE_HANDS * 2) return 'reference'
   return 'ok'
 }
 
@@ -103,37 +103,37 @@ export const getUserStyleRadar = async (
   })
   if (!profile) return null
 
-  const [player, pop, tech] = await Promise.all([
+  const [player, pop, disc] = await Promise.all([
     playerStyleStat.findUnique({
       where: { userId_scope: { userId, scope } }
     }),
     stylePopulationStat.findUnique({ where: { id: scope } }),
-    playerTechStat.findUnique({
+    playerDisciplineStat.findUnique({
       where: { userId_scope: { userId, scope } }
     })
   ])
 
   const hands = player?.hands ?? 0
   const sampleStatus = sampleStatusForHands(hands)
-  const playerTech = tech?.playerTech ?? null
-  const decision = tech?.decisionTech ?? null
-  const structure = tech?.structureScore ?? null
-  const { rank: skillRank, rankOf: skillRankOf } = await techRankAmongEligible(
-    scope,
-    playerTech,
-    tech?.handsScored ?? 0
-  )
+  const disciplineScore = disc?.disciplineScore ?? null
+  const action = disc?.actionScore ?? null
+  const habit = disc?.habitScore ?? null
+  const { rank: disciplineRank, rankOf: disciplineRankOf } =
+    await disciplineRankAmongEligible(
+      scope,
+      disciplineScore,
+      disc?.handsScored ?? 0
+    )
 
-  // 全站技术均分：有 tech 的达标用户简单平均（机会加权后续可加）
-  const techAvgRow = await playerTechStat.aggregate({
+  const discAvgRow = await playerDisciplineStat.aggregate({
     where: {
       scope,
-      handsScored: { gte: TECH_SAMPLE_HANDS },
-      NOT: { playerTech: null }
+      handsScored: { gte: DISCIPLINE_SAMPLE_HANDS },
+      NOT: { disciplineScore: null }
     },
-    _avg: { playerTech: true }
+    _avg: { disciplineScore: true }
   })
-  const avgTech = techAvgRow._avg.playerTech ?? null
+  const avgDiscipline = discAvgRow._avg.disciplineScore ?? null
 
   const tagInput = {
     hands,
@@ -142,8 +142,8 @@ export const getUserStyleRadar = async (
     pfr: player?.axisPfr ?? null,
     wtsd: player?.axisWtsd ?? null,
     wsd: player?.axisWsd ?? null,
-    skill: playerTech,
-    popAvgSkill: avgTech,
+    discipline: disciplineScore,
+    popAvgDiscipline: avgDiscipline,
     limpHands: player?.limpHands ?? 0
   }
   const playStyle = derivePlayStyleArchetype(tagInput)
@@ -151,10 +151,10 @@ export const getUserStyleRadar = async (
 
   const axes: StyleRadarAxisDto[] = [
     {
-      key: 'skill',
-      label: '技术分',
-      value: playerTech,
-      avg: avgTech
+      key: 'discipline',
+      label: '纪律分',
+      value: disciplineScore,
+      avg: avgDiscipline
     },
     {
       key: 'vpip',
@@ -209,18 +209,18 @@ export const getUserStyleRadar = async (
     sampleStatus,
     statsVersion: player?.statsVersion ?? STYLE_STATS_VERSION,
     updatedAt:
-      tech?.updatedAt?.toISOString() ??
+      disc?.updatedAt?.toISOString() ??
       player?.updatedAt?.toISOString() ??
       null,
     playStyle,
     tags,
     axes,
-    skill: {
-      score: playerTech,
-      decision,
-      structure,
-      rank: skillRank,
-      rankOf: skillRankOf
+    discipline: {
+      score: disciplineScore,
+      action,
+      habit,
+      rank: disciplineRank,
+      rankOf: disciplineRankOf
     }
   }
 }

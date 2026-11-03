@@ -1,6 +1,5 @@
 export {
   STYLE_STATS_VERSION,
-  SKILL_SAMPLE_HANDS,
   RADAR_MIN_HANDS,
   STYLE_SCOPE_ALL
 } from './constants'

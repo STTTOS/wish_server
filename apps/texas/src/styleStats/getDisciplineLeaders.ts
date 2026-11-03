@@ -1,50 +1,50 @@
-import { playerTechStat } from '../models'
 import { STYLE_SCOPE_ALL } from './engine'
-import { TECH_SAMPLE_HANDS } from '../decisionSkill/engine'
+import { playerDisciplineStat } from '../models'
+import { DISCIPLINE_SAMPLE_HANDS } from '../discipline/engine'
 
-export type SkillLeaderDto = {
+export type DisciplineLeaderDto = {
   rank: number
   userId: number
   name: string
   avatarUrl: string | null
   avatarKey: string
-  skillScore: number
+  disciplineScore: number
   hands: number
 }
 
-export type SkillLeadersResult = {
-  list: SkillLeaderDto[]
+export type DisciplineLeadersResult = {
+  list: DisciplineLeaderDto[]
   total: number
 }
 
 /**
- * 技术流排行：按 PlayerTech（决策+结构）降序。
+ * 纪律榜：按纪律分（行动 + 习惯）降序。
  * hands 字段用 handsScored（有效评分手数）。
  */
-export const getSkillLeaders = async (
+export const getDisciplineLeaders = async (
   limit = 3,
   scope: string = STYLE_SCOPE_ALL
-): Promise<SkillLeadersResult> => {
+): Promise<DisciplineLeadersResult> => {
   const take = Math.min(Math.max(1, Math.floor(limit) || 3), 100)
   const where = {
     scope,
-    handsScored: { gte: TECH_SAMPLE_HANDS },
-    NOT: { playerTech: null },
+    handsScored: { gte: DISCIPLINE_SAMPLE_HANDS },
+    NOT: { disciplineScore: null },
     user: { deletedAt: null }
   }
 
   const [rows, total] = await Promise.all([
-    playerTechStat.findMany({
+    playerDisciplineStat.findMany({
       where,
       orderBy: [
-        { playerTech: 'desc' },
+        { disciplineScore: 'desc' },
         { handsScored: 'desc' },
         { userId: 'asc' }
       ],
       take,
       select: {
         userId: true,
-        playerTech: true,
+        disciplineScore: true,
         handsScored: true,
         user: {
           select: {
@@ -55,7 +55,7 @@ export const getSkillLeaders = async (
         }
       }
     }),
-    playerTechStat.count({ where })
+    playerDisciplineStat.count({ where })
   ])
 
   return {
@@ -66,7 +66,7 @@ export const getSkillLeaders = async (
       name: r.user.name,
       avatarUrl: r.user.avatarUrl,
       avatarKey: r.user.avatarKey,
-      skillScore: r.playerTech as number,
+      disciplineScore: r.disciplineScore as number,
       hands: r.handsScored
     }))
   }

@@ -11,8 +11,8 @@ test('deriveStyleTags: insufficient sample only', () => {
     pfr: 40,
     wtsd: 40,
     wsd: 40,
-    skill: 20,
-    popAvgSkill: 50,
+    discipline: 20,
+    popAvgDiscipline: 50,
     limpHands: 5
   })
   assert.equal(tags.length, 1)
@@ -36,8 +36,8 @@ test('derivePlayStyleArchetype: loose passive; tags are leaks only', () => {
     pfr: 46.7,
     wtsd: 39.3,
     wsd: 41.1,
-    skill: 24,
-    popAvgSkill: 50,
+    discipline: 24,
+    popAvgDiscipline: 50,
     limpHands: 120
   }
   const arch = derivePlayStyleArchetype(input)
@@ -51,7 +51,7 @@ test('derivePlayStyleArchetype: loose passive; tags are leaks only', () => {
   assert.ok(keys.includes('leak_calling_station'))
   assert.ok(keys.includes('leak_vpip_high'))
   assert.ok(keys.includes('leak_limp'))
-  assert.ok(keys.includes('leak_skill_low'))
+  assert.ok(keys.includes('leak_discipline_low'))
 })
 
 test('derivePlayStyleArchetype: tight aggressive', () => {
@@ -71,8 +71,8 @@ test('derivePlayStyleArchetype: tight aggressive', () => {
     pfr: 18,
     wtsd: 25,
     wsd: 55,
-    skill: 62,
-    popAvgSkill: 50,
+    discipline: 62,
+    popAvgDiscipline: 50,
     limpHands: 5
   })
   assert.ok(!tags.some((t) => t.tone === 'leak'))
@@ -87,8 +87,8 @@ test('deriveStyleTags: vpip leak is absolute not vs pop', () => {
     pfr: 6.3,
     wtsd: 24,
     wsd: 56,
-    skill: 50,
-    popAvgSkill: 50,
+    discipline: 50,
+    popAvgDiscipline: 50,
     limpHands: 2000
   })
   assert.ok(tags.some((t) => t.key === 'leak_vpip_high'))

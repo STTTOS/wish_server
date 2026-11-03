@@ -18,8 +18,8 @@ export type DeriveStyleTagsInput = {
   pfr: number | null
   wtsd: number | null
   wsd: number | null
-  skill: number | null
-  popAvgSkill: number | null
+  discipline: number | null
+  popAvgDiscipline: number | null
   limpHands: number
 }
 
@@ -114,7 +114,7 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
       key: 'leak_calling_station',
       label: '爱跟到底',
       tone: 'leak',
-      hint: '看翻后常跟到摊牌，但摊牌胜率偏低（打法漏洞）。'
+      hint: '看翻后常跟到摊牌，但摊牌胜率偏低（习惯漏洞）。'
     })
   }
 
@@ -138,17 +138,17 @@ export const deriveStyleTags = (input: DeriveStyleTagsInput): StyleTag[] => {
   }
 
   if (
-    input.skill != null &&
-    input.popAvgSkill != null &&
-    input.skill <= input.popAvgSkill - 15
+    input.discipline != null &&
+    input.popAvgDiscipline != null &&
+    input.discipline <= input.popAvgDiscipline - 15
   ) {
     tags.push({
-      key: 'leak_skill_low',
-      label: '技术偏弱',
+      key: 'leak_discipline_low',
+      label: '纪律偏松',
       tone: 'leak',
-      hint: `技术分低于全站均值约 ${(input.popAvgSkill - input.skill).toFixed(
-        0
-      )} 分。`
+      hint: `纪律分低于全站均值约 ${(
+        input.popAvgDiscipline - input.discipline
+      ).toFixed(0)} 分。`
     })
   }
 

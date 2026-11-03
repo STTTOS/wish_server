@@ -2,33 +2,27 @@ import { Prisma } from '@prisma/texas-client'
 
 import prisma from '../models'
 import { logger } from '../logger'
-import { PLAYER_TECH_VERSION } from './engine'
+import { PLAYER_DISCIPLINE_VERSION } from './engine'
 import { projectDecisionSnapshots } from './projectSnapshots'
 
-const parsePokes = (raw: unknown): string[] => {
-  if (!Array.isArray(raw)) return []
-  return raw.filter((x): x is string => typeof x === 'string')
-}
-
 /**
- * 一手结束后投影 DecisionSkillSnapshot（不含洞牌；盲注不落库）。
- * 幂等：DecisionSkillAppliedHand。
+ * 一手结束后投影行动快照（不含洞牌；盲注不落库）。
+ * 幂等：DisciplineAppliedHand。
  */
-export const projectDecisionSkillForHandSafe = async (matchId: number) => {
+export const projectDisciplineForHandSafe = async (matchId: number) => {
   try {
-    await projectDecisionSkillForHand(matchId)
+    await projectDisciplineForHand(matchId)
   } catch (err) {
-    logger.error(`[decisionSkill] project failed matchId=${matchId}`, err)
+    logger.error(`[discipline] project failed matchId=${matchId}`, err)
   }
 }
 
-export const projectDecisionSkillForHand = async (matchId: number) => {
+export const projectDisciplineForHand = async (matchId: number) => {
   const matchRow = await prisma.match.findUnique({
     where: { id: matchId },
     select: {
       id: true,
       lowestBetAmount: true,
-      commonPokes: true,
       records: {
         orderBy: { id: 'asc' },
         select: {
@@ -43,8 +37,7 @@ export const projectDecisionSkillForHand = async (matchId: number) => {
       playerMatchRecords: {
         select: {
           userId: true,
-          role: true,
-          balanceAtHandStart: true
+          role: true
         }
       }
     }
@@ -54,20 +47,18 @@ export const projectDecisionSkillForHand = async (matchId: number) => {
   const rows = projectDecisionSnapshots({
     matchId,
     lowestBetAmount: matchRow.lowestBetAmount,
-    boardPokes: parsePokes(matchRow.commonPokes),
     records: matchRow.records,
     seats: matchRow.playerMatchRecords.map((p) => ({
       userId: p.userId,
-      role: p.role,
-      balanceStart: p.balanceAtHandStart
+      role: p.role
     }))
   })
 
   if (!rows.length) {
     await prisma.$transaction(async (tx) => {
       try {
-        await tx.decisionSkillAppliedHand.create({
-          data: { matchId, techVersion: PLAYER_TECH_VERSION }
+        await tx.disciplineAppliedHand.create({
+          data: { matchId, disciplineVersion: PLAYER_DISCIPLINE_VERSION }
         })
       } catch (err) {
         if (
@@ -84,8 +75,8 @@ export const projectDecisionSkillForHand = async (matchId: number) => {
 
   await prisma.$transaction(async (tx) => {
     try {
-      await tx.decisionSkillAppliedHand.create({
-        data: { matchId, techVersion: PLAYER_TECH_VERSION }
+      await tx.disciplineAppliedHand.create({
+        data: { matchId, disciplineVersion: PLAYER_DISCIPLINE_VERSION }
       })
     } catch (err) {
       if (
@@ -97,24 +88,19 @@ export const projectDecisionSkillForHand = async (matchId: number) => {
       throw err
     }
 
-    await tx.decisionSkillSnapshot.createMany({
+    await tx.disciplineActionSnapshot.createMany({
       data: rows.map((s) => ({
         matchId: s.matchId,
         userId: s.userId,
         actionIndex: s.actionIndex,
         schemaVersion: s.schemaVersion,
-        strategyVersion: null,
+        rulesVersion: null,
         street: s.street,
         playersInHand: s.playersInHand,
         heroPosition: s.heroPosition,
-        heroStackBb: s.heroStackBb,
         potBb: s.potBb,
         toCallBb: s.toCallBb,
-        spr: s.spr,
-        boardPokes: s.boardPokes,
-        boardTexture: s.boardTexture,
         lineTag: s.lineTag,
-        aggressorIsHero: s.aggressorIsHero,
         actionType: s.actionType,
         actionSizeBb: s.actionSizeBb,
         actionSizePotFrac: s.actionSizePotFrac,

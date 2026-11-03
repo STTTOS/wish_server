@@ -19,10 +19,10 @@ import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
+import { projectDisciplineForHandSafe } from '../../../../discipline/projectFromHand'
+import { scoreDisciplineForHandSafe } from '../../../../discipline/scoreProjectedHand'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
 import { applyStyleStatsForHandSafe } from '../../../../styleStats/applyStyleStatsForHand'
-import { projectDecisionSkillForHandSafe } from '../../../../decisionSkill/projectFromHand'
-import { scoreDecisionSkillForHandSafe } from '../../../../decisionSkill/scoreProjectedHand'
 import {
   clearPlayerTurnTimeout,
   schedulePlayerTurnTimeout
@@ -530,8 +530,8 @@ async function handleHandEnded(
     })
 
     await applyStyleStatsForHandSafe(currentMatchId)
-    await projectDecisionSkillForHandSafe(currentMatchId)
-    await scoreDecisionSkillForHandSafe(currentMatchId)
+    await projectDisciplineForHandSafe(currentMatchId)
+    await scoreDisciplineForHandSafe(currentMatchId)
 
     let matchOverview: WsMatchOverview = {
       wagerList: [],

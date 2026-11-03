@@ -1,31 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { scoreDecisionNode } from './engine'
-import {
-  boardPokesForStreet,
-  projectDecisionSnapshots
-} from './projectSnapshots'
+import { scoreDisciplineNode } from './engine'
+import { projectDecisionSnapshots } from './projectSnapshots'
 
 const seats3 = [
-  { userId: 1, role: 'btn' as const, balanceStart: 200 },
-  { userId: 2, role: 'sb' as const, balanceStart: 200 },
-  { userId: 3, role: 'bb' as const, balanceStart: 200 }
+  { userId: 1, role: 'btn' as const },
+  { userId: 2, role: 'sb' as const },
+  { userId: 3, role: 'bb' as const }
 ]
 
-test('boardPokesForStreet truncates by street', () => {
-  const all = ['sa', 'hk', 'c2', 'd7', 's3']
-  assert.deepEqual(boardPokesForStreet('pre_flop', all), [])
-  assert.deepEqual(boardPokesForStreet('flop', all), ['sa', 'hk', 'c2'])
-  assert.deepEqual(boardPokesForStreet('turn', all), ['sa', 'hk', 'c2', 'd7'])
-  assert.deepEqual(boardPokesForStreet('river', all), all)
-})
-
-test('blinds do not open the pot; limp is unopened mistake', () => {
+test('blinds do not open the pot; limp is unopened hard_leak', () => {
   const rows = projectDecisionSnapshots({
     matchId: 1,
     lowestBetAmount: 2,
-    boardPokes: ['sa', 'hk', 'c2', 'd7', 's3'],
     seats: seats3,
     records: [
       {
@@ -56,14 +44,13 @@ test('blinds do not open the pot; limp is unopened mistake', () => {
   assert.equal(limp.lineTag, 'unopened')
   assert.equal(limp.toCallBb, 1)
   assert.equal(limp.potBb, 1.5)
-  assert.equal(scoreDecisionNode(limp).tier, 'mistake')
+  assert.equal(scoreDisciplineNode(limp).tier, 'hard_leak')
 })
 
-test('BTN unopened raise after blinds scores best', () => {
+test('BTN unopened raise after blinds is clean (no aggression reward)', () => {
   const rows = projectDecisionSnapshots({
     matchId: 2,
     lowestBetAmount: 2,
-    boardPokes: [],
     seats: seats3,
     records: [
       {
@@ -92,14 +79,13 @@ test('BTN unopened raise after blinds scores best', () => {
   const open = rows[0]!
   assert.equal(open.lineTag, 'unopened')
   assert.equal(open.heroPosition, 'btn')
-  assert.equal(scoreDecisionNode(open).tier, 'best')
+  assert.equal(scoreDisciplineNode(open).tier, 'clean')
 })
 
-test('PFR dry flop cbet tagged as_pfr with truncated board', () => {
+test('PFR flop cbet tagged as_pfr', () => {
   const rows = projectDecisionSnapshots({
     matchId: 3,
     lowestBetAmount: 2,
-    boardPokes: ['sa', 'c7', 'd2', 'h9', 'sk'],
     seats: seats3,
     records: [
       {
@@ -158,20 +144,16 @@ test('PFR dry flop cbet tagged as_pfr with truncated board', () => {
   )
   assert.ok(cbet)
   assert.equal(cbet!.lineTag, 'as_pfr')
-  assert.equal(cbet!.aggressorIsHero, true)
-  assert.deepEqual(cbet!.boardPokes, ['sa', 'c7', 'd2'])
-  assert.equal(cbet!.boardTexture, 'dry')
-  assert.equal(scoreDecisionNode(cbet!).tier, 'best')
+  assert.equal(scoreDisciplineNode(cbet!).tier, 'clean')
 })
 
 test('fold facing bet keeps toCall for potOdds', () => {
   const rows = projectDecisionSnapshots({
     matchId: 4,
     lowestBetAmount: 2,
-    boardPokes: ['sa', 'hk', 'c2', 'd7', 's3'],
     seats: [
-      { userId: 1, role: 'btn', balanceStart: 200 },
-      { userId: 3, role: 'bb', balanceStart: 200 }
+      { userId: 1, role: 'btn' },
+      { userId: 3, role: 'bb' }
     ],
     records: [
       {

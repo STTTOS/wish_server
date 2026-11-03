@@ -20,7 +20,6 @@ export type ProjectRecord = {
 export type ProjectSeat = {
   userId: number
   role: Role | null
-  balanceStart: number | null
 }
 
 const toActionType = (t: ActionType): DecisionActionType => {
@@ -35,25 +34,13 @@ const toActionType = (t: ActionType): DecisionActionType => {
 const isRaiseLike = (t: ActionType) =>
   t === 'raise' || t === 'bet' || t === 'allIn'
 
-/** 按街截断公牌，避免用河牌纹理评翻牌决策 */
-export const boardPokesForStreet = (
-  stage: Stage,
-  allBoard: string[]
-): string[] => {
-  if (stage === 'pre_flop') return []
-  if (stage === 'flop') return allBoard.slice(0, 3)
-  if (stage === 'turn') return allBoard.slice(0, 4)
-  return allBoard.slice(0, 5)
-}
-
 /**
- * 从 BetRecord 序列投影决策快照（纯函数，不含洞牌、不写库）。
+ * 从 BetRecord 序列投影纪律行动快照（纯函数，不含洞牌、不写库）。
  * 盲注只推进底池/面对跟注额，不算开池、不算进攻方。
  */
 export const projectDecisionSnapshots = (input: {
   matchId: number
   lowestBetAmount: number
-  boardPokes: string[]
   records: ProjectRecord[]
   seats: ProjectSeat[]
 }): DecisionSnapshot[] => {
@@ -81,8 +68,6 @@ export const projectDecisionSnapshots = (input: {
     const amountBb = Math.max(0, rec.amount) / bb
     const isForced = rec.source === 'blind'
     const seat = seatMap.get(rec.userId)
-    const heroStackBb =
-      seat?.balanceStart != null ? Math.max(0, seat.balanceStart / bb) : 100
 
     const potBefore = potBb
     // fold/call/raise 面对跟注价；check 可过 → 0
@@ -90,12 +75,6 @@ export const projectDecisionSnapshots = (input: {
     if (!isForced && rec.actionType !== 'check') {
       toCallBefore = toCallFacingBb
     }
-
-    const aggressorIsHero =
-      streetAggressor === rec.userId ||
-      (street !== 'pre_flop' &&
-        streetAggressor == null &&
-        preflopAggressor === rec.userId)
 
     let lineTag: DecisionLineTag = 'other'
     if (street === 'pre_flop' && !preflopOpened) {
@@ -128,12 +107,9 @@ export const projectDecisionSnapshots = (input: {
           street: stageToStreet(street),
           playersInHand: seatMap.size,
           heroPosition: roleToPositionBucket(seat?.role),
-          heroStackBb,
           potBb: potBefore,
           toCallBb: toCallBefore,
-          boardPokes: boardPokesForStreet(street, input.boardPokes),
           lineTag,
-          aggressorIsHero,
           actionType: toActionType(rec.actionType),
           actionSizeBb: amountBb,
           isForced: false

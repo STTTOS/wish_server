@@ -27,9 +27,9 @@ export const {
   playerStyleStat,
   stylePopulationStat,
   styleStatAppliedHand,
-  decisionSkillSnapshot,
-  decisionSkillAppliedHand,
-  playerTechStat
+  disciplineActionSnapshot,
+  disciplineAppliedHand,
+  playerDisciplineStat
 } = prisma
 
 export default prisma
