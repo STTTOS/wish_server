@@ -31,6 +31,16 @@ import {
   projectTargetUserHistoryListFields,
   isNoShowdownSingleWinnerFromParticipants
 } from './matchSettleVisibility'
+import {
+  resolveStartedAtFilter,
+  resolveBoardStageFilter,
+  parseMatchListRankFilter,
+  parseMatchListTimePreset,
+  parseMatchListMemberCount,
+  parseMatchListStageFilter,
+  parseMatchListResultFilter,
+  loadMatchIdsWithExactPlayerCount
+} from './matchListClientFilters'
 
 const matchApi = combinePath(apiPrefixClient)('/match')
 
@@ -95,23 +105,6 @@ async function loadNoShowdownSingleWinnerByMatchId(
 /**
  * 查询当前用户的对局记录（分页）
  */
-/** 客户端历史战绩牌型筛选：全部 / 未成牌（翻前结束）/ RankCategory */
-const MATCH_LIST_RANK_FILTERS = [
-  'all',
-  'unmade',
-  'z',
-  'y',
-  'x',
-  'w',
-  'v',
-  'u',
-  't',
-  's',
-  'r',
-  'q'
-] as const
-type MatchListRankFilter = (typeof MATCH_LIST_RANK_FILTERS)[number]
-
 router.post(matchApi('/list'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
   const {
@@ -120,13 +113,29 @@ router.post(matchApi('/list'), async (ctx) => {
     roomId,
     type,
     userId,
-    rankFilter
+    rankFilter,
+    timePreset,
+    startedAtFrom,
+    startedAtTo,
+    resultFilter,
+    endStage,
+    memberCount
   }: WithPaginationReq & {
     roomId?: number
     type?: string
     userId?: number
     /** 全部牌型 | 未成牌(翻前结束) | 具体牌型字母 */
     rankFilter?: string
+    /** 所有时间 | 近3天 | 近一周 | 自定义时间段 */
+    timePreset?: string
+    startedAtFrom?: string
+    startedAtTo?: string
+    /** 全部 | 赢 | 输 */
+    resultFilter?: string
+    /** 全部 | 结束轮次 Stage */
+    endStage?: string
+    /** 全部 | 2–10 人桌 */
+    memberCount?: number | string
   } = ctx.request.body ?? {}
 
   const targetUserId = parseTargetUserId(userId, viewerUserId)
@@ -157,19 +166,57 @@ router.post(matchApi('/list'), async (ctx) => {
     return
   }
 
-  const resolvedRankFilter: MatchListRankFilter =
-    rankFilter == null || rankFilter === ''
-      ? 'all'
-      : (rankFilter as MatchListRankFilter)
-  if (
-    !(MATCH_LIST_RANK_FILTERS as readonly string[]).includes(resolvedRankFilter)
-  ) {
+  const resolvedRankFilter = parseMatchListRankFilter(rankFilter)
+  if (resolvedRankFilter == null) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'rankFilter 参数异常')
+    return
+  }
+
+  const resolvedTimePreset = parseMatchListTimePreset(timePreset)
+  if (resolvedTimePreset == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'timePreset 参数异常')
+    return
+  }
+
+  const resolvedResultFilter = parseMatchListResultFilter(resultFilter)
+  if (resolvedResultFilter == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'resultFilter 参数异常')
+    return
+  }
+
+  const resolvedEndStage = parseMatchListStageFilter(endStage)
+  if (resolvedEndStage == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'endStage 参数异常')
+    return
+  }
+
+  const resolvedMemberCount = parseMatchListMemberCount(memberCount)
+  if (resolvedMemberCount == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'memberCount 参数异常')
+    return
+  }
+
+  const startedAtResolved = resolveStartedAtFilter(
+    resolvedTimePreset,
+    startedAtFrom,
+    startedAtTo
+  )
+  if (!startedAtResolved.ok) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, startedAtResolved.message)
     return
   }
 
   const tableTypeFilter: RoomTableType | null =
     type && type !== 'all' ? (type as RoomTableType) : null
+
+  const boardStageResolved = resolveBoardStageFilter(
+    resolvedRankFilter,
+    resolvedEndStage
+  )
+  if (boardStageResolved == null) {
+    response.success(ctx, withList([], 0))
+    return
+  }
 
   const matchWhere: Prisma.MatchWhereInput = {
     endedAt: { not: null },
@@ -177,16 +224,38 @@ router.post(matchApi('/list'), async (ctx) => {
     ...(tableTypeFilter
       ? { room: { is: { tableType: tableTypeFilter } } }
       : null),
-    ...(resolvedRankFilter === 'unmade'
-      ? { boardThroughStage: 'pre_flop' }
+    ...(boardStageResolved !== 'all'
+      ? { boardThroughStage: boardStageResolved }
+      : null),
+    ...(startedAtResolved.filter
+      ? { startedAt: startedAtResolved.filter }
       : null)
   }
+
+  if (resolvedMemberCount !== 'all') {
+    const matchIds = await loadMatchIdsWithExactPlayerCount({
+      targetUserId,
+      memberCount: resolvedMemberCount,
+      matchWhere
+    })
+    if (matchIds.length === 0) {
+      response.success(ctx, withList([], 0))
+      return
+    }
+    matchWhere.id = { in: matchIds }
+  }
+
+  let wagerWhere: Prisma.FloatFilter | undefined
+  if (resolvedResultFilter === 'win') wagerWhere = { gt: 0 }
+  else if (resolvedResultFilter === 'lose') wagerWhere = { lt: 0 }
+
   const where: Prisma.PlayerMatchRecordWhereInput = {
     userId: targetUserId,
     match: matchWhere,
     ...(resolvedRankFilter !== 'all' && resolvedRankFilter !== 'unmade'
       ? { rankCategory: resolvedRankFilter }
-      : null)
+      : null),
+    ...(wagerWhere ? { wager: wagerWhere } : null)
   }
 
   const [total, records] = await Promise.all([
@@ -200,7 +269,7 @@ router.post(matchApi('/list'), async (ctx) => {
           include: {
             room: true,
             _count: {
-              select: { domainEvents: true }
+              select: { domainEvents: true, playerMatchRecords: true }
             }
           }
         },
@@ -257,6 +326,7 @@ router.post(matchApi('/list'), async (ctx) => {
       initialChips,
       tableType: match.room.tableType,
       sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
+      memberCount: _count.playerMatchRecords,
       replaySupported: viewingSelf && _count.domainEvents > 0,
       startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
       endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
