@@ -11,6 +11,7 @@ import './userOpsWeb'
 import './announcement'
 import './styleStatsWeb'
 import './styleStatsClient'
+import './appClientFlagsWeb'
 import './runtimeSettingsWeb'
 import './matchDomainEventWeb'
 

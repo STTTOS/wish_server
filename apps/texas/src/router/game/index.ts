@@ -10,6 +10,7 @@ import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { GameWsGateway } from './services/gameWsGateway'
 import { gameRuntimeRegistry } from './services/runtimeKit'
+import { appClientFlags } from '../../utils/appClientFlags'
 import { QuitGameUseCase } from './services/quitGameUseCase'
 import { ChipTopUpUseCase } from './services/chipTopUpUseCase'
 import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
@@ -56,6 +57,7 @@ const showMyHandPokesUseCase = new ShowMyHandPokesUseCase(gameWsGateway)
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
+  const flags = appClientFlags.getSnapshot()
   response.success(ctx, {
     maxPlayersCount: MAX_PLAYERS_COUNT,
     roomLowestBetOptions: ROOM_LOWEST_BET_OPTIONS,
@@ -65,7 +67,8 @@ router.get(gameClientApi('/config'), async (ctx) => {
     customInitialChipsBbMultiplierMax:
       ROOM_CUSTOM_INITIAL_CHIPS_BB_MULTIPLIER_MAX,
     roomPresetRules: ROOM_PRESET_RULES,
-    custom27oRewardTiers: CUSTOM_27O_REWARD_TIERS
+    custom27oRewardTiers: CUSTOM_27O_REWARD_TIERS,
+    showHomeScoreLeaders: flags.showHomeScoreLeaders
   })
 })
 
