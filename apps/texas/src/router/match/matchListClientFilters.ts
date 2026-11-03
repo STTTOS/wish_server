@@ -25,7 +25,7 @@ export const MATCH_LIST_TIME_PRESETS = [
   'all',
   'last3d',
   'last7d',
-  'range'
+  'last30d'
 ] as const
 export type MatchListTimePreset = (typeof MATCH_LIST_TIME_PRESETS)[number]
 
@@ -94,22 +94,8 @@ export function parseMatchListMemberCount(raw: unknown): number | 'all' | null {
   return n
 }
 
-/** 解析自定义时间段边界；无效返回 null */
-export function parseMatchListRangeBound(
-  raw: unknown,
-  bound: 'start' | 'end'
-): dayjs.Dayjs | null {
-  if (raw == null || raw === '') return null
-  if (typeof raw !== 'string') return null
-  const d = dayjs(raw)
-  if (!d.isValid()) return null
-  return bound === 'start' ? d.startOf('day') : d.endOf('day')
-}
-
 export function resolveStartedAtFilter(
-  timePreset: MatchListTimePreset,
-  startedAtFrom: unknown,
-  startedAtTo: unknown
+  timePreset: MatchListTimePreset
 ):
   | { ok: true; filter?: Prisma.DateTimeNullableFilter }
   | { ok: false; message: string } {
@@ -119,18 +105,10 @@ export function resolveStartedAtFilter(
   if (timePreset === 'last7d') {
     return { ok: true, filter: { gte: dayjs().subtract(7, 'day').toDate() } }
   }
-  if (timePreset !== 'range') {
-    return { ok: true }
+  if (timePreset === 'last30d') {
+    return { ok: true, filter: { gte: dayjs().subtract(30, 'day').toDate() } }
   }
-  const from = parseMatchListRangeBound(startedAtFrom, 'start')
-  const to = parseMatchListRangeBound(startedAtTo, 'end')
-  if (from == null || to == null) {
-    return { ok: false, message: '自定义时间段参数异常' }
-  }
-  if (from.isAfter(to)) {
-    return { ok: false, message: '自定义时间段起止颠倒' }
-  }
-  return { ok: true, filter: { gte: from.toDate(), lte: to.toDate() } }
+  return { ok: true }
 }
 
 /** 未成牌与结束轮次：未成牌强制 pre_flop；冲突时返回 null 表示空结果 */

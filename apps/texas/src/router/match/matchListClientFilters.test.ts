@@ -31,14 +31,13 @@ describe('matchListClientFilters', () => {
     assert.equal(resolveBoardStageFilter('all', 'all'), 'all')
   })
 
-  it('resolveStartedAtFilter validates custom range', () => {
-    const bad = resolveStartedAtFilter('range', '2026-02-01', '2026-01-01')
-    assert.equal(bad.ok, false)
-    const ok = resolveStartedAtFilter('range', '2026-01-01', '2026-01-31')
-    assert.equal(ok.ok, true)
-    if (ok.ok) {
-      assert.ok(ok.filter?.gte)
-      assert.ok(ok.filter?.lte)
-    }
+  it('resolveStartedAtFilter supports last30d', () => {
+    const all = resolveStartedAtFilter('all')
+    assert.equal(all.ok, true)
+    if (all.ok) assert.equal(all.filter, undefined)
+
+    const month = resolveStartedAtFilter('last30d')
+    assert.equal(month.ok, true)
+    if (month.ok) assert.ok(month.filter?.gte)
   })
 })

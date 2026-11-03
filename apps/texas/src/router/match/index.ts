@@ -115,8 +115,6 @@ router.post(matchApi('/list'), async (ctx) => {
     userId,
     rankFilter,
     timePreset,
-    startedAtFrom,
-    startedAtTo,
     resultFilter,
     endStage,
     memberCount
@@ -126,10 +124,8 @@ router.post(matchApi('/list'), async (ctx) => {
     userId?: number
     /** 全部牌型 | 未成牌(翻前结束) | 具体牌型字母 */
     rankFilter?: string
-    /** 所有时间 | 近3天 | 近一周 | 自定义时间段 */
+    /** 所有时间 | 近3天 | 近一周 | 近一月 */
     timePreset?: string
-    startedAtFrom?: string
-    startedAtTo?: string
     /** 全部 | 赢 | 输 */
     resultFilter?: string
     /** 全部 | 结束轮次 Stage */
@@ -196,11 +192,7 @@ router.post(matchApi('/list'), async (ctx) => {
     return
   }
 
-  const startedAtResolved = resolveStartedAtFilter(
-    resolvedTimePreset,
-    startedAtFrom,
-    startedAtTo
-  )
+  const startedAtResolved = resolveStartedAtFilter(resolvedTimePreset)
   if (!startedAtResolved.ok) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, startedAtResolved.message)
     return
