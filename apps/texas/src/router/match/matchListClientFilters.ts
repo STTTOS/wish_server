@@ -32,6 +32,14 @@ export type MatchListTimePreset = (typeof MATCH_LIST_TIME_PRESETS)[number]
 export const MATCH_LIST_RESULT_FILTERS = ['all', 'win', 'lose'] as const
 export type MatchListResultFilter = (typeof MATCH_LIST_RESULT_FILTERS)[number]
 
+/** 列表排序：默认时间倒序；输赢升/降序按本手 wager */
+export const MATCH_LIST_SORTS = [
+  'time_desc',
+  'wager_desc',
+  'wager_asc'
+] as const
+export type MatchListSort = (typeof MATCH_LIST_SORTS)[number]
+
 export const MATCH_LIST_STAGES = ['pre_flop', 'flop', 'turn', 'river'] as const
 export type MatchListStage = (typeof MATCH_LIST_STAGES)[number]
 
@@ -72,6 +80,29 @@ export function parseMatchListResultFilter(
     return raw as MatchListResultFilter
   }
   return null
+}
+
+export function parseMatchListSort(raw: unknown): MatchListSort | null {
+  if (raw == null || raw === '') return 'time_desc'
+  if (
+    typeof raw === 'string' &&
+    (MATCH_LIST_SORTS as readonly string[]).includes(raw)
+  ) {
+    return raw as MatchListSort
+  }
+  return null
+}
+
+export function resolveMatchListOrderBy(
+  sort: MatchListSort
+): Prisma.PlayerMatchRecordOrderByWithRelationInput[] {
+  if (sort === 'wager_desc') {
+    return [{ wager: 'desc' }, { match: { startedAt: 'desc' } }]
+  }
+  if (sort === 'wager_asc') {
+    return [{ wager: 'asc' }, { match: { startedAt: 'desc' } }]
+  }
+  return [{ match: { startedAt: 'desc' } }]
 }
 
 export function parseMatchListStageFilter(

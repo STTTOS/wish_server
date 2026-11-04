@@ -32,8 +32,10 @@ import {
   isNoShowdownSingleWinnerFromParticipants
 } from './matchSettleVisibility'
 import {
+  parseMatchListSort,
   resolveStartedAtFilter,
   resolveBoardStageFilter,
+  resolveMatchListOrderBy,
   parseMatchListRankFilter,
   parseMatchListTimePreset,
   parseMatchListMemberCount,
@@ -117,7 +119,8 @@ router.post(matchApi('/list'), async (ctx) => {
     timePreset,
     resultFilter,
     endStage,
-    memberCount
+    memberCount,
+    sort
   }: WithPaginationReq & {
     roomId?: number
     type?: string
@@ -132,6 +135,8 @@ router.post(matchApi('/list'), async (ctx) => {
     endStage?: string
     /** 全部 | 2–10 人桌 */
     memberCount?: number | string
+    /** 时间倒序 | 输赢降序 | 输赢升序 */
+    sort?: string
   } = ctx.request.body ?? {}
 
   const targetUserId = parseTargetUserId(userId, viewerUserId)
@@ -189,6 +194,12 @@ router.post(matchApi('/list'), async (ctx) => {
   const resolvedMemberCount = parseMatchListMemberCount(memberCount)
   if (resolvedMemberCount == null) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'memberCount 参数异常')
+    return
+  }
+
+  const resolvedSort = parseMatchListSort(sort)
+  if (resolvedSort == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'sort 参数异常')
     return
   }
 
@@ -273,11 +284,7 @@ router.post(matchApi('/list'), async (ctx) => {
         rankCategory: true,
         totalBetAmount: true
       },
-      orderBy: {
-        match: {
-          startedAt: 'desc'
-        }
-      },
+      orderBy: resolveMatchListOrderBy(resolvedSort),
       skip,
       take
     })
