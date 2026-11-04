@@ -33,7 +33,7 @@ export type UploadedImageFile = {
   size: number
 }
 
-/** 内存上传（不落盘）：仅 sharp 后传 compressed */
+/** 内存上传（不落盘）：buffer → COS */
 export type UploadedImageBuffer = {
   newFilename: string
   originalFilename: string | null

@@ -74,10 +74,18 @@ export function isAllowedProfileHighlightImageUrl(
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') return false
     if (parsed.hostname !== cosDomain) return false
-    return parsed.pathname.startsWith('/images/')
+    return (
+      parsed.pathname.startsWith('/images/compressed/') ||
+      parsed.pathname.startsWith('/images/origin/')
+    )
   } catch {
     return false
   }
+}
+
+/** 入库统一存 compressed，原图由客户端替换路径前缀得到 */
+export function toProfileHighlightStoredUrl(rawUrl: string): string {
+  return rawUrl.trim().replace('/images/origin/', '/images/compressed/')
 }
 
 export async function setProfileHighlight(params: {
@@ -90,10 +98,11 @@ export async function setProfileHighlight(params: {
   if (!isValidSlotIndex(slotIndex)) {
     return { error: '槽位无效' }
   }
-  const url = imageUrl.trim()
-  if (!isAllowedProfileHighlightImageUrl(url, cosDomain)) {
+  const raw = imageUrl.trim()
+  if (!isAllowedProfileHighlightImageUrl(raw, cosDomain)) {
     return { error: '图片地址无效' }
   }
+  const url = toProfileHighlightStoredUrl(raw)
   await prisma.profileHighlight.upsert({
     where: { userId_slotIndex: { userId, slotIndex } },
     create: { userId, slotIndex, imageUrl: url },

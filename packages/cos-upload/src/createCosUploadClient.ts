@@ -198,6 +198,14 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     }
   }
 
+  const guessImageContentType = (filename: string | null): string => {
+    const lower = (filename || '').toLowerCase()
+    if (lower.endsWith('.png')) return 'image/png'
+    if (lower.endsWith('.webp')) return 'image/webp'
+    if (lower.endsWith('.gif')) return 'image/gif'
+    return 'image/jpeg'
+  }
+
   /**
    * 内存 buffer → sharp 压缩 → 仅上传 images/compressed（不落盘、不传原图）。
    * 供 mart 等只要展示图、追求延迟的调用方；不影响 processOneImage。
@@ -250,6 +258,69 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
       url,
       // 未上传 origin：与 url 相同，保持响应字段兼容
       originalUrl: url,
+      filename: file.originalFilename
+    }
+  }
+
+  /**
+   * 内存 buffer → 同时上传 images/origin + images/compressed（同文件名，blog 约定）。
+   * DB / 业务侧通常只存 compressed url，展示时客户端替换路径前缀取原图。
+   */
+  const processOriginAndCompressedImageFromBuffer = async (
+    file: UploadedImageBuffer
+  ): Promise<ProcessedImage> => {
+    if (!file.buffer?.length) {
+      throw new Error('空文件')
+    }
+
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'start sharp (buffer, origin+compressed)'
+    )
+    const compressedBuffer = await sharp(file.buffer)
+      .rotate()
+      .resize({
+        width: IMAGE_COMPRESS_MAX_EDGE,
+        height: IMAGE_COMPRESS_MAX_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true
+      })
+      .jpeg({ quality: imageCompressRatio * 100 })
+      .toBuffer()
+
+    const start = Date.now()
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'sharp done, upload origin+compressed'
+    )
+    const originContentType = guessImageContentType(file.originalFilename)
+    const [originalUrl, compressedUrl] = await Promise.all([
+      uploadBufferToCos(
+        'images/origin',
+        file.newFilename,
+        file.buffer,
+        originContentType
+      ),
+      uploadBufferToCos(
+        'images/compressed',
+        file.newFilename,
+        compressedBuffer,
+        'image/jpeg'
+      )
+    ])
+    logger?.info(
+      'upload_image:',
+      file.originalFilename,
+      'cos done, cost',
+      dayjs().diff(start, 'second'),
+      's'
+    )
+
+    return {
+      url: toCosSafeUrl(compressedUrl),
+      originalUrl: toCosSafeUrl(originalUrl, false),
       filename: file.originalFilename
     }
   }
@@ -437,6 +508,7 @@ export function createCosUploadClient(options: CosUploadClientOptions) {
     partitionImagesBySize,
     processOneImage,
     processCompressedImageFromBuffer,
+    processOriginAndCompressedImageFromBuffer,
     processImagesBatch,
     processImagesBatchWithSizeFilter,
     assignOriginUploadPath,

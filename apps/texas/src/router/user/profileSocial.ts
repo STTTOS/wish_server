@@ -60,7 +60,7 @@ function parsePositiveUserId(raw: unknown): number | null {
   return Math.trunc(n)
 }
 
-/** 资料卡高光图上传：登录即可；内存/临时文件 → sharp → COS compressed */
+/** 资料卡高光图：登录即可；内存 → sharp → COS origin + compressed（同名，blog 约定） */
 router.post(userClientApi('/profile/upload-image'), async (ctx) => {
   const userId = ctx.state.user?.id
   if (!userId) {
@@ -83,12 +83,13 @@ router.post(userClientApi('/profile/upload-image'), async (ctx) => {
     .replaceAll(/\s/g, '')
 
   try {
-    const data = await cos.processCompressedImageFromBuffer({
+    const data = await cos.processOriginAndCompressedImageFromBuffer({
       buffer,
       originalFilename: file?.originalFilename ?? null,
       newFilename,
       size: file?.size ?? buffer.length
     })
+    // data.url = compressed；data.originalUrl = origin。业务入库用 url 即可
     response.success(ctx, data, '上传成功')
   } catch (error) {
     logger.error(error)
