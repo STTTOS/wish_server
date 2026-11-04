@@ -53,6 +53,41 @@ model User {
   playerHonorsStat        PlayerHonorsStat?
   disciplineActionSnapshots  DisciplineActionSnapshot[]
   playerDisciplineStats      PlayerDisciplineStat[]
+  profileHighlights          ProfileHighlight[]
+  guestbookWallMessages      ProfileGuestbookMessage[] @relation("GuestbookWall")
+  guestbookAuthoredMessages  ProfileGuestbookMessage[] @relation("GuestbookAuthor")
+}
+
+/// 个人主页高光时刻：每用户固定 6 槽（slotIndex 0..5）
+model ProfileHighlight {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  slotIndex Int
+  imageUrl  String   @db.VarChar(512)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slotIndex])
+  @@index([userId])
+  @@map("profile_highlight")
+}
+
+/// 个人主页留言墙：访客 → 墙主；a→b 每日上限 3
+model ProfileGuestbookMessage {
+  id           Int      @id @default(autoincrement())
+  wallUserId   Int
+  authorUserId Int
+  content      String   @db.VarChar(48)
+  createdAt    DateTime @default(now())
+
+  wallUser User @relation("GuestbookWall", fields: [wallUserId], references: [id], onDelete: Cascade)
+  author   User @relation("GuestbookAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([wallUserId, createdAt])
+  @@index([authorUserId, wallUserId, createdAt])
+  @@map("profile_guestbook_message")
 }
 
 /// 道具目录（系统级）：一行代表一种道具（如 `rename_card`）

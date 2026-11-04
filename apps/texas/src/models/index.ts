@@ -30,7 +30,9 @@ export const {
   styleStatAppliedHand,
   disciplineActionSnapshot,
   disciplineAppliedHand,
-  playerDisciplineStat
+  playerDisciplineStat,
+  profileHighlight,
+  profileGuestbookMessage
 } = prisma
 
 export default prisma

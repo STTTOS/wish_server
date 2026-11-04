@@ -37,6 +37,7 @@
     "**/*.{js,jsx,ts,tsx}": "eslint --fix --cache --ext .ts,.tsx,.js,.jsx"
   },
   "dependencies": {
+    "@wishufree/cos-upload": "workspace:*",
     "@wishufree/texas-ws-contract": "workspace:*",
     "redis": "^5.11.0"
   }

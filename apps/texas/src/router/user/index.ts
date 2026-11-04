@@ -6,6 +6,7 @@ import { omit } from 'ramda'
 import { v4 as uuidv4 } from 'uuid'
 import { Prisma, AssetUsageType } from '@prisma/texas-client'
 
+import './profileSocial'
 import { getToken } from '../../utils/login'
 import combinePath from '../../utils/combinePath'
 import router, { type DefaultState } from '../instance'

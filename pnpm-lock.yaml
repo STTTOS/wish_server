@@ -238,6 +238,9 @@ importers:
 
   apps/texas:
     dependencies:
+      '@wishufree/cos-upload':
+        specifier: workspace:*
+        version: link:../../packages/cos-upload
       '@wishufree/texas-ws-contract':
         specifier: workspace:*
         version: link:../../packages/texas-ws-contract
