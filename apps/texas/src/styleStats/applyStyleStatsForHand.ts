@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/texas-client'
 
 import prisma from '../models'
 import { logger } from '../logger'
+import { applyHandHonorsDeltas } from './playerHonors'
 import { applyHandStyleDeltas } from './applyIncremental'
 import {
   STYLE_SCOPE_ALL,
@@ -55,6 +56,7 @@ export const applyStyleStatsForHand = async (matchId: number) => {
           wager: true,
           isFold: true,
           isAllIn: true,
+          rankCategory: true,
           sevenTwoBonusPaid: true,
           sevenTwoBonusReceived: true
         }
@@ -112,5 +114,13 @@ export const applyStyleStatsForHand = async (matchId: number) => {
       throw err
     }
     await applyHandStyleDeltas(tx, { matchId, scopes, deltas })
+    await applyHandHonorsDeltas(tx, {
+      matchId,
+      seats: matchRow.playerMatchRecords.map((p) => ({
+        userId: p.userId,
+        isFold: p.isFold,
+        rankCategory: p.rankCategory
+      }))
+    })
   })
 }

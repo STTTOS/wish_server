@@ -50,6 +50,7 @@ model User {
   itemLedgers       UserItemLedger[]
   mails             UserMail[]
   playerStyleStats        PlayerStyleStat[]
+  playerHonorsStat        PlayerHonorsStat?
   disciplineActionSnapshots  DisciplineActionSnapshot[]
   playerDisciplineStats      PlayerDisciplineStat[]
 }
@@ -342,6 +343,23 @@ model UserRoomStat {
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([userId, roomId])
+}
+
+/// 玩家名片荣誉物化（终身）：手数 + 大牌成就计数，避免每次扫 PlayerMatchRecord。
+model PlayerHonorsStat {
+  userId Int @id
+
+  hands               Int @default(0)
+  royalFlushCount     Int @default(0)
+  straightFlushCount  Int @default(0)
+  fourOfKindCount     Int @default(0)
+
+  lastMatchId Int?
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_honors_stat")
 }
 
 /// 牌风雷达物化计数（用户 × scope）。scope=`all` 为终身；亦可为 quick|standard|deep|custom。

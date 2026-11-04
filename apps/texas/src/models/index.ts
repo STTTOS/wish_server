@@ -25,6 +25,7 @@ export const {
   userMail,
   userMailAttachment,
   playerStyleStat,
+  playerHonorsStat,
   stylePopulationStat,
   styleStatAppliedHand,
   disciplineActionSnapshot,

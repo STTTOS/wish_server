@@ -55,6 +55,14 @@ export type UserStyleRadarDto = {
     rank: number | null
     rankOf: number | null
   }
+  /** 机会/分母样本，供解读展示可信度 */
+  samples: {
+    hands: number
+    threeBetOpps: number
+    cbetOpps: number
+    afqActions: number
+    limpHands: number
+  }
 }
 
 const disciplineRankAmongEligible = async (
@@ -221,6 +229,13 @@ export const getUserStyleRadar = async (
       habit,
       rank: disciplineRank,
       rankOf: disciplineRankOf
+    },
+    samples: {
+      hands,
+      threeBetOpps: player?.threeBetOpps ?? 0,
+      cbetOpps: player?.cbetOpps ?? 0,
+      afqActions: player?.afqActions ?? 0,
+      limpHands: player?.limpHands ?? 0
     }
   }
 }
