@@ -122,7 +122,13 @@ router.post(userClientApi('/profile/highlights/set'), async (ctx) => {
   }
   const slotIndex = Number(body.slotIndex)
   const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl : ''
-  const result = await setProfileHighlight({ userId, slotIndex, imageUrl })
+  const cos = getCosUploadClient()
+  const result = await setProfileHighlight({
+    userId,
+    slotIndex,
+    imageUrl,
+    cosDomain: cos.cosDomain
+  })
   if ('error' in result) {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, result.error)
     return

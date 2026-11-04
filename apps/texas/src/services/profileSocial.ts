@@ -63,17 +63,35 @@ export async function listProfileHighlights(
   )
 }
 
+/** 仅允许本站 COS 展示图 URL（与 cos-upload toCosSafeUrl 约定一致） */
+export function isAllowedProfileHighlightImageUrl(
+  rawUrl: string,
+  cosDomain: string
+): boolean {
+  const url = rawUrl.trim()
+  if (!url || url.length > 512) return false
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return false
+    if (parsed.hostname !== cosDomain) return false
+    return parsed.pathname.startsWith('/images/')
+  } catch {
+    return false
+  }
+}
+
 export async function setProfileHighlight(params: {
   userId: number
   slotIndex: number
   imageUrl: string
+  cosDomain: string
 }): Promise<ProfileHighlightSlot[] | { error: string }> {
-  const { userId, slotIndex, imageUrl } = params
+  const { userId, slotIndex, imageUrl, cosDomain } = params
   if (!isValidSlotIndex(slotIndex)) {
     return { error: '槽位无效' }
   }
   const url = imageUrl.trim()
-  if (!url || url.length > 512) {
+  if (!isAllowedProfileHighlightImageUrl(url, cosDomain)) {
     return { error: '图片地址无效' }
   }
   await prisma.profileHighlight.upsert({
