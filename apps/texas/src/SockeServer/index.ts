@@ -8,11 +8,10 @@ import { Server, Socket, Namespace } from 'socket.io'
 
 import { server } from '../server'
 import { logger } from '../logger'
-import { isAdminUser } from '../utils/isAdminUser'
 import prisma, { room as roomModel } from '../models'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
-import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
+import { isBlockedByMaintenance } from '../utils/maintenanceAccess'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
 import { setNextHandCountdownBroadcaster } from '../gameRuntime/nextHandCountdown'
@@ -449,11 +448,9 @@ class SocketServer {
   }
 
   async #guardMaintenance(socket: Socket) {
-    const enabled = await isMaintenanceEnabled()
-    if (!enabled) return false
     const userId = socket.data.userId as number | undefined
-    const adminPassed = await isAdminUser(userId)
-    if (adminPassed) return false
+    const blocked = await isBlockedByMaintenance(userId)
+    if (!blocked) return false
     logger.info(
       `ws blocked by maintenance, nsp=${socket.nsp.name}, userId=${userId ?? 0}`
     )

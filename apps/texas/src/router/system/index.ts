@@ -5,9 +5,9 @@ import response from '../../utils/response'
 import { assertWebAdmin } from '../webAuth'
 import { user, announcement } from '../../models'
 import combinePath from '../../utils/combinePath'
-import { isAdminUser } from '../../utils/isAdminUser'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { isValidSemverCoreString } from '../../utils/semverCompare'
+import { isBlockedByMaintenance } from '../../utils/maintenanceAccess'
 import { timeFormat, apiPrefixWeb, apiPrefixClient } from '../../config'
 import {
   isMaintenanceEnabled,
@@ -49,7 +49,7 @@ router.post(systemApiClient('/maintenance/status'), async (ctx) => {
 })
 
 // 客户端：进入游戏前置检查（维护态 + 昵称设置态）
-// maintenanceEnabled 语义：是否拦截「当前用户」进厅（与 HTTP/WS guard 一致：管理员放行）
+// maintenanceEnabled = 是否拦截「当前用户」进厅（与 maintenanceAccess / HTTP / WS 一致）
 router.post(systemApiClient('/game/entry-check'), async (ctx) => {
   const userId = ctx.state.user?.id
   if (!userId) {
@@ -57,9 +57,8 @@ router.post(systemApiClient('/game/entry-check'), async (ctx) => {
     return
   }
 
-  const [systemMaintenanceOn, adminPassed, currentUser] = await Promise.all([
-    isMaintenanceEnabled(),
-    isAdminUser(userId),
+  const [maintenanceEnabled, currentUser] = await Promise.all([
+    isBlockedByMaintenance(userId),
     user.findUnique({
       where: { id: userId },
       select: { hasSetName: true }
@@ -69,8 +68,6 @@ router.post(systemApiClient('/game/entry-check'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
     return
   }
-
-  const maintenanceEnabled = systemMaintenanceOn && !adminPassed
 
   response.success(
     ctx,

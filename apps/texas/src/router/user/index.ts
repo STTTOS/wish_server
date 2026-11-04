@@ -33,6 +33,10 @@ import {
   tokenValidatedTime
 } from '../../config'
 import {
+  isBlockedByMaintenance,
+  respondMaintenanceBlocked
+} from '../../utils/maintenanceAccess'
+import {
   grantMailAttachments,
   canUsePokerBackgroundKey,
   listOwnedPokerBackgroundKeys
@@ -221,6 +225,11 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
   // 存在账户, 直接登录
   if (target) {
     if (target.password === password) {
+      // 维护期：一键登录即拦截普通用户；管理员可登录（sign 在白名单，身份在此判定）
+      if (await isBlockedByMaintenance(target.id)) {
+        respondMaintenanceBlocked(ctx)
+        return
+      }
       setLoginSession(target.id!, sessionId, 'client')
       response.success(
         ctx,
@@ -241,6 +250,11 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
       })
     }
   } else {
+    // 维护期禁止新注册（尚无管理员身份）
+    if (await isBlockedByMaintenance(null)) {
+      respondMaintenanceBlocked(ctx)
+      return
+    }
     const ramdomName = `用户_${sessionId.slice(0, 6)}_${dayjs().format(
       'yyyy-MM-DD'
     )}`

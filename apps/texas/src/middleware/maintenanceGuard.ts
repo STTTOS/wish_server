@@ -1,17 +1,18 @@
 import type { ParameterizedContext } from 'koa'
 
-import response from '../utils/response'
 import { DefaultState } from '../router/instance'
-import { isAdminUser } from '../utils/isAdminUser'
-import { isMaintenanceEnabled } from '../utils/maintenanceSwitch'
+import { MAINTENANCE_HTTP_WHITELIST_PATHS } from '../router/system/maintenanceConstants'
 import {
-  MAINTENANCE_CODE,
-  MAINTENANCE_MESSAGE,
-  MAINTENANCE_HTTP_WHITELIST_PATHS
-} from '../router/system/maintenanceConstants'
+  isBlockedByMaintenance,
+  respondMaintenanceBlocked
+} from '../utils/maintenanceAccess'
 
 const maintenanceWhitelist = new Set<string>(MAINTENANCE_HTTP_WHITELIST_PATHS)
 
+/**
+ * 已登录请求的维护闸门（依赖 koa-jwt 已写入 ctx.state.user）。
+ * `/user/sign` 等鉴权前路径在白名单内，由登录处理器自行按账号身份拦截。
+ */
 export default async (
   ctx: ParameterizedContext<DefaultState>,
   next: () => Promise<void>
@@ -21,21 +22,11 @@ export default async (
     return
   }
 
-  const enabled = await isMaintenanceEnabled()
-  if (!enabled) {
+  const blocked = await isBlockedByMaintenance(ctx.state.user?.id)
+  if (!blocked) {
     await next()
     return
   }
 
-  const userId = ctx.state.user?.id
-  const adminPassed = await isAdminUser(userId)
-  if (adminPassed) {
-    await next()
-    return
-  }
-
-  response.error(ctx, MAINTENANCE_CODE, MAINTENANCE_MESSAGE, {
-    type: 'MAINTENANCE',
-    enabled: true
-  })
+  respondMaintenanceBlocked(ctx)
 }
