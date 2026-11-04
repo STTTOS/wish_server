@@ -215,7 +215,7 @@ router.post(userClientApi('/profile/guestbook/delete'), async (ctx) => {
   }
   const result = await deleteGuestbookMessage({ messageId, wallOwnerId })
   if ('error' in result) {
-    let status = HTTP_STATUS.BAD_REQUEST
+    let status: number = HTTP_STATUS.BAD_REQUEST
     if (result.status === 403) status = HTTP_STATUS.FORBIDDEN
     else if (result.status === 404) status = HTTP_STATUS.NOT_FOUND
     response.error(ctx, status, result.error)
