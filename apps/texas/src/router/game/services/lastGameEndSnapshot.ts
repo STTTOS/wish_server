@@ -125,8 +125,13 @@ export async function buildLastGameEndForViewer(input: {
     matchOverview,
     boardThroughStage: (matchRow.boardThroughStage ?? 'pre_flop') as Stage,
     bestRankCategory: matchRow.bestRankCategory ?? undefined,
-    bestRankSignature:
-      (matchRow.bestRankSignature as RankSignature | null) ?? undefined,
+    // 空串勿下发：客户端牌力条解析会 throw（尤其重连 lastGameEnd）
+    bestRankSignature: (() => {
+      const raw = matchRow.bestRankSignature
+      if (raw == null) return undefined
+      const trimmed = String(raw).trim()
+      return trimmed ? (trimmed as RankSignature) : undefined
+    })(),
     gameDuration,
     bestPokes: parseBestPokesJson(matchRow.bestPokes),
     totalBetAmount: Number(matchRow.totalBetAmount ?? 0)

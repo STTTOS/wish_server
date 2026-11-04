@@ -48,7 +48,9 @@ function bestRankSignatureFromHandEnded(
   payload: Extract<TexasDomainEvent, { type: 'HandEnded' }>['payload']
 ): RankSignature | null {
   const v = (payload as { bestRankSignature?: string }).bestRankSignature
-  return v != null && v !== '' ? (v as RankSignature) : null
+  if (v == null) return null
+  const trimmed = String(v).trim()
+  return trimmed ? (trimmed as RankSignature) : null
 }
 
 const OFFLINE_TURN_THINKING_TIME_MS = 5000
