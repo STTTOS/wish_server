@@ -8,6 +8,12 @@ import combinePath from '../../utils/combinePath'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import { getCosUploadClient } from '../../services/cosUpload'
 import {
+  removeUserPushToken,
+  upsertUserPushToken,
+  isValidExpoPushToken,
+  normalizePushPlatform
+} from '../../services/pushNotifications'
+import {
   setProfileHighlight,
   clearProfileHighlight,
   listGuestbookMessages,
@@ -251,4 +257,52 @@ router.post(userClientApi('/profile/guestbook/markRead'), async (ctx) => {
   }
   await markGuestbookWallRead(wallUserId)
   response.success(ctx, { ok: true })
+})
+
+/** 注册 / 换绑 Expo Push Token（留言等系统通知） */
+router.post(userClientApi('/push/register'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const body = (ctx.request.body ?? {}) as {
+    token?: unknown
+    platform?: unknown
+  }
+  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  if (!isValidExpoPushToken(token)) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '参数异常：需要有效的 Expo Push Token'
+    )
+    return
+  }
+  await upsertUserPushToken({
+    userId,
+    token,
+    platform: normalizePushPlatform(body.platform)
+  })
+  response.success(ctx, { ok: true }, '已注册推送')
+})
+
+router.post(userClientApi('/push/unregister'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const body = (ctx.request.body ?? {}) as { token?: unknown }
+  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  if (!isValidExpoPushToken(token)) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '参数异常：需要有效的 Expo Push Token'
+    )
+    return
+  }
+  await removeUserPushToken({ userId, token })
+  response.success(ctx, { ok: true }, '已取消推送')
 })

@@ -207,6 +207,20 @@ export async function createGuestbookMessage(params: {
       }
     }
   })
+
+  // 异步推送墙主；失败不影响留言成功
+  try {
+    const { scheduleGuestbookPush } = await import('./pushNotifications')
+    scheduleGuestbookPush({
+      wallUserId,
+      authorName: created.author.name,
+      content: created.content,
+      messageId: created.id
+    })
+  } catch {
+    // ignore
+  }
+
   return {
     id: created.id,
     content: created.content,

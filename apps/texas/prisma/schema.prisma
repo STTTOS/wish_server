@@ -56,6 +56,23 @@ model User {
   profileHighlights          ProfileHighlight[]
   guestbookWallMessages      ProfileGuestbookMessage[] @relation("GuestbookWall")
   guestbookAuthoredMessages  ProfileGuestbookMessage[] @relation("GuestbookAuthor")
+  pushTokens                 UserPushToken[]
+}
+
+/// 客户端推送 token（Expo Push Token）；一设备一 token，可换绑用户
+model UserPushToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  /// ExponentPushToken[...]
+  token     String   @unique @db.VarChar(191)
+  platform  String   @db.VarChar(16)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_push_token")
 }
 
 /// 个人主页高光时刻：每用户固定 6 槽（slotIndex 0..5）
