@@ -12,8 +12,10 @@ import {
   clearProfileHighlight,
   listGuestbookMessages,
   listProfileHighlights,
+  markGuestbookWallRead,
   createGuestbookMessage,
   deleteGuestbookMessage,
+  getGuestbookUnreadCount,
   normalizeGuestbookContent,
   PROFILE_GUESTBOOK_MAX_CHARS
 } from '../../services/profileSocial'
@@ -228,4 +230,24 @@ router.post(userClientApi('/profile/guestbook/delete'), async (ctx) => {
     return
   }
   response.success(ctx, null, '已删除')
+})
+
+router.post(userClientApi('/profile/guestbook/unreadCount'), async (ctx) => {
+  const wallUserId = ctx.state.user?.id
+  if (!wallUserId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const count = await getGuestbookUnreadCount(wallUserId)
+  response.success(ctx, { count })
+})
+
+router.post(userClientApi('/profile/guestbook/markRead'), async (ctx) => {
+  const wallUserId = ctx.state.user?.id
+  if (!wallUserId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  await markGuestbookWallRead(wallUserId)
+  response.success(ctx, { ok: true })
 })

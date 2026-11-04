@@ -194,6 +194,8 @@ model UserSettings {
   showStyleRadar     Boolean @default(false)
   // 离线是否自动跟注
   autoCallOnOffline  Boolean @default(false)
+  /// 留言墙已读游标：createdAt 晚于此的他人留言计为未读
+  guestbookWallLastReadAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())

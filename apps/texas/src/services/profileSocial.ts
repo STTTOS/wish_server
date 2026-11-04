@@ -224,3 +224,40 @@ export async function deleteGuestbookMessage(params: {
   await prisma.profileGuestbookMessage.delete({ where: { id: row.id } })
   return { ok: true }
 }
+
+/** 他人在自己墙上的未读留言数（不含自己写的） */
+export async function getGuestbookUnreadCount(
+  wallUserId: number
+): Promise<number> {
+  const settings = await prisma.userSettings.findUnique({
+    where: { userId: wallUserId },
+    select: { guestbookWallLastReadAt: true }
+  })
+  const lastRead = settings?.guestbookWallLastReadAt
+  return prisma.profileGuestbookMessage.count({
+    where: {
+      wallUserId,
+      authorUserId: { not: wallUserId },
+      ...(lastRead ? { createdAt: { gt: lastRead } } : {})
+    }
+  })
+}
+
+/** 墙主将留言墙标为已读 */
+export async function markGuestbookWallRead(
+  wallUserId: number
+): Promise<{ ok: true }> {
+  const now = new Date()
+  await prisma.userSettings.upsert({
+    where: { userId: wallUserId },
+    create: {
+      user: { connect: { id: wallUserId } },
+      guestbookWallLastReadAt: now
+    },
+    update: {
+      guestbookWallLastReadAt: now,
+      updatedAt: now
+    }
+  })
+  return { ok: true }
+}
