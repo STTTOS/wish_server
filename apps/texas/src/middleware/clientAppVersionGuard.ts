@@ -4,6 +4,7 @@ import response from '../utils/response'
 import { DefaultState } from '../router/instance'
 import { HTTP_STATUS } from '../constants/httpStatus'
 import { getMinClientAppVersion } from '../utils/clientMinVersionPolicy'
+import { readClientVersionFromRequest } from '../utils/readClientVersion'
 import { parseSemverCore, compareSemverCore } from '../utils/semverCompare'
 import {
   APP_VERSION_TOO_LOW_DETAILS_TYPE,
@@ -15,18 +16,6 @@ const whitelist = new Set<string>(CLIENT_VERSION_CHECK_WHITELIST_PATHS)
 /** 与版本低于 min 时一致，便于老包（未带 version）走同一套客户端提示 */
 const CLIENT_VERSION_TOO_LOW_MESSAGE =
   '当前应用版本过低, 为了正常游戏体验, 需要更新到最新版本'
-
-function readClientVersion(ctx: ParameterizedContext<DefaultState>): unknown {
-  const method = ctx.method.toUpperCase()
-  if (method === 'GET') {
-    return ctx.query.version
-  }
-  const body = ctx.request.body
-  if (body && typeof body === 'object' && !Array.isArray(body)) {
-    return (body as Record<string, unknown>).version
-  }
-  return undefined
-}
 
 export default async function clientAppVersionGuard(
   ctx: ParameterizedContext<DefaultState>,
@@ -42,13 +31,7 @@ export default async function clientAppVersionGuard(
     return
   }
 
-  const raw = readClientVersion(ctx)
-  let explicitVersion: string | undefined
-  if (typeof raw === 'string' && raw.trim() !== '') {
-    explicitVersion = raw.trim()
-  } else if (typeof raw === 'number' && Number.isFinite(raw)) {
-    explicitVersion = String(raw)
-  }
+  const explicitVersion = readClientVersionFromRequest(ctx)
 
   if (explicitVersion != null && parseSemverCore(explicitVersion) == null) {
     response.error(

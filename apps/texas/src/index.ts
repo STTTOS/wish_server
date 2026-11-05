@@ -25,6 +25,7 @@ import maintenanceGuard from './middleware/maintenanceGuard'
 import { respondFromApiResult } from './utils/respondFromApiResult'
 import clientAppVersionGuard from './middleware/clientAppVersionGuard'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
+import { readClientVersionFromRequest } from './utils/readClientVersion'
 import { startAchievementMailCompensationJob } from './services/mailReward'
 
 async function recoverRoomsWithoutRuntimeOnBoot() {
@@ -87,11 +88,15 @@ app.use(async (ctx, next) => {
   }
 })
 
-// 记录请求
+// 记录请求（finally 里打日志：此时 body 通常已解析，可带上客户端 version）
 app.use(async (ctx, next) => {
   const { ip, url } = ctx.request
-  logger.info(`ip: ${ip}, request for ${url}`)
-  await next()
+  try {
+    await next()
+  } finally {
+    const version = readClientVersionFromRequest(ctx) ?? '-'
+    logger.info(`ip: ${ip}, version: ${version}, request for ${url}`)
+  }
 })
 
 // 配合history模式

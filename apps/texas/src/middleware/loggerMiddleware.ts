@@ -1,6 +1,7 @@
 import { Context } from 'koa'
 
 import { logger } from '../logger'
+import { readClientVersionFromRequest } from '../utils/readClientVersion'
 
 const loggerMiddleware = async (ctx: Context, next: () => Promise<void>) => {
   const { url } = ctx.request
@@ -12,8 +13,9 @@ const loggerMiddleware = async (ctx: Context, next: () => Promise<void>) => {
 
   // 计算响应时间
   const ms = Date.now() - start
+  const version = readClientVersionFromRequest(ctx) ?? '-'
   logger.info(
-    `ip: ${ip}, request for ${url}, body: ${JSON.stringify(
+    `ip: ${ip}, version: ${version}, request for ${url}, body: ${JSON.stringify(
       ctx.request.body || {}
     )}; 耗时${ms}ms`
   )
