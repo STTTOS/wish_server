@@ -19,6 +19,8 @@ type RoomListItem = {
   roomId: number
   activeCode: string | null
   matchCount: number
+  /** 近窗内该房对局中出现过的去重人数（含本人） */
+  playerCount: number
   lastMatchAt: string | null
   tableType: string
   lowestBetAmount: number
@@ -69,6 +71,44 @@ router.post(minScorePathWebApi('/rooms'), async (ctx) => {
   })
   const roomById = new Map(rooms.map((r) => [r.id, r]))
 
+  const matchTimeWhere = {
+    roomId: { in: roomIds },
+    playerMatchRecords: { some: { userId } },
+    OR: [
+      { endedAt: { gte: since } },
+      { startedAt: { gte: since } },
+      { createdAt: { gte: since } }
+    ]
+  }
+  const matchRows = await match.findMany({
+    where: matchTimeWhere,
+    select: { id: true, roomId: true }
+  })
+  const matchRoomById = new Map(matchRows.map((m) => [m.id, m.roomId]))
+  const matchIds = matchRows.map((m) => m.id)
+
+  const playerCountByRoom = new Map<number, number>()
+  if (matchIds.length > 0) {
+    const sides = await playerMatchRecord.findMany({
+      where: { matchId: { in: matchIds } },
+      select: { userId: true, matchId: true }
+    })
+    const usersByRoom = new Map<number, Set<number>>()
+    for (const side of sides) {
+      const rid = matchRoomById.get(side.matchId)
+      if (rid == null) continue
+      let set = usersByRoom.get(rid)
+      if (!set) {
+        set = new Set()
+        usersByRoom.set(rid, set)
+      }
+      set.add(side.userId)
+    }
+    for (const [rid, set] of usersByRoom) {
+      playerCountByRoom.set(rid, set.size)
+    }
+  }
+
   const list: RoomListItem[] = withMatches
     .map((g) => {
       const lastAt = g._max.endedAt ?? g._max.startedAt ?? g._max.createdAt
@@ -77,6 +117,7 @@ router.post(minScorePathWebApi('/rooms'), async (ctx) => {
         roomId: g.roomId,
         activeCode: r?.activeCode ?? null,
         matchCount: g._count._all,
+        playerCount: playerCountByRoom.get(g.roomId) ?? 0,
         lastMatchAt: lastAt ? formatTime(lastAt) : null,
         tableType: r?.tableType ?? 'standard',
         lowestBetAmount: r?.lowestBetAmount ?? 0,
@@ -90,6 +131,7 @@ router.post(minScorePathWebApi('/rooms'), async (ctx) => {
         roomId,
         activeCode,
         matchCount,
+        playerCount,
         lastMatchAt,
         tableType,
         lowestBetAmount,
@@ -98,6 +140,7 @@ router.post(minScorePathWebApi('/rooms'), async (ctx) => {
         roomId,
         activeCode,
         matchCount,
+        playerCount,
         lastMatchAt,
         tableType,
         lowestBetAmount,
