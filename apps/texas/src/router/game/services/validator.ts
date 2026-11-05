@@ -60,4 +60,8 @@ export async function markRoomEnteringAndNotify(
 ) {
   wsGateway.notifyEntering(roomId)
   wsGateway.trackEntering(roomId, userIds)
+  const { scheduleMatchEnteringPush } = await import(
+    '../../../services/pushNotifications'
+  )
+  scheduleMatchEnteringPush({ roomId, userIds })
 }

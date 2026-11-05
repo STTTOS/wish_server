@@ -936,6 +936,14 @@ async function processTexasDomainEvent(
         restrict: e.payload.restrict,
         serverNow
       })
+      const { scheduleYourTurnPush } = await import(
+        '../../../../services/pushNotifications'
+      )
+      scheduleYourTurnPush({
+        userId: e.payload.userId,
+        roomId,
+        matchId
+      })
       return
     }
     case 'HandEnded':

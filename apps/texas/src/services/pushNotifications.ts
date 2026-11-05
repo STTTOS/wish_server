@@ -91,7 +91,7 @@ async function sendExpoPushMessages(
 }
 
 /**
- * 给指定用户所有已注册设备发推送。失败只打日志，不抛给业务路径。
+ * 给指定用户所有已注册 iOS 设备发推送。失败只打日志，不抛给业务路径。
  */
 export async function notifyUserDevicesSafe(params: {
   userId: number
@@ -100,11 +100,31 @@ export async function notifyUserDevicesSafe(params: {
   data?: Record<string, unknown>
   badge?: number
 }): Promise<void> {
+  await notifyUsersDevicesSafe({
+    userIds: [params.userId],
+    title: params.title,
+    body: params.body,
+    data: params.data,
+    badge: params.badge
+  })
+}
+
+/** 批量：仅 iOS token；空列表 no-op */
+export async function notifyUsersDevicesSafe(params: {
+  userIds: number[]
+  title: string
+  body: string
+  data?: Record<string, unknown>
+  badge?: number
+}): Promise<void> {
+  const userIds = [
+    ...new Set(params.userIds.filter((id) => Number.isInteger(id) && id > 0))
+  ]
+  if (userIds.length === 0) return
   try {
-    // 仅向 iOS 设备推送（Android 暂不启用）
     const rows = await prisma.userPushToken.findMany({
-      where: { userId: params.userId, platform: 'ios' },
-      select: { token: true, platform: true }
+      where: { userId: { in: userIds }, platform: 'ios' },
+      select: { token: true }
     })
     if (rows.length === 0) return
 
@@ -119,7 +139,7 @@ export async function notifyUserDevicesSafe(params: {
     await sendExpoPushMessages(messages)
   } catch (err) {
     logger.error(
-      `[push] notifyUserDevicesSafe failed userId=${params.userId}`,
+      `[push] notifyUsersDevicesSafe failed userIds=${userIds.join(',')}`,
       err
     )
   }
@@ -156,5 +176,43 @@ export function scheduleGuestbookPush(params: {
     })
   })().catch((err) => {
     logger.error('[push] scheduleGuestbookPush failed', err)
+  })
+}
+
+/** 房主点开始：通知桌上成员「对局开始了」（异步） */
+export function scheduleMatchEnteringPush(params: {
+  roomId: number
+  userIds: number[]
+}): void {
+  void notifyUsersDevicesSafe({
+    userIds: params.userIds,
+    title: '对局开始了',
+    body: '房主已开始游戏，快返回牌桌吧',
+    data: {
+      type: 'match_entering',
+      roomId: params.roomId
+    }
+  }).catch((err) => {
+    logger.error('[push] scheduleMatchEnteringPush failed', err)
+  })
+}
+
+/** 轮到该玩家行动（异步；思考时长通常数十秒，频率可控） */
+export function scheduleYourTurnPush(params: {
+  userId: number
+  roomId: number
+  matchId: number
+}): void {
+  void notifyUserDevicesSafe({
+    userId: params.userId,
+    title: '轮到你行动了',
+    body: '请尽快返回牌桌完成操作',
+    data: {
+      type: 'your_turn',
+      roomId: params.roomId,
+      matchId: params.matchId
+    }
+  }).catch((err) => {
+    logger.error('[push] scheduleYourTurnPush failed', err)
   })
 }
