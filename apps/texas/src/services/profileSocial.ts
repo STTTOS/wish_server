@@ -229,19 +229,21 @@ export async function createGuestbookMessage(params: {
   }
 }
 
-/** 仅墙主可删 */
+/** 墙主可删墙上任意留言；作者可删自己发出的留言 */
 export async function deleteGuestbookMessage(params: {
   messageId: number
-  wallOwnerId: number
+  actorUserId: number
 }): Promise<{ ok: true } | { error: string; status?: number }> {
   const row = await prisma.profileGuestbookMessage.findUnique({
     where: { id: params.messageId },
-    select: { id: true, wallUserId: true }
+    select: { id: true, wallUserId: true, authorUserId: true }
   })
   if (!row) {
     return { error: '留言不存在', status: 404 }
   }
-  if (row.wallUserId !== params.wallOwnerId) {
+  const isWallOwner = row.wallUserId === params.actorUserId
+  const isAuthor = row.authorUserId === params.actorUserId
+  if (!isWallOwner && !isAuthor) {
     return { error: '无权删除', status: 403 }
   }
   await prisma.profileGuestbookMessage.delete({ where: { id: row.id } })

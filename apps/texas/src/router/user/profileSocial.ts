@@ -217,8 +217,8 @@ router.post(userClientApi('/profile/guestbook/create'), async (ctx) => {
 })
 
 router.post(userClientApi('/profile/guestbook/delete'), async (ctx) => {
-  const wallOwnerId = ctx.state.user?.id
-  if (!wallOwnerId) {
+  const actorUserId = ctx.state.user?.id
+  if (!actorUserId) {
     response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
     return
   }
@@ -228,7 +228,7 @@ router.post(userClientApi('/profile/guestbook/delete'), async (ctx) => {
     response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 id')
     return
   }
-  const result = await deleteGuestbookMessage({ messageId, wallOwnerId })
+  const result = await deleteGuestbookMessage({ messageId, actorUserId })
   if ('error' in result) {
     let status: number = HTTP_STATUS.BAD_REQUEST
     if (result.status === 403) status = HTTP_STATUS.FORBIDDEN
