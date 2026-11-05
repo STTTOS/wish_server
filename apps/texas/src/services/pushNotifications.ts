@@ -101,8 +101,9 @@ export async function notifyUserDevicesSafe(params: {
   badge?: number
 }): Promise<void> {
   try {
+    // 仅向 iOS 设备推送（Android 暂不启用）
     const rows = await prisma.userPushToken.findMany({
-      where: { userId: params.userId },
+      where: { userId: params.userId, platform: 'ios' },
       select: { token: true, platform: true }
     })
     if (rows.length === 0) return
@@ -113,8 +114,7 @@ export async function notifyUserDevicesSafe(params: {
       body: params.body,
       data: params.data,
       sound: 'default',
-      badge: params.badge,
-      ...(r.platform === 'android' ? { channelId: 'guestbook' } : {})
+      badge: params.badge
     }))
     await sendExpoPushMessages(messages)
   } catch (err) {
