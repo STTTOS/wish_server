@@ -87,16 +87,16 @@ router.post(minScorePathWebApi('/rooms'), async (ctx) => {
     .sort((a, b) => b._sort - a._sort)
     .map(
       ({
-        id,
-        roomName,
+        roomId,
+        activeCode,
         matchCount,
         lastMatchAt,
         tableType,
         lowestBetAmount,
         initialChips
       }) => ({
-        id,
-        roomName,
+        roomId,
+        activeCode,
         matchCount,
         lastMatchAt,
         tableType,
