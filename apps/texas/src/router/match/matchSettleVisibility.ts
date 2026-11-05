@@ -2,8 +2,9 @@ import type { Role } from '@prisma/texas-client'
 
 /**
  * 对局详情结算行：底牌与牌力同一套可见性（本人始终可见；
- * 他人：弃牌者不可见；一人独赢无摊牌时其余所有人底牌与牌力均不可见）。
- * **进行中**（`matchEnded === false`）：除本人外一律不返回他人底牌与牌力，避免 Web 详情泄露。
+ * 他人：弃牌者不可见；一人独赢无摊牌时其余所有人底牌与牌力均不可见；
+ * 例外：已落库 `voluntaryShowHandAt`（局间主动亮牌 / 27o 自动亮）时对他人可见）。
+ * **进行中**（`matchEnded === false`）：除本人与已自愿亮牌者外一律不返回他人底牌与牌力。
  * Web `match/detail` 与客户端 `matchApi('/detail')` 共用；不因管理员身份放宽。
  */
 export function settleRecordVisibleFields<
@@ -75,8 +76,11 @@ export function shouldHideTargetHandFromHistoryViewer(args: {
   viewingSelf: boolean
   targetIsFold: boolean
   isNoShowdownSingleWinner: boolean
+  /** 目标用户本手已主动亮牌（含 27o 自动亮） */
+  voluntarilyShownHand?: boolean
 }): boolean {
   if (args.viewingSelf) return false
+  if (args.voluntarilyShownHand) return false
   return args.targetIsFold || args.isNoShowdownSingleWinner
 }
 
@@ -88,13 +92,20 @@ export function projectTargetUserHistoryListFields<
   viewingSelf: boolean
   isFold: boolean
   isNoShowdownSingleWinner: boolean
+  voluntarilyShownHand?: boolean
   handPokes: H
   rankCategory: C
-}): { handPokes: H | []; rankCategory: C | null } {
+}): {
+  handPokes: H | []
+  rankCategory: C | null
+  voluntarilyShownHand: boolean
+} {
+  const voluntarilyShownHand = args.voluntarilyShownHand === true
   const hideHoleCardsFromViewer = shouldHideTargetHandFromHistoryViewer({
     viewingSelf: args.viewingSelf,
     targetIsFold: args.isFold,
-    isNoShowdownSingleWinner: args.isNoShowdownSingleWinner
+    isNoShowdownSingleWinner: args.isNoShowdownSingleWinner,
+    voluntarilyShownHand
   })
   const visible = settleRecordVisibleFields({
     isSelf: !hideHoleCardsFromViewer,
@@ -107,7 +118,8 @@ export function projectTargetUserHistoryListFields<
   })
   return {
     handPokes: visible.handPokes,
-    rankCategory: visible.rankCategory
+    rankCategory: visible.rankCategory,
+    voluntarilyShownHand
   }
 }
 
@@ -154,11 +166,15 @@ export function projectSettleRecordsForMatchDetail(
       rankCategory,
       rankStrength,
       rankSignature,
+      voluntaryShowHandAt,
       ...rest
     }) => {
       const isSelf = recordUserId === opts.viewerUserId
+      const voluntarilyShownHand = voluntaryShowHandAt != null
       const hideHoleCardsFromViewer =
-        !isSelf && (!matchEnded ? true : isFold || isNoShowdownSingleWinner)
+        !isSelf &&
+        !voluntarilyShownHand &&
+        (!matchEnded ? true : isFold || isNoShowdownSingleWinner)
 
       const {
         handPokes: outHandPokes,
@@ -180,6 +196,7 @@ export function projectSettleRecordsForMatchDetail(
         ...rest,
         userId: recordUserId,
         isFold,
+        voluntarilyShownHand,
         handPokes: outHandPokes,
         rankCategory: outRankCategory,
         rankStrength: outRankStrength,

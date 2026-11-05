@@ -282,7 +282,8 @@ router.post(matchApi('/list'), async (ctx) => {
         isAllIn: true,
         isFold: true,
         rankCategory: true,
-        totalBetAmount: true
+        totalBetAmount: true,
+        voluntaryShowHandAt: true
       },
       orderBy: resolveMatchListOrderBy(resolvedSort),
       skip,
@@ -296,41 +297,45 @@ router.post(matchApi('/list'), async (ctx) => {
     ? new Map<number, boolean>()
     : await loadNoShowdownSingleWinnerByMatchId(matchIds)
 
-  const listForResponse = records.map(({ match, ...restRecord }) => {
-    const {
-      id: matchId,
-      room: { activeCode, initialChips },
-      _count,
-      startedAt,
-      endedAt,
-      ...restMatch
-    } = match
+  const listForResponse = records.map(
+    ({ match, voluntaryShowHandAt, ...restRecord }) => {
+      const {
+        id: matchId,
+        room: { activeCode, initialChips },
+        _count,
+        startedAt,
+        endedAt,
+        ...restMatch
+      } = match
 
-    const visibleFields = projectTargetUserHistoryListFields({
-      viewingSelf,
-      isFold: restRecord.isFold,
-      isNoShowdownSingleWinner:
-        noShowdownSingleWinnerByMatchId.get(matchId) ?? false,
-      handPokes: restRecord.handPokes,
-      rankCategory: restRecord.rankCategory
-    })
+      const visibleFields = projectTargetUserHistoryListFields({
+        viewingSelf,
+        isFold: restRecord.isFold,
+        isNoShowdownSingleWinner:
+          noShowdownSingleWinnerByMatchId.get(matchId) ?? false,
+        voluntarilyShownHand: voluntaryShowHandAt != null,
+        handPokes: restRecord.handPokes,
+        rankCategory: restRecord.rankCategory
+      })
 
-    return {
-      ...restRecord,
-      handPokes: visibleFields.handPokes,
-      rankCategory: visibleFields.rankCategory,
-      ...restMatch,
-      matchId,
-      roomCode: activeCode ?? '',
-      initialChips,
-      tableType: match.room.tableType,
-      sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
-      memberCount: _count.playerMatchRecords,
-      replaySupported: viewingSelf && _count.domainEvents > 0,
-      startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
-      endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
+      return {
+        ...restRecord,
+        handPokes: visibleFields.handPokes,
+        rankCategory: visibleFields.rankCategory,
+        voluntarilyShownHand: visibleFields.voluntarilyShownHand,
+        ...restMatch,
+        matchId,
+        roomCode: activeCode ?? '',
+        initialChips,
+        tableType: match.room.tableType,
+        sevenTwoBonusEnabled: match.room.sevenTwoBonusEnabled,
+        memberCount: _count.playerMatchRecords,
+        replaySupported: viewingSelf && _count.domainEvents > 0,
+        startedAt: startedAt ? dayjs(startedAt).format(timeFormat) : null,
+        endedAt: endedAt ? dayjs(endedAt).format(timeFormat) : null
+      }
     }
-  })
+  )
 
   response.success(ctx, withList(listForResponse, total))
 })
@@ -488,7 +493,8 @@ router.post(matchApi('/detail'), async (ctx) => {
           rankSignature: true,
           totalBetAmount: true,
           sevenTwoBonusPaid: true,
-          sevenTwoBonusReceived: true
+          sevenTwoBonusReceived: true,
+          voluntaryShowHandAt: true
         }
       },
       records: {
@@ -638,8 +644,11 @@ router.post(matchApi('/replayTape'), async (ctx) => {
     matchInfo.playerMatchRecords
   ).map((record) => {
     const isSelf = record.userId === userId
+    const voluntarilyShownHand = record.voluntaryShowHandAt != null
     const hideHoleCardsFromViewer =
-      !isSelf && (record.isFold || isNoShowdownSingleWinner)
+      !isSelf &&
+      !voluntarilyShownHand &&
+      (record.isFold || isNoShowdownSingleWinner)
     const visible = settleRecordVisibleFields({
       isSelf,
       isFold: record.isFold,
@@ -662,8 +671,10 @@ router.post(matchApi('/replayTape'), async (ctx) => {
       sevenTwoBonusReceived: record.sevenTwoBonusReceived,
       isAllIn: record.isAllIn,
       isFold: record.isFold,
+      voluntarilyShownHand,
       canVoluntaryShowHand:
         (record.isFold || unfoldedOnSetCount === 1) &&
+        !voluntarilyShownHand &&
         Number(record.sevenTwoBonusReceived ?? 0) <= 0,
       handPokes: visible.handPokes,
       rankCategory: visible.rankCategory,
