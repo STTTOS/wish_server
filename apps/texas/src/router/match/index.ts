@@ -410,6 +410,8 @@ router.post(matchApi('/overview'), async (ctx) => {
   const totalMatches = records.length
 
   let allInCount = 0
+  /** All-In 局中 wager>0 的局数；胜率 = allInWinCount / allInCount */
+  let allInWinCount = 0
   let foldCount = 0
   let royalFlushCount = 0
   let straightFlushCount = 0
@@ -419,9 +421,12 @@ router.post(matchApi('/overview'), async (ctx) => {
   let tieMatchCount = 0
   let totalBetAmount = 0
   let totalWager = 0
+  /** 单局最大赢分（wager 最大正值；无盈利局为 0） */
+  let maxWinWager = 0
+  /** 单局最大输分（wager 最小负值的绝对值语义：存负数；无亏损局为 0） */
+  let maxLoseWager = 0
 
   records.forEach((r) => {
-    if (r.isAllIn) allInCount += 1
     if (r.isFold) foldCount += 1
 
     if (!r.isFold) {
@@ -431,9 +436,16 @@ router.post(matchApi('/overview'), async (ctx) => {
     }
 
     const wager = r.wager ?? 0
+    if (r.isAllIn) {
+      allInCount += 1
+      if (wager > 0) allInWinCount += 1
+    }
     if (wager > 0) winMatchCount += 1
     else if (wager < 0) loseMatchCount += 1
     else tieMatchCount += 1
+
+    if (wager > maxWinWager) maxWinWager = wager
+    if (wager < maxLoseWager) maxLoseWager = wager
 
     totalBetAmount += r.totalBetAmount ?? 0
     totalWager += wager
@@ -442,6 +454,7 @@ router.post(matchApi('/overview'), async (ctx) => {
   response.success(ctx, {
     totalMatches,
     allInCount,
+    allInWinCount,
     foldCount,
     royalFlushCount,
     straightFlushCount,
@@ -450,7 +463,9 @@ router.post(matchApi('/overview'), async (ctx) => {
     loseMatchCount,
     tieMatchCount,
     totalBetAmount,
-    totalWager
+    totalWager,
+    maxWinWager,
+    maxLoseWager
   })
 })
 
