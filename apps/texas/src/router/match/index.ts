@@ -12,6 +12,7 @@ import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
+import { fetchMatchOverviewForRoom } from '../game/services/matchOverviewAggregation'
 import {
   user,
   match,
@@ -467,6 +468,38 @@ router.post(matchApi('/overview'), async (ctx) => {
     maxWinWager,
     maxLoseWager
   })
+})
+
+/**
+ * 房间输赢总览（与对局中 `matchOverview` 同源）：须曾参与该房至少一手。
+ * Body: `{ roomId }`
+ */
+router.post(matchApi('/room-overview'), async (ctx) => {
+  const viewerUserId = ctx.state.user!.id
+  const roomId = Number((ctx.request.body as { roomId?: number })?.roomId)
+  if (!Number.isInteger(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 roomId')
+    return
+  }
+
+  const participated = await playerMatchRecord.findFirst({
+    where: { userId: viewerUserId, match: { roomId } },
+    select: { id: true }
+  })
+  if (!participated) {
+    response.error(
+      ctx,
+      HTTP_STATUS.FORBIDDEN,
+      '你未参与该房间对局,无法查看总览',
+      {
+        type: 'ROOM_OVERVIEW_FORBIDDEN'
+      }
+    )
+    return
+  }
+
+  const overview = await fetchMatchOverviewForRoom(roomId)
+  response.success(ctx, overview)
 })
 
 /**

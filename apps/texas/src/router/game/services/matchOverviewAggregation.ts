@@ -8,6 +8,8 @@ import {
 
 type UserAgg = {
   wagerSum: number
+  totalBetSum: number
+  matchCount: number
   chipTopUpCount: number
   chipTopUpAmount: number
 }
@@ -23,12 +25,13 @@ type UserAgg = {
 export async function fetchMatchOverviewForRoom(
   roomId: number
 ): Promise<WsMatchOverview> {
-  // 按人累计本房 wager、补码次数与金额
+  // 按人累计本房 wager / 总下注 / 手数、补码次数与金额
   const [wagerGroups, topUpGroups] = await Promise.all([
     prisma.playerMatchRecord.groupBy({
       by: ['userId'],
       where: { match: { roomId } },
-      _sum: { wager: true }
+      _sum: { wager: true, totalBetAmount: true },
+      _count: { _all: true }
     }),
     prisma.roomChipTopUp.groupBy({
       by: ['userId'],
@@ -46,8 +49,15 @@ export async function fetchMatchOverviewForRoom(
     if (w != null && !Number.isNaN(Number(w))) {
       wagerSum = Number(w)
     }
+    const bet = row._sum.totalBetAmount
+    let totalBetSum = 0
+    if (bet != null && !Number.isNaN(Number(bet))) {
+      totalBetSum = Number(bet)
+    }
     byUser.set(row.userId, {
       wagerSum,
+      totalBetSum,
+      matchCount: row._count._all,
       chipTopUpCount: 0,
       chipTopUpAmount: 0
     })
@@ -56,6 +66,8 @@ export async function fetchMatchOverviewForRoom(
   for (const row of topUpGroups) {
     const prev = byUser.get(row.userId) ?? {
       wagerSum: 0,
+      totalBetSum: 0,
+      matchCount: 0,
       chipTopUpCount: 0,
       chipTopUpAmount: 0
     }
@@ -91,9 +103,12 @@ export async function fetchMatchOverviewForRoom(
   const wagerList = normalized
     .map((n) => {
       const extra = byUser.get(n.userId)!
+      const avgBetAmount =
+        extra.matchCount > 0 ? extra.totalBetSum / extra.matchCount : 0
       return {
         userId: n.userId,
         totalWager: n.net,
+        avgBetAmount,
         chipTopUpCount: extra.chipTopUpCount,
         chipTopUpAmount: extra.chipTopUpAmount
       }
