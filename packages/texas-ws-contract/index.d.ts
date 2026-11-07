@@ -79,6 +79,8 @@ export type WsRunoutHandsRevealedData = {
 export type WsMatchOverviewWagerItem = {
   userId: number
   totalWager: number
+  /** 本房参与手数（中途入座者少于全桌手数） */
+  matchCount: number
   /** 本房累计总下注 / 参与手数；无手数时为 0 */
   avgBetAmount: number
   chipTopUpCount: number

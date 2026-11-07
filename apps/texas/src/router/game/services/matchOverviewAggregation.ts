@@ -108,6 +108,7 @@ export async function fetchMatchOverviewForRoom(
       return {
         userId: n.userId,
         totalWager: n.net,
+        matchCount: extra.matchCount,
         avgBetAmount,
         chipTopUpCount: extra.chipTopUpCount,
         chipTopUpAmount: extra.chipTopUpAmount
