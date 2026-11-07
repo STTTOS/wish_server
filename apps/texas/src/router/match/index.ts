@@ -392,6 +392,7 @@ router.post(matchApi('/rooms'), async (ctx) => {
             select: {
               activeCode: true,
               lowestBetAmount: true,
+              initialChips: true,
               thinkingTime: true,
               isPrivate: true,
               tableType: true,
@@ -440,24 +441,50 @@ router.post(matchApi('/rooms'), async (ctx) => {
   }
 
   const roomIds = Array.from(byRoom.keys())
-  const playerCountByRoom = new Map<number, number>()
+  type RoomPlayer = {
+    userId: number
+    avatarKey: string | null
+    avatarUrl: string | null
+    lastAt: number
+  }
+  const playersByRoom = new Map<number, Map<number, RoomPlayer>>()
   if (roomIds.length > 0) {
     const sides = await playerMatchRecord.findMany({
       where: { match: { roomId: { in: roomIds } } },
-      select: { userId: true, match: { select: { roomId: true } } }
+      select: {
+        userId: true,
+        user: { select: { avatarKey: true, avatarUrl: true } },
+        match: {
+          select: {
+            roomId: true,
+            endedAt: true,
+            startedAt: true,
+            createdAt: true
+          }
+        }
+      }
     })
-    const usersByRoom = new Map<number, Set<number>>()
     for (const side of sides) {
       const rid = side.match.roomId
-      let set = usersByRoom.get(rid)
-      if (!set) {
-        set = new Set()
-        usersByRoom.set(rid, set)
+      const at = (
+        side.match.endedAt ??
+        side.match.startedAt ??
+        side.match.createdAt ??
+        new Date(0)
+      ).getTime()
+      let byUser = playersByRoom.get(rid)
+      if (!byUser) {
+        byUser = new Map()
+        playersByRoom.set(rid, byUser)
       }
-      set.add(side.userId)
-    }
-    for (const [rid, set] of usersByRoom) {
-      playerCountByRoom.set(rid, set.size)
+      const prev = byUser.get(side.userId)
+      if (prev != null && prev.lastAt >= at) continue
+      byUser.set(side.userId, {
+        userId: side.userId,
+        avatarKey: side.user.avatarKey ?? null,
+        avatarUrl: side.user.avatarUrl ?? null,
+        lastAt: at
+      })
     }
   }
 
@@ -466,17 +493,26 @@ router.post(matchApi('/rooms'), async (ctx) => {
     .map((stat) => {
       const matchCount = stat.matchCount
       const totalBetAmount = stat.totalBetAmount
+      const players = Array.from(playersByRoom.get(stat.roomId)?.values() ?? [])
+        .sort((a, b) => b.lastAt - a.lastAt)
+        .map(({ userId, avatarKey, avatarUrl }) => ({
+          userId,
+          avatarKey,
+          avatarUrl
+        }))
       return {
         roomId: stat.roomId,
         roomCode: stat.room.activeCode ?? '',
         lowestBetAmount: stat.room.lowestBetAmount,
+        initialChips: stat.room.initialChips,
         thinkingTime: stat.room.thinkingTime,
         isPrivate: stat.room.isPrivate,
         tableType: stat.room.tableType,
         sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
         lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
         matchCount,
-        playerCount: playerCountByRoom.get(stat.roomId) ?? 0,
+        playerCount: players.length,
+        players,
         totalWager: stat.totalWager,
         totalBetAmount,
         avgBetAmount: matchCount > 0 ? totalBetAmount / matchCount : 0
