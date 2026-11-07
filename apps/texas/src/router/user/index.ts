@@ -16,6 +16,7 @@ import response, { withList } from '../../utils/response'
 import prisma, { user, userSettings } from '../../models'
 import { STYLE_SCOPE_ALL } from '../../styleStats/engine'
 import { getPlayerCard } from '../../styleStats/getPlayerCard'
+import { clearUserPushTokens } from '../../services/pushNotifications'
 import { recordAssetUsageOnSet } from '../../services/recordAssetUsageOnSet'
 import { getNicknameDisplayLengthError } from '../../utils/nicknameDisplayLength'
 import {
@@ -232,6 +233,8 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
         return
       }
       setLoginSession(target.id!, sessionId, 'client')
+      // 与单设备登录一致：踢掉旧 client 会话的同时撤销其推送绑定
+      await clearUserPushTokens(target.id!)
       response.success(
         ctx,
         {
@@ -278,6 +281,7 @@ async function handleSignOrRegister(ctx: ParameterizedContext<DefaultState>) {
         return created
       })
       setLoginSession(target.id!, sessionId, 'client')
+      await clearUserPushTokens(target.id!)
       response.success(
         ctx,
         {

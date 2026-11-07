@@ -15,25 +15,42 @@ export function normalizePushPlatform(raw: unknown): PushPlatform {
   return 'unknown'
 }
 
-/** 绑定/换绑当前用户的 Expo Push Token（token 全局唯一） */
+/**
+ * 绑定/换绑当前用户的 Expo Push Token（token 全局唯一）。
+ * 与单设备登录一致：同一 user 只保留本条 token，其它设备推送绑定会被清除。
+ */
 export async function upsertUserPushToken(params: {
   userId: number
   token: string
   platform: PushPlatform
 }): Promise<void> {
   const token = params.token.trim()
-  await prisma.userPushToken.upsert({
-    where: { token },
-    create: {
-      userId: params.userId,
-      token,
-      platform: params.platform
-    },
-    update: {
-      userId: params.userId,
-      platform: params.platform
-    }
-  })
+  await prisma.$transaction([
+    prisma.userPushToken.upsert({
+      where: { token },
+      create: {
+        userId: params.userId,
+        token,
+        platform: params.platform
+      },
+      update: {
+        userId: params.userId,
+        platform: params.platform
+      }
+    }),
+    prisma.userPushToken.deleteMany({
+      where: {
+        userId: params.userId,
+        token: { not: token }
+      }
+    })
+  ])
+}
+
+/** 单设备登录：新 client 会话建立时清空该用户全部推送绑定 */
+export async function clearUserPushTokens(userId: number): Promise<void> {
+  if (!Number.isInteger(userId) || userId <= 0) return
+  await prisma.userPushToken.deleteMany({ where: { userId } })
 }
 
 export async function removeUserPushToken(params: {
@@ -91,7 +108,8 @@ async function sendExpoPushMessages(
 }
 
 /**
- * 给指定用户所有已注册 iOS 设备发推送。失败只打日志，不抛给业务路径。
+ * 给指定用户已绑定的 iOS 推送设备发通知（单设备登录下通常至多一台）。
+ * 失败只打日志，不抛给业务路径。
  */
 export async function notifyUserDevicesSafe(params: {
   userId: number
