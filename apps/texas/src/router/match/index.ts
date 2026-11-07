@@ -13,7 +13,7 @@ import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
 import { fetchMatchOverviewForRoom } from '../game/services/matchOverviewAggregation'
-import {
+import prisma, {
   user,
   match,
   userSettings,
@@ -340,16 +340,18 @@ router.post(matchApi('/list'), async (ctx) => {
   response.success(ctx, withList(listForResponse, total))
 })
 /**
- * 参与过的房间列表（至少一手）。
+ * 参与过的房间列表（至少一手，分页：与 `/match/list` 同形 `{ total, list }`）。
  * 以 `PlayerMatchRecord` 聚合为准（`UserRoomStat` 当前无写入路径，不可作权威源）。
- * Body 可选：`userId`（他人视角）、`type`（桌型，同 list）。
+ * Body：`current`/`pageSize`、可选 `userId`（他人视角）、`type`（桌型，同 list）。
  */
 router.post(matchApi('/rooms'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
   const {
+    current = 1,
+    pageSize = 10,
     userId,
     type
-  }: {
+  }: WithPaginationReq & {
     userId?: number
     type?: string
   } = ctx.request.body ?? {}
@@ -369,15 +371,65 @@ router.post(matchApi('/rooms'), async (ctx) => {
     return
   }
 
+  if (
+    type &&
+    type !== 'all' &&
+    !(ROOM_TABLE_TYPES as readonly string[]).includes(type)
+  ) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'type 参数异常')
+    return
+  }
+
   const tableType =
     type && type !== 'all' && ROOM_TABLE_TYPES.includes(type as RoomTableType)
       ? (type as RoomTableType)
       : undefined
 
+  const skip = (current - 1) * pageSize
+  const take = pageSize
+  const tableTypeFilter = tableType
+    ? Prisma.sql`AND r.tableType = ${tableType}`
+    : Prisma.empty
+
+  type RoomIdPageRow = { roomId: number; lastMatchAt: Date }
+  const [pageRows, countRows] = await Promise.all([
+    prisma.$queryRaw<RoomIdPageRow[]>`
+      SELECT
+        m.roomId AS roomId,
+        MAX(COALESCE(m.endedAt, m.startedAt, m.createdAt)) AS lastMatchAt
+      FROM PlayerMatchRecord pmr
+      INNER JOIN \`Match\` m ON m.id = pmr.matchId
+      INNER JOIN Room r ON r.id = m.roomId
+      WHERE pmr.userId = ${targetUserId}
+      ${tableTypeFilter}
+      GROUP BY m.roomId
+      ORDER BY lastMatchAt DESC
+      LIMIT ${take} OFFSET ${skip}
+    `,
+    prisma.$queryRaw<Array<{ cnt: bigint | number }>>`
+      SELECT COUNT(*) AS cnt FROM (
+        SELECT m.roomId
+        FROM PlayerMatchRecord pmr
+        INNER JOIN \`Match\` m ON m.id = pmr.matchId
+        INNER JOIN Room r ON r.id = m.roomId
+        WHERE pmr.userId = ${targetUserId}
+        ${tableTypeFilter}
+        GROUP BY m.roomId
+      ) t
+    `
+  ])
+
+  const total = Number(countRows[0]?.cnt ?? 0)
+  const roomIds = pageRows.map((r) => r.roomId)
+  if (roomIds.length === 0) {
+    response.success(ctx, withList([], total))
+    return
+  }
+
   const records = await playerMatchRecord.findMany({
     where: {
       userId: targetUserId,
-      ...(tableType ? { match: { room: { tableType } } } : null)
+      match: { roomId: { in: roomIds } }
     },
     select: {
       wager: true,
@@ -440,7 +492,6 @@ router.post(matchApi('/rooms'), async (ctx) => {
     }
   }
 
-  const roomIds = Array.from(byRoom.keys())
   type RoomPlayer = {
     userId: number
     avatarKey: string | null
@@ -448,51 +499,51 @@ router.post(matchApi('/rooms'), async (ctx) => {
     lastAt: number
   }
   const playersByRoom = new Map<number, Map<number, RoomPlayer>>()
-  if (roomIds.length > 0) {
-    const sides = await playerMatchRecord.findMany({
-      where: { match: { roomId: { in: roomIds } } },
-      select: {
-        userId: true,
-        user: { select: { avatarKey: true, avatarUrl: true } },
-        match: {
-          select: {
-            roomId: true,
-            endedAt: true,
-            startedAt: true,
-            createdAt: true
-          }
+  const sides = await playerMatchRecord.findMany({
+    where: { match: { roomId: { in: roomIds } } },
+    select: {
+      userId: true,
+      user: { select: { avatarKey: true, avatarUrl: true } },
+      match: {
+        select: {
+          roomId: true,
+          endedAt: true,
+          startedAt: true,
+          createdAt: true
         }
       }
-    })
-    for (const side of sides) {
-      const rid = side.match.roomId
-      const at = (
-        side.match.endedAt ??
-        side.match.startedAt ??
-        side.match.createdAt ??
-        new Date(0)
-      ).getTime()
-      let byUser = playersByRoom.get(rid)
-      if (!byUser) {
-        byUser = new Map()
-        playersByRoom.set(rid, byUser)
-      }
-      const prev = byUser.get(side.userId)
-      if (prev != null && prev.lastAt >= at) continue
-      byUser.set(side.userId, {
-        userId: side.userId,
-        avatarKey: side.user.avatarKey ?? null,
-        avatarUrl: side.user.avatarUrl ?? null,
-        lastAt: at
-      })
     }
+  })
+  for (const side of sides) {
+    const rid = side.match.roomId
+    const at = (
+      side.match.endedAt ??
+      side.match.startedAt ??
+      side.match.createdAt ??
+      new Date(0)
+    ).getTime()
+    let byUser = playersByRoom.get(rid)
+    if (!byUser) {
+      byUser = new Map()
+      playersByRoom.set(rid, byUser)
+    }
+    const prev = byUser.get(side.userId)
+    if (prev != null && prev.lastAt >= at) continue
+    byUser.set(side.userId, {
+      userId: side.userId,
+      avatarKey: side.user.avatarKey ?? null,
+      avatarUrl: side.user.avatarUrl ?? null,
+      lastAt: at
+    })
   }
 
-  const list = Array.from(byRoom.values())
-    .sort((a, b) => b.lastMatchAt.getTime() - a.lastMatchAt.getTime())
+  // 保持 SQL 分页顺序（按最近对局时间倒序）
+  const list = roomIds
+    .map((rid) => byRoom.get(rid))
+    .filter((stat): stat is RoomAgg => stat != null)
     .map((stat) => {
       const matchCount = stat.matchCount
-      const totalBetAmount = stat.totalBetAmount
+      const totalBetAmount = Math.round(stat.totalBetAmount)
       const players = Array.from(playersByRoom.get(stat.roomId)?.values() ?? [])
         .sort((a, b) => b.lastAt - a.lastAt)
         .map(({ userId, avatarKey, avatarUrl }) => ({
@@ -515,11 +566,12 @@ router.post(matchApi('/rooms'), async (ctx) => {
         players,
         totalWager: stat.totalWager,
         totalBetAmount,
-        avgBetAmount: matchCount > 0 ? totalBetAmount / matchCount : 0
+        avgBetAmount:
+          matchCount > 0 ? Math.round(totalBetAmount / matchCount) : 0
       }
     })
 
-  response.success(ctx, list)
+  response.success(ctx, withList(list, total))
 })
 
 /**
