@@ -1,5 +1,7 @@
 import type { Context } from 'koa'
 
+import { apiPrefixClient } from '../config'
+
 /**
  * 从 query / body 读取客户端上报的 App version（与 clientAppVersionGuard 约定一致）。
  */
@@ -17,4 +19,17 @@ export function readClientVersionFromRequest(ctx: Context): string | undefined {
   if (typeof raw === 'string' && raw.trim() !== '') return raw.trim()
   if (typeof raw === 'number' && Number.isFinite(raw)) return String(raw)
   return undefined
+}
+
+/**
+ * API 日志用 version：仅 `/api/client` 记录客户端版本，其余（含 web）固定为 `-`。
+ */
+export function readClientVersionForApiLog(ctx: Context): string {
+  if (
+    !ctx.path.startsWith(`${apiPrefixClient}/`) &&
+    ctx.path !== apiPrefixClient
+  ) {
+    return '-'
+  }
+  return readClientVersionFromRequest(ctx) ?? '-'
 }

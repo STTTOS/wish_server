@@ -24,8 +24,8 @@ import loggerMiddleware from './middleware/loggerMiddleware'
 import maintenanceGuard from './middleware/maintenanceGuard'
 import { respondFromApiResult } from './utils/respondFromApiResult'
 import clientAppVersionGuard from './middleware/clientAppVersionGuard'
+import { readClientVersionForApiLog } from './utils/readClientVersion'
 import singleDeviceLoginGuard from './middleware/singleDeviceLoginGuard'
-import { readClientVersionFromRequest } from './utils/readClientVersion'
 import { startAchievementMailCompensationJob } from './services/mailReward'
 
 async function recoverRoomsWithoutRuntimeOnBoot() {
@@ -94,7 +94,7 @@ app.use(async (ctx, next) => {
   try {
     await next()
   } finally {
-    const version = readClientVersionFromRequest(ctx) ?? '-'
+    const version = readClientVersionForApiLog(ctx)
     logger.info(`ip: ${ip}, version: ${version}, request for ${url}`)
   }
 })
