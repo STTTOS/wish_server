@@ -18,6 +18,7 @@ export const {
   userRoomStat,
   engineFatalIncident,
   assetUsageEvent,
+  clientConnectionEvent,
   userDailyFortune,
   itemDefinition,
   userItemBalance,

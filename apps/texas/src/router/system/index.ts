@@ -17,6 +17,11 @@ import {
   getMinClientAppVersion,
   setMinClientAppVersion
 } from '../../utils/clientMinVersionPolicy'
+import {
+  ingestClientConnectionEvents,
+  type IngestConnectionEventInput,
+  CONNECTION_QUALITY_INGEST_MAX_BATCH
+} from './connectionQualityIngest'
 
 const systemApiWeb = combinePath(apiPrefixWeb)('/system')
 const systemApiClient = combinePath(apiPrefixClient)('/system')
@@ -190,4 +195,34 @@ router.post(systemApiWeb('/client-version/set'), async (ctx) => {
     return
   }
   response.success(ctx, { minVersion }, '已更新最低客户端版本')
+})
+
+/**
+ * 客户端：批量上报连接质量事件（切 App / 弱网 / 重连 / replay）。
+ * Body: `{ events: IngestConnectionEventInput[] }`，单次最多 80 条；幂等键 (userId, clientEventId)。
+ */
+router.post(systemApiClient('/connection-quality/ingest'), async (ctx) => {
+  const userId = ctx.state.user?.id
+  if (!userId) {
+    response.error(ctx, HTTP_STATUS.UNAUTHORIZED, '身份凭证无效, 请重新登录')
+    return
+  }
+  const body = (ctx.request.body ?? {}) as { events?: unknown }
+  if (!Array.isArray(body.events)) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '参数异常：需要 events 数组')
+    return
+  }
+  if (body.events.length > CONNECTION_QUALITY_INGEST_MAX_BATCH) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      `单次最多 ${CONNECTION_QUALITY_INGEST_MAX_BATCH} 条`
+    )
+    return
+  }
+  const result = await ingestClientConnectionEvents({
+    userId,
+    events: body.events as IngestConnectionEventInput[]
+  })
+  response.success(ctx, result, '已接收')
 })

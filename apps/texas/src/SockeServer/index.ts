@@ -11,6 +11,7 @@ import { logger } from '../logger'
 import prisma, { room as roomModel } from '../models'
 import { RoomCleanupManager } from './roomCleanupManager'
 import { GameEnteringTracker } from './gameEnteringTracker'
+import { logGameConnectionAudit } from './connectionAuditLog'
 import { isBlockedByMaintenance } from '../utils/maintenanceAccess'
 import { GameConnectionWaiterStore } from './gameConnectionWaiterStore'
 import { gameRuntimeRegistry } from '../router/game/services/runtimeRegistry'
@@ -217,6 +218,14 @@ class SocketServer {
        * - **`throughSeq`**：本包 `events` 中**最大 `seq`**；若 `events` 为空（仅 `truncated` 场景）则退化为 `sinceSeq`，表示本包未通过缓冲补到任何一条。
        */
       const sinceSeq = getWsGameRoomSinceSeqFromHandshake(socket.handshake)
+      logGameConnectionAudit({
+        phase: 'connect',
+        userId,
+        roomId,
+        socketId: socket.id,
+        sinceSeq: sinceSeq >= 0 ? sinceSeq : 0,
+        latestSeq: getLatestGameRoomSeq(roomKey)
+      })
       if (sinceSeq >= 0) {
         const replayEpoch = getGameRoomReplayEpoch()
         const clientReplayEpoch = getWsGameRoomReplayEpochFromHandshake(
@@ -232,6 +241,18 @@ class SocketServer {
         if (entries.length > 0 || truncated) {
           const throughSeq =
             entries.length > 0 ? entries[entries.length - 1]!.seq : sinceSeq
+          logGameConnectionAudit({
+            phase: 'replay',
+            userId,
+            roomId,
+            socketId: socket.id,
+            sinceSeq,
+            latestSeq,
+            throughSeq,
+            eventCount: entries.length,
+            truncated,
+            epochMismatch
+          })
           const replay: WsMessage<'game-room-replay'> = {
             type: 'game-room-replay',
             data: {
@@ -263,6 +284,13 @@ class SocketServer {
 
       socket.on('disconnect', (reason) => {
         onLeave()
+        logGameConnectionAudit({
+          phase: 'disconnect',
+          userId,
+          roomId,
+          socketId: socket.id,
+          reason: String(reason)
+        })
         logger.info(
           '[/game] client disconnect, id:',
           socket.id,

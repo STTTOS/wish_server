@@ -45,6 +45,7 @@ model User {
   settings          UserSettings?
   announcementReads AnnouncementRead[]
   assetUsageEvents  AssetUsageEvent[]
+  connectionEvents  ClientConnectionEvent[]
   dailyFortunes     UserDailyFortune[]
   itemBalances      UserItemBalance[]
   itemLedgers       UserItemLedger[]
@@ -817,6 +818,52 @@ model AssetUsageEvent {
   @@index([assetType, assetId, serverTs])
   @@index([userId, serverTs])
   @@map("asset_usage_event")
+}
+
+/// 连接质量事件（App 上报 + Server `/game` 侧写）。
+/// 常用维度拆成列便于 SQL；仅非结构化碎片进 `extra` Json。
+model ClientConnectionEvent {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// client | server
+  source          String   @default("client") @db.VarChar(16)
+  /// 客户端事件 id / 服务端生成 id，同用户幂等
+  clientEventId   String   @db.VarChar(48)
+  clientSessionId String   @db.VarChar(48)
+  clientTs        DateTime @db.DateTime(3)
+  kind            String   @db.VarChar(40)
+  ns              String?  @db.VarChar(32)
+  roomId          Int?
+  matchId         Int?
+  platform        String?  @db.VarChar(16)
+  osVersion       String?  @db.VarChar(32)
+  appVersion      String?  @db.VarChar(32)
+  appState        String?  @db.VarChar(16)
+  netType         String?  @db.VarChar(24)
+  isConnected     Boolean?
+  reason          String?  @db.VarChar(120)
+  sinceSeq        Int?
+  afterSeq        Int?
+  throughSeq      Int?
+  latestSeq       Int?
+  eventCount      Int?
+  truncated       Boolean?
+  recovery        String?  @db.VarChar(32)
+  durationMs      Int?
+  expectedSeq     Int?
+  actualSeq       Int?
+  /// 少量扩展字段（勿存牌面）
+  extra           Json?
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, clientEventId])
+  @@index([userId, clientTs])
+  @@index([kind, clientTs])
+  @@index([roomId, clientTs])
+  @@index([matchId, clientTs])
+  @@index([source, clientTs])
+  @@map("client_connection_event")
 }
 
 enum UserMailStatus {
