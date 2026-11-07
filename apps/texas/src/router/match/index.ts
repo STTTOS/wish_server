@@ -16,7 +16,6 @@ import { fetchMatchOverviewForRoom } from '../game/services/matchOverviewAggrega
 import {
   user,
   match,
-  userRoomStat,
   userSettings,
   matchDomainEvent,
   playerMatchRecord
@@ -341,7 +340,8 @@ router.post(matchApi('/list'), async (ctx) => {
   response.success(ctx, withList(listForResponse, total))
 })
 /**
- * 参与过的房间列表（matchCount > 0）。
+ * 参与过的房间列表（至少一手）。
+ * 以 `PlayerMatchRecord` 聚合为准（`UserRoomStat` 当前无写入路径，不可作权威源）。
  * Body 可选：`userId`（他人视角）、`type`（桌型，同 list）。
  */
 router.post(matchApi('/rooms'), async (ctx) => {
@@ -374,19 +374,72 @@ router.post(matchApi('/rooms'), async (ctx) => {
       ? (type as RoomTableType)
       : undefined
 
-  const stats = await userRoomStat.findMany({
+  const records = await playerMatchRecord.findMany({
     where: {
       userId: targetUserId,
-      matchCount: { gt: 0 },
-      ...(tableType ? { room: { tableType } } : null)
+      ...(tableType ? { match: { room: { tableType } } } : null)
     },
-    include: {
-      room: true
-    },
-    orderBy: { lastMatchAt: 'desc' }
+    select: {
+      wager: true,
+      totalBetAmount: true,
+      match: {
+        select: {
+          roomId: true,
+          endedAt: true,
+          startedAt: true,
+          createdAt: true,
+          room: {
+            select: {
+              activeCode: true,
+              lowestBetAmount: true,
+              thinkingTime: true,
+              isPrivate: true,
+              tableType: true,
+              sevenTwoBonusEnabled: true
+            }
+          }
+        }
+      }
+    }
   })
 
-  const roomIds = stats.map((s) => s.roomId)
+  type RoomAgg = {
+    roomId: number
+    matchCount: number
+    totalWager: number
+    totalBetAmount: number
+    lastMatchAt: Date
+    room: (typeof records)[number]['match']['room']
+  }
+  const byRoom = new Map<number, RoomAgg>()
+  for (const row of records) {
+    const rid = row.match.roomId
+    const at =
+      row.match.endedAt ??
+      row.match.startedAt ??
+      row.match.createdAt ??
+      new Date(0)
+    const prev = byRoom.get(rid)
+    if (!prev) {
+      byRoom.set(rid, {
+        roomId: rid,
+        matchCount: 1,
+        totalWager: Number(row.wager ?? 0),
+        totalBetAmount: Number(row.totalBetAmount ?? 0),
+        lastMatchAt: at,
+        room: row.match.room
+      })
+      continue
+    }
+    prev.matchCount += 1
+    prev.totalWager += Number(row.wager ?? 0)
+    prev.totalBetAmount += Number(row.totalBetAmount ?? 0)
+    if (at.getTime() > prev.lastMatchAt.getTime()) {
+      prev.lastMatchAt = at
+    }
+  }
+
+  const roomIds = Array.from(byRoom.keys())
   const playerCountByRoom = new Map<number, number>()
   if (roomIds.length > 0) {
     const sides = await playerMatchRecord.findMany({
@@ -408,25 +461,27 @@ router.post(matchApi('/rooms'), async (ctx) => {
     }
   }
 
-  const list = stats.map((stat) => {
-    const matchCount = stat.matchCount
-    const totalBetAmount = Number(stat.totalBetAmount ?? 0)
-    return {
-      roomId: stat.roomId,
-      roomCode: stat.room.activeCode ?? '',
-      lowestBetAmount: stat.room.lowestBetAmount,
-      thinkingTime: stat.room.thinkingTime,
-      isPrivate: stat.room.isPrivate,
-      tableType: stat.room.tableType,
-      sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
-      lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
-      matchCount,
-      playerCount: playerCountByRoom.get(stat.roomId) ?? 0,
-      totalWager: Number(stat.totalWager ?? 0),
-      totalBetAmount,
-      avgBetAmount: matchCount > 0 ? totalBetAmount / matchCount : 0
-    }
-  })
+  const list = Array.from(byRoom.values())
+    .sort((a, b) => b.lastMatchAt.getTime() - a.lastMatchAt.getTime())
+    .map((stat) => {
+      const matchCount = stat.matchCount
+      const totalBetAmount = stat.totalBetAmount
+      return {
+        roomId: stat.roomId,
+        roomCode: stat.room.activeCode ?? '',
+        lowestBetAmount: stat.room.lowestBetAmount,
+        thinkingTime: stat.room.thinkingTime,
+        isPrivate: stat.room.isPrivate,
+        tableType: stat.room.tableType,
+        sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
+        lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
+        matchCount,
+        playerCount: playerCountByRoom.get(stat.roomId) ?? 0,
+        totalWager: stat.totalWager,
+        totalBetAmount,
+        avgBetAmount: matchCount > 0 ? totalBetAmount / matchCount : 0
+      }
+    })
 
   response.success(ctx, list)
 })
