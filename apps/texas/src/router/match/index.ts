@@ -341,23 +341,77 @@ router.post(matchApi('/list'), async (ctx) => {
   response.success(ctx, withList(listForResponse, total))
 })
 /**
- * 查询当前用户参与过的所有房间列表（按房间归类）
+ * 参与过的房间列表（matchCount > 0）。
+ * Body 可选：`userId`（他人视角）、`type`（桌型，同 list）。
  */
 router.post(matchApi('/rooms'), async (ctx) => {
-  const userId = ctx.state.user!.id
+  const viewerUserId = ctx.state.user!.id
+  const {
+    userId,
+    type
+  }: {
+    userId?: number
+    type?: string
+  } = ctx.request.body ?? {}
+  const targetUserId = parseTargetUserId(userId, viewerUserId)
+  if (targetUserId == null) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'userId 参数异常')
+    return
+  }
+  if (!(await ensureTargetUserExists(targetUserId))) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '用户不存在')
+    return
+  }
+  if (!(await canViewUserHistory(viewerUserId, targetUserId))) {
+    response.error(ctx, HTTP_STATUS.FORBIDDEN, '该玩家隐藏了历史战绩', {
+      type: 'USER_HISTORY_PRIVATE'
+    })
+    return
+  }
+
+  const tableType =
+    type && type !== 'all' && ROOM_TABLE_TYPES.includes(type as RoomTableType)
+      ? (type as RoomTableType)
+      : undefined
 
   const stats = await userRoomStat.findMany({
     where: {
-      userId
+      userId: targetUserId,
+      matchCount: { gt: 0 },
+      ...(tableType ? { room: { tableType } } : null)
     },
     include: {
       room: true
-    }
+    },
+    orderBy: { lastMatchAt: 'desc' }
   })
 
-  const list = stats
-    .sort((a, b) => b.lastMatchAt.getTime() - a.lastMatchAt.getTime())
-    .map((stat) => ({
+  const roomIds = stats.map((s) => s.roomId)
+  const playerCountByRoom = new Map<number, number>()
+  if (roomIds.length > 0) {
+    const sides = await playerMatchRecord.findMany({
+      where: { match: { roomId: { in: roomIds } } },
+      select: { userId: true, match: { select: { roomId: true } } }
+    })
+    const usersByRoom = new Map<number, Set<number>>()
+    for (const side of sides) {
+      const rid = side.match.roomId
+      let set = usersByRoom.get(rid)
+      if (!set) {
+        set = new Set()
+        usersByRoom.set(rid, set)
+      }
+      set.add(side.userId)
+    }
+    for (const [rid, set] of usersByRoom) {
+      playerCountByRoom.set(rid, set.size)
+    }
+  }
+
+  const list = stats.map((stat) => {
+    const matchCount = stat.matchCount
+    const totalBetAmount = Number(stat.totalBetAmount ?? 0)
+    return {
       roomId: stat.roomId,
       roomCode: stat.room.activeCode ?? '',
       lowestBetAmount: stat.room.lowestBetAmount,
@@ -366,10 +420,13 @@ router.post(matchApi('/rooms'), async (ctx) => {
       tableType: stat.room.tableType,
       sevenTwoBonusEnabled: stat.room.sevenTwoBonusEnabled,
       lastMatchAt: dayjs(stat.lastMatchAt).format(timeFormat),
-      matchCount: stat.matchCount,
-      totalWager: stat.totalWager,
-      totalBetAmount: stat.totalBetAmount
-    }))
+      matchCount,
+      playerCount: playerCountByRoom.get(stat.roomId) ?? 0,
+      totalWager: Number(stat.totalWager ?? 0),
+      totalBetAmount,
+      avgBetAmount: matchCount > 0 ? totalBetAmount / matchCount : 0
+    }
+  })
 
   response.success(ctx, list)
 })
