@@ -6,6 +6,7 @@ static
 public
 source
 .env
+.env.prod.ro
 system.json
 
 # lock文件
