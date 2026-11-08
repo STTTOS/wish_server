@@ -18,6 +18,8 @@ import { buildDashboardSummary } from '../webOps/buildDashboardSummary'
 import { buildRoomOpsListWhere } from '../webOps/buildRoomOpsListWhere'
 import { ROOM_TABLE_TYPES, type RoomTableType } from '../constants/game'
 import { buildRoomOpsDetailPayload } from '../webOps/buildRoomOpsDetailPayload'
+import { buildRoomRuntimeDebugPayload } from '../webOps/buildRoomRuntimeDebugPayload'
+import { buildRoomLeaveForensicsPayload } from '../webOps/buildRoomLeaveForensicsPayload'
 import { historicalMemberCountsForRoomIds } from '../webOps/historicalMemberCountsForRoomIds'
 
 const engineFatalWebApi = combinePath(apiPrefixWeb)('/engine-fatal')
@@ -225,6 +227,76 @@ router.post(roomOpsWebApi('/detail'), async (ctx) => {
   }
 
   const payload = await buildRoomOpsDetailPayload(roomId)
+  if (!payload) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
+    return
+  }
+  response.success(ctx, payload)
+})
+
+/**
+ * 本地 env 特殊码：非 production 且 `TEXAS_RUNTIME_DEBUG_CODE` 与 body.debugCode 一致时可绕过 admin。
+ * 生产环境仍须管理员。
+ */
+async function assertRoomRuntimeDebugAccess(
+  ctx: Parameters<typeof assertWebAdmin>[0]
+): Promise<boolean> {
+  const body = (ctx.request.body ?? {}) as { debugCode?: string }
+  const expected = process.env.TEXAS_RUNTIME_DEBUG_CODE
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    typeof expected === 'string' &&
+    expected.length > 0 &&
+    body.debugCode === expected
+  ) {
+    return true
+  }
+  return (await assertWebAdmin(ctx)) != null
+}
+
+/**
+ * 实时对照：DB RoomMember vs 本进程 Core 座位环 / leavePending。
+ * Body: `{ roomId, debugCode? }`
+ */
+router.post(roomOpsWebApi('/runtime-debug'), async (ctx) => {
+  if (!(await assertRoomRuntimeDebugAccess(ctx))) return
+
+  const { roomId } = (ctx.request.body ?? {}) as { roomId?: number }
+  if (roomId == null || !Number.isInteger(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'roomId 参数错误')
+    return
+  }
+
+  const payload = await buildRoomRuntimeDebugPayload(roomId)
+  if (!payload.db.exists) {
+    response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
+    return
+  }
+  response.success(ctx, payload)
+})
+
+/**
+ * 事后排障：从 MatchDomainEvent 还原离场/RolesAssigned 座位变化（不依赖 runtime）。
+ * Body: `{ roomId, matchLimit?, debugCode? }`
+ */
+router.post(roomOpsWebApi('/leave-forensics'), async (ctx) => {
+  if (!(await assertRoomRuntimeDebugAccess(ctx))) return
+
+  const { roomId, matchLimit } = (ctx.request.body ?? {}) as {
+    roomId?: number
+    matchLimit?: number
+  }
+  if (roomId == null || !Number.isInteger(roomId) || roomId <= 0) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, 'roomId 参数错误')
+    return
+  }
+
+  const payload = await buildRoomLeaveForensicsPayload(roomId, {
+    matchLimit:
+      matchLimit != null && Number.isInteger(matchLimit)
+        ? matchLimit
+        : undefined
+  })
   if (!payload) {
     response.error(ctx, HTTP_STATUS.NOT_FOUND, '房间不存在')
     return
