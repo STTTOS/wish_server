@@ -4,7 +4,8 @@ import type {
   SignLevel,
   SignPhoto,
   SignStatus,
-  SignDirection
+  SignDirection,
+  RectifyStatus
 } from '../../../domain/signTypes'
 
 import { ok, fail } from '../../../utils/apiResult'
@@ -15,10 +16,12 @@ import {
   isSignLevel,
   isSignStatus,
   isSignDirection,
+  isRectifyStatus,
   isOneWayDirection
 } from '../../../domain/signTypes'
 
 const MAX_EXTRA_PHOTOS = 20
+const MAX_RECTIFY_PHOTOS = 20
 
 export type RoadSignWriteData = {
   name: string
@@ -32,6 +35,8 @@ export type RoadSignWriteData = {
   level: SignLevel
   signPhoto: SignPhoto | null
   extraPhotos: SignPhoto[]
+  rectifyStatus: RectifyStatus
+  rectifyPhotos: SignPhoto[]
   lng: number
   lat: number
 }
@@ -133,21 +138,42 @@ function parseSignPhoto(value: unknown): ApiResult<SignPhoto | null> {
   return parsePhoto(value, 'sign')
 }
 
-function parseExtraPhotos(value: unknown): ApiResult<SignPhoto[]> {
+function parsePhotoList(
+  value: unknown,
+  kind: SignPhoto['kind'],
+  options: { field: string; max: number }
+): ApiResult<SignPhoto[]> {
   if (value === undefined || value === null || value === '') return ok([])
   if (!Array.isArray(value)) {
-    return fail(HTTP_STATUS.BAD_REQUEST, '附带照片格式不正确')
+    return fail(HTTP_STATUS.BAD_REQUEST, `${options.field}格式不正确`)
   }
-  if (value.length > MAX_EXTRA_PHOTOS) {
-    return fail(HTTP_STATUS.BAD_REQUEST, `附带照片最多 ${MAX_EXTRA_PHOTOS} 张`)
+  if (value.length > options.max) {
+    return fail(
+      HTTP_STATUS.BAD_REQUEST,
+      `${options.field}最多 ${options.max} 张`
+    )
   }
   const photos: SignPhoto[] = []
   for (const item of value) {
-    const parsed = parsePhoto(item, 'extra')
+    const parsed = parsePhoto(item, kind)
     if (!parsed.ok) return parsed
     photos.push(parsed.data)
   }
   return ok(photos)
+}
+
+function parseExtraPhotos(value: unknown): ApiResult<SignPhoto[]> {
+  return parsePhotoList(value, 'extra', {
+    field: '附带照片',
+    max: MAX_EXTRA_PHOTOS
+  })
+}
+
+function parseRectifyPhotos(value: unknown): ApiResult<SignPhoto[]> {
+  return parsePhotoList(value, 'rectify', {
+    field: '整改照片',
+    max: MAX_RECTIFY_PHOTOS
+  })
 }
 
 function parseDistanceM(
@@ -221,11 +247,21 @@ function parseWriteBody(
   const coord = parseLngLat(body.lng, body.lat)
   if (!coord.ok) return coord
 
+  const rectifyStatus = parseEnum(
+    body.rectifyStatus ?? 'none',
+    isRectifyStatus,
+    '整改状态无效'
+  )
+  if (!rectifyStatus.ok) return rectifyStatus
+
   const signPhoto = parseSignPhoto(body.signPhoto)
   if (!signPhoto.ok) return signPhoto
 
   const extraPhotos = parseExtraPhotos(body.extraPhotos)
   if (!extraPhotos.ok) return extraPhotos
+
+  const rectifyPhotos = parseRectifyPhotos(body.rectifyPhotos)
+  if (!rectifyPhotos.ok) return rectifyPhotos
 
   return ok({
     name: name.data,
@@ -239,6 +275,8 @@ function parseWriteBody(
     level: level.data,
     signPhoto: signPhoto.data,
     extraPhotos: extraPhotos.data,
+    rectifyStatus: rectifyStatus.data,
+    rectifyPhotos: rectifyPhotos.data,
     lng: coord.data.lng,
     lat: coord.data.lat
   })

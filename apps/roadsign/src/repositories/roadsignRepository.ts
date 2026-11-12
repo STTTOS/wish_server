@@ -21,7 +21,9 @@ function toPhotoJson(photo: RoadSignWriteData['signPhoto']) {
   } satisfies Prisma.InputJsonValue
 }
 
-function toExtraPhotosJson(photos: RoadSignWriteData['extraPhotos']) {
+type SignPhotoLike = NonNullable<RoadSignWriteData['signPhoto']>
+
+function toPhotosJson(photos: SignPhotoLike[]) {
   return photos.map((photo) => ({
     id: photo.id,
     kind: photo.kind,
@@ -45,7 +47,9 @@ function toWriteInput(data: RoadSignWriteData) {
     lng: data.lng,
     lat: data.lat,
     signPhoto: toPhotoJson(data.signPhoto),
-    extraPhotos: toExtraPhotosJson(data.extraPhotos)
+    extraPhotos: toPhotosJson(data.extraPhotos),
+    rectifyStatus: data.rectifyStatus,
+    rectifyPhotos: toPhotosJson(data.rectifyPhotos)
   }
 }
 

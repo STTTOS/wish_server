@@ -11,7 +11,8 @@ export const SIGN_DIRECTIONS = [
   'sn_one'
 ] as const
 export const SIGN_LEVELS = ['l1', 'l2'] as const
-export const PHOTO_KINDS = ['sign', 'extra'] as const
+export const RECTIFY_STATUSES = ['none', 'todo', 'done'] as const
+export const PHOTO_KINDS = ['sign', 'extra', 'rectify'] as const
 export const ONE_WAY_DIRECTIONS = [
   'ew_one',
   'we_one',
@@ -23,6 +24,7 @@ export type SignType = (typeof SIGN_TYPES)[number]
 export type SignStatus = (typeof SIGN_STATUSES)[number]
 export type SignDirection = (typeof SIGN_DIRECTIONS)[number]
 export type SignLevel = (typeof SIGN_LEVELS)[number]
+export type RectifyStatus = (typeof RECTIFY_STATUSES)[number]
 export type PhotoKind = (typeof PHOTO_KINDS)[number]
 
 export type SignPhoto = {
@@ -47,6 +49,8 @@ export type RoadSignView = {
   level: SignLevel
   signPhoto: SignPhoto | null
   extraPhotos: SignPhoto[]
+  rectifyStatus: RectifyStatus
+  rectifyPhotos: SignPhoto[]
   lng: number
   lat: number
   createdAt: string
@@ -78,6 +82,13 @@ export function isSignLevel(value: unknown): value is SignLevel {
   return (
     typeof value === 'string' &&
     (SIGN_LEVELS as readonly string[]).includes(value)
+  )
+}
+
+export function isRectifyStatus(value: unknown): value is RectifyStatus {
+  return (
+    typeof value === 'string' &&
+    (RECTIFY_STATUSES as readonly string[]).includes(value)
   )
 }
 

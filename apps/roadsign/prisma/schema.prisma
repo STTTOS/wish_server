@@ -37,6 +37,13 @@ enum RoadSignLevel {
   l2
 }
 
+/// 问题整改：无 / 待整改 / 已整改
+enum RoadSignRectifyStatus {
+  none
+  todo
+  done
+}
+
 /// 昌都市区道路名录（下拉字典）
 model Road {
   id        Int      @id @default(autoincrement())
@@ -69,11 +76,16 @@ model RoadSign {
   signPhoto   Json?
   /// 附带照片数组
   extraPhotos Json              @default("[]")
+  /// 问题整改状态
+  rectifyStatus RoadSignRectifyStatus @default(none)
+  /// 待整改问题照片（可多张）
+  rectifyPhotos Json            @default("[]")
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   @@index([status])
   @@index([type])
+  @@index([rectifyStatus])
   @@index([name])
   @@index([roadName])
 }

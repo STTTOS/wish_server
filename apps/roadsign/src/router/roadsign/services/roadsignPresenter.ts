@@ -36,6 +36,13 @@ export function presentExtraPhotos(raw: unknown): SignPhoto[] {
     .filter((item): item is SignPhoto => item !== null)
 }
 
+export function presentRectifyPhotos(raw: unknown): SignPhoto[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item) => presentPhoto(item, 'rectify'))
+    .filter((item): item is SignPhoto => item !== null)
+}
+
 export function presentRoadSign(row: RoadSign): RoadSignView {
   return {
     id: String(row.id),
@@ -50,6 +57,8 @@ export function presentRoadSign(row: RoadSign): RoadSignView {
     level: row.level,
     signPhoto: presentPhoto(row.signPhoto, 'sign'),
     extraPhotos: presentExtraPhotos(row.extraPhotos),
+    rectifyStatus: row.rectifyStatus,
+    rectifyPhotos: presentRectifyPhotos(row.rectifyPhotos),
     lng: row.lng,
     lat: row.lat,
     createdAt: row.createdAt.toISOString(),
