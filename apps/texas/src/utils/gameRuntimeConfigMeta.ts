@@ -50,7 +50,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '协商二次跑马时：第一跑河牌揭示之后、第二跑公牌重置（boardReset）之前的额外停顿，便于看清第一跑结果。默认 4000ms；与进街间隔独立。单位：毫秒。'
+      '协商二次跑马时：第一跑河牌揭示之后、第二跑公牌重置（boardReset）之前的额外停顿，便于看清第一跑结果。默认 5000ms；与进街间隔独立。单位：毫秒。'
   },
   {
     key: 'runoutToGameEndDelayMs',

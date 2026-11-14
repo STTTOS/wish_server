@@ -44,7 +44,7 @@ export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 8000
  * 二次跑马：第一跑河牌揭示后、第二跑 `boardReset` 推送前的停顿。
  * 可被 `gameRuntimeConfig.runoutInterRunDelayMs` 覆盖。
  */
-export const GAME_WS_RUNOUT_INTER_RUN_DELAY_MS = 4000
+export const GAME_WS_RUNOUT_INTER_RUN_DELAY_MS = 5000
 
 /**
  * 二次跑马：第二跑河牌 / `runout-run-result` 之后、推送 `game-end` 前的停顿。
