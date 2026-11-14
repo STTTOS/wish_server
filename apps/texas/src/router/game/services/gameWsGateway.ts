@@ -179,6 +179,28 @@ export class GameWsGateway {
     ws.broadcastGameToUser(userId, { type: 'player-hand-dealt', data })
   }
 
+  /**
+   * `/game` 连接且 `game-room-replay` 之后调用：本手进行中的在座玩家补发私牌单播。
+   * `player-hand-dealt` 不进全房 replay，重连后需靠此补发（或 HTTP 快照）恢复手牌。
+   */
+  resyncHoleCardsOnGameConnect(
+    roomKey: string,
+    roomId: number,
+    userId: number
+  ) {
+    const texas = gameRuntimeRegistry.getTexas(roomKey)
+    if (!texas) return
+    if (texas.controller.status !== 'in_hand') return
+    if (texas.room.getPlayerSeatStatusById(userId) !== 'on-set') return
+    const player = texas.dealer.getById(userId)
+    if (!player || !texas.dealer.has(player)) return
+    const handPokes = player.getHandPokes()
+    if (!Array.isArray(handPokes) || handPokes.length === 0) return
+    const matchId = gameRuntimeRegistry.getCurrentMatchId(roomKey)
+    if (matchId == null || !Number.isInteger(matchId) || matchId <= 0) return
+    this.notifyHandDealtToUser(userId, { matchId, roomId, handPokes })
+  }
+
   trackEntering(roomId: number, expectedUserIds: number[]) {
     ws.trackGameEntering(roomId, expectedUserIds)
   }

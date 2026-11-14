@@ -21,6 +21,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 - 经 `broadcastGameRoom` / `broadcastGameEachWithReplay` 发出的状态流事件（如 `game-stage-changed`、`game-end`）**必须**带顶层 `seq` + `replayEpoch`。
 - 单播（`player-hand-dealt` 等）与 `skipReplay: true` 事件**不带** seq；断线后靠 HTTP 快照补全。
+- **额外兜底**：`/game` 连接并完成 `game-room-replay` 后，若本手 `in_hand` 且该用户在座有手牌，服务端会再单播一次 `player-hand-dealt`（不入全房 replay 缓冲）。
 - 客户端以 HTTP `latestWsSeq` 为游标种子，忽略 `seq <= lastHandledSeq` 的重复投递。
 
 ## 共享类型说明
@@ -357,7 +358,7 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 - **WS 补发**：连接 `/game` 时在 **`auth.gameRoomSinceSeq`** 传入客户端「最后已处理的全房广播序号」（未收到过则 `0`）。连上后除 `initial connect` 外，可能收到一条 **`game-room-replay`**：
   - `events`：每条为 `{ seq, payload }`，`payload` 与同房间历史 `message` 事件 body 相同（一般为 `{ type, data }`），按 `seq` 顺序重放即可。缓冲含 **`runout-hands-revealed`** 等全房广播。
   - **`truncated: true`**：`afterSeq < latestSeq` 但环形缓冲里已无中间消息（断线过久或消息过多被挤出）；须先拉 HTTP 快照对齐，再把本地游标设为返回的 `latestSeq`。
-- **未入缓冲的消息**：`broadcastGameToUser`（如 `player-hand-dealt`）、`broadcastGameEach` 等**不会**进入环形缓冲，仍依赖快照或既有单播逻辑。
+- **未入缓冲的消息**：`broadcastGameToUser`（如 `player-hand-dealt`）、`broadcastGameEach` 等**不会**进入环形缓冲；断线后除 HTTP 快照外，`/game` 重连还会在 replay 之后对在座玩家再单播一次 `player-hand-dealt`。
 
 ### 中途加入/重连恢复时序
 
@@ -374,6 +375,8 @@ sequenceDiagram
   App->>WS: connect /game(auth.roomId, auth.gameRoomSinceSeq=latestWsSeq)
   WS-->>App: game-room-replay(events > latestWsSeq)
   Note over App: 逐条重放补齐窗口期缺失事件
+  WS-->>App: player-hand-dealt (in_hand 在座补发，可选)
+  Note over App: 私牌单播兜底；客户端幂等忽略已有手牌
 
   WS-->>App: 实时事件流
 ```
