@@ -9,6 +9,7 @@ export type RuntimeConfigFieldDef = {
     | 'actionRequiredWsDelayMs'
     | 'stageChangedWsDelayMs'
     | 'runoutInterRunDelayMs'
+    | 'runoutToGameEndDelayMs'
     | 'startGameBeforeAssignRolesDelayMs'
     | 'nextHandCountdownPushDelayMs'
     | 'nextHandLockAtOffsetMs'
@@ -40,7 +41,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '引擎在「待处理操作队列」里连续推进多条 WS 时，相邻两条之间的间隔（例如翻公牌、切换街道）。摊牌后、在推送本手 `game-end` 之前的停顿也复用该值（不推迟 `game-stage-changed` 本身）。过小玩家看不清街面变化，过大拖慢节奏。单位：毫秒。'
+      '引擎在「待处理操作队列」里连续推进多条 WS 时，相邻两条之间的间隔（例如翻公牌、切换街道）。单次跑马摊牌后、推送 `game-end` 前亦复用该值；二次跑马终局见「二次跑马终局间隔」。不推迟 `game-stage-changed` 本身。单位：毫秒。'
   },
   {
     key: 'runoutInterRunDelayMs',
@@ -50,6 +51,15 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     maxMs: 120_000,
     description:
       '协商二次跑马时：第一跑河牌揭示之后、第二跑公牌重置（boardReset）之前的额外停顿，便于看清第一跑结果。默认 4000ms；与进街间隔独立。单位：毫秒。'
+  },
+  {
+    key: 'runoutToGameEndDelayMs',
+    label: '二次跑马终局间隔',
+    group: 'websocket',
+    minMs: 0,
+    maxMs: 120_000,
+    description:
+      '二次跑马第二跑河牌与收池结果推送之后、本手 `game-end` 之前的停顿，便于看清第二跑再进入结算。默认 3200ms；与进街间隔、两跑间隔均独立。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

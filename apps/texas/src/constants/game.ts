@@ -31,12 +31,13 @@ export const MAX_PLAYERS_COUNT = 10
 export const GAME_WS_ACTION_REQUIRED_DELAY_MS = 1200
 
 /**
- * Core `pendingFlowOps` 节拍：两次进街（含跑马连续翻牌）之间的间隔；摊牌结算后、推送 `game-end` 前亦用此时长。
+ * Core `pendingFlowOps` 节拍：两次进街（含跑马连续翻牌）之间的间隔。
+ * 单次跑马摊牌后、推送 `game-end` 前亦用此时长；二次跑马终局见 `GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS`。
  * `game-stage-changed` 在事件处理中立即推送，此值不推迟该 WS。
  */
 export const GAME_WS_STAGE_CHANGED_DELAY_MS = 2200
 
-/** 跑马二次协商：all-in 玩家投票窗口；超时默认否。 */
+/** 跑马二次协商：仍在摊牌中的玩家投票窗口；超时默认否。 */
 export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 8000
 
 /**
@@ -44,3 +45,9 @@ export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 8000
  * 可被 `gameRuntimeConfig.runoutInterRunDelayMs` 覆盖。
  */
 export const GAME_WS_RUNOUT_INTER_RUN_DELAY_MS = 4000
+
+/**
+ * 二次跑马：第二跑河牌 / `runout-run-result` 之后、推送 `game-end` 前的停顿。
+ * 可被 `gameRuntimeConfig.runoutToGameEndDelayMs` 覆盖。
+ */
+export const GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS = 3200

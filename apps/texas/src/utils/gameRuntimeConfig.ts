@@ -2,7 +2,8 @@ import { logger } from '../logger'
 import {
   GAME_WS_STAGE_CHANGED_DELAY_MS,
   GAME_WS_ACTION_REQUIRED_DELAY_MS,
-  GAME_WS_RUNOUT_INTER_RUN_DELAY_MS
+  GAME_WS_RUNOUT_INTER_RUN_DELAY_MS,
+  GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS
 } from '../constants/game'
 import {
   NEXT_HAND_DEAL_AFTER_END_MS,
@@ -30,10 +31,12 @@ function isFiniteInt(n: unknown): n is number {
 export type GameRuntimeConfigPatch = {
   /** 行动结束后、`pendingFlowOps` 开始消费前的间隔（下一位 `player-action-required` 等） */
   actionRequiredWsDelayMs?: unknown
-  /** `pendingFlowOps` 连续进街间隔；摊牌后 `game-end` 推送前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
+  /** `pendingFlowOps` 连续进街间隔；单次摊牌后 `game-end` 前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
   stageChangedWsDelayMs?: unknown
   /** 二次跑马：第一跑河牌后到第二跑 boardReset 前的停顿 */
   runoutInterRunDelayMs?: unknown
+  /** 二次跑马：第二跑结束后到 `game-end` 前的停顿 */
+  runoutToGameEndDelayMs?: unknown
   /** 首局进桌后延迟再分配角色 */
   startGameBeforeAssignRolesDelayMs?: unknown
   /** `game-end` 后延迟再推 `next-hand-countdown-started` */
@@ -51,10 +54,12 @@ export type GameRuntimeConfigPatch = {
 export type GameRuntimeConfigSnapshot = {
   /** `pendingFlowOps` 消费前间隔（毫秒） */
   actionRequiredWsDelayMs: number
-  /** 连续进街间隔与摊牌后 `game-end` 前停顿（毫秒） */
+  /** 连续进街间隔；单次摊牌后 `game-end` 前停顿（毫秒） */
   stageChangedWsDelayMs: number
   /** 二次跑马两跑之间停顿（毫秒） */
   runoutInterRunDelayMs: number
+  /** 二次跑马第二跑结束后到 `game-end` 前停顿（毫秒） */
+  runoutToGameEndDelayMs: number
   /** 首局进桌后延迟再分配角色（毫秒） */
   startGameBeforeAssignRolesDelayMs: number
   /** `game-end` 后延迟再推局间倒计时（毫秒） */
@@ -78,6 +83,7 @@ export class GameRuntimeConfigStore {
   #actionRequiredDelayMs = GAME_WS_ACTION_REQUIRED_DELAY_MS
   #stageChangedDelayMs = GAME_WS_STAGE_CHANGED_DELAY_MS
   #runoutInterRunDelayMs = GAME_WS_RUNOUT_INTER_RUN_DELAY_MS
+  #runoutToGameEndDelayMs = GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS
   #startGameBeforeAssignRolesDelayMs = DEFAULT_START_GAME_BEFORE_ASSIGN_ROLES_MS
 
   #nextHandCountdownPushDelayMs = NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
@@ -96,6 +102,10 @@ export class GameRuntimeConfigStore {
 
   getRunoutInterRunDelayMs(): number {
     return this.#runoutInterRunDelayMs
+  }
+
+  getRunoutToGameEndDelayMs(): number {
+    return this.#runoutToGameEndDelayMs
   }
 
   getStartGameBeforeAssignRolesDelayMs(): number {
@@ -131,6 +141,7 @@ export class GameRuntimeConfigStore {
       actionRequiredWsDelayMs: this.#actionRequiredDelayMs,
       stageChangedWsDelayMs: this.#stageChangedDelayMs,
       runoutInterRunDelayMs: this.#runoutInterRunDelayMs,
+      runoutToGameEndDelayMs: this.#runoutToGameEndDelayMs,
       startGameBeforeAssignRolesDelayMs:
         this.#startGameBeforeAssignRolesDelayMs,
       nextHandCountdownPushDelayMs: this.#nextHandCountdownPushDelayMs,
@@ -160,6 +171,7 @@ export class GameRuntimeConfigStore {
     let nextActionReq = this.#actionRequiredDelayMs
     let nextStageCh = this.#stageChangedDelayMs
     let nextRunoutInter = this.#runoutInterRunDelayMs
+    let nextRunoutToEnd = this.#runoutToGameEndDelayMs
     let nextStartAssign = this.#startGameBeforeAssignRolesDelayMs
     let nextPushDelay = this.#nextHandCountdownPushDelayMs
     let nextLockOff = this.#nextHandLockAtOffsetMs
@@ -194,6 +206,11 @@ export class GameRuntimeConfigStore {
       const r = applyMs(input.runoutInterRunDelayMs, 'runoutInterRunDelayMs')
       if (!r.ok) return r
       nextRunoutInter = r.v
+    }
+    if (input.runoutToGameEndDelayMs !== undefined) {
+      const r = applyMs(input.runoutToGameEndDelayMs, 'runoutToGameEndDelayMs')
+      if (!r.ok) return r
+      nextRunoutToEnd = r.v
     }
     if (input.startGameBeforeAssignRolesDelayMs !== undefined) {
       const r = applyMs(
@@ -250,6 +267,7 @@ export class GameRuntimeConfigStore {
     this.#actionRequiredDelayMs = nextActionReq
     this.#stageChangedDelayMs = nextStageCh
     this.#runoutInterRunDelayMs = nextRunoutInter
+    this.#runoutToGameEndDelayMs = nextRunoutToEnd
     this.#startGameBeforeAssignRolesDelayMs = nextStartAssign
     this.#nextHandCountdownPushDelayMs = nextPushDelay
     this.#nextHandLockAtOffsetMs = nextLockOff

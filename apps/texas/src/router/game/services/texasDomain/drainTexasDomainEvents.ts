@@ -658,7 +658,12 @@ async function handleHandEnded(
     }
 
     if (p.outcome === 'showdown') {
-      await sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs())
+      // 二次跑马终局用独立 pacing；单次仍复用进街间隔
+      const preGameEndMs =
+        runCount === 2
+          ? gameRuntimeConfig.getRunoutToGameEndDelayMs()
+          : gameRuntimeConfig.getGameWsStageChangedDelayMs()
+      await sleep(preGameEndMs)
     }
 
     clearRunoutConsentSession(roomKey)
