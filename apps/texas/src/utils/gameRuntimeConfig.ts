@@ -31,7 +31,7 @@ function isFiniteInt(n: unknown): n is number {
 export type GameRuntimeConfigPatch = {
   /** 行动结束后、`pendingFlowOps` 开始消费前的间隔（下一位 `player-action-required` 等） */
   actionRequiredWsDelayMs?: unknown
-  /** `pendingFlowOps` 连续进街间隔；单次摊牌后 `game-end` 前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
+  /** `pendingFlowOps` 连续进街间隔；单次摊牌后 `game-end` 前、二次跑马第二跑河牌→`runout-run-result` 亦用此值（不推迟 `game-stage-changed` 本身） */
   stageChangedWsDelayMs?: unknown
   /** 二次跑马：第一跑河牌后到第二跑 boardReset 前的停顿 */
   runoutInterRunDelayMs?: unknown
@@ -54,7 +54,7 @@ export type GameRuntimeConfigPatch = {
 export type GameRuntimeConfigSnapshot = {
   /** `pendingFlowOps` 消费前间隔（毫秒） */
   actionRequiredWsDelayMs: number
-  /** 连续进街间隔；单次摊牌后 `game-end` 前停顿（毫秒） */
+  /** 连续进街间隔；单次摊牌→`game-end`、二次第二跑河牌→`runout-run-result`（毫秒） */
   stageChangedWsDelayMs: number
   /** 二次跑马两跑之间停顿（毫秒） */
   runoutInterRunDelayMs: number

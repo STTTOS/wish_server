@@ -41,7 +41,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '引擎在「待处理操作队列」里连续推进多条 WS 时，相邻两条之间的间隔（例如翻公牌、切换街道）。单次跑马摊牌后、推送 `game-end` 前亦复用该值；二次跑马终局见「二次跑马终局间隔」。不推迟 `game-stage-changed` 本身。单位：毫秒。'
+      '引擎在「待处理操作队列」里连续推进多条 WS 时，相邻两条之间的间隔（例如翻公牌、切换街道）。单次摊牌后推送 `game-end` 前、以及二次跑马第二跑河牌 `game-stage-changed` 到 `runout-run-result` 之间亦复用该值；二次跑马 `runout-run-result` 到 `game-end` 见「二次跑马终局间隔」。不推迟 `game-stage-changed` 本身。单位：毫秒。'
   },
   {
     key: 'runoutInterRunDelayMs',
@@ -59,7 +59,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '二次跑马第二跑河牌与收池结果推送之后、本手 `game-end` 之前的短停顿（牌力已在本跑 `runout-run-result` 展示，此处主要为切入 wager 结算留过渡）。默认 400ms；与进街间隔、两跑间隔均独立。单位：毫秒。'
+      '二次跑马第二跑 `runout-run-result` 之后、本手 `game-end` 之前的短停顿（牌力已在本跑结果展示，此处主要为切入 wager 结算留过渡）。默认 400ms；河牌 `game-stage-changed` → 本跑结果见「进街 / 阶段 WS 间隔」。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

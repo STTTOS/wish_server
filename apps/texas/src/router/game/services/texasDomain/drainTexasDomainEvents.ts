@@ -1080,13 +1080,14 @@ async function processTexasDomainEvent(
         ...(e.payload.boardReset ? { boardReset: true } : {})
       })
 
-      // 第二跑河牌亮完：推本跑收池名单（随后 HandEnded）
+      // 第二跑河牌亮完：与单次「stage → game-end」同用进街间隔，再推本跑收池名单（随后 HandEnded）
       if (
         e.payload.advanceKind === 'runout_reveal' &&
         !e.payload.boardReset &&
         e.payload.runIndex === 2 &&
         e.payload.toStage === 'river'
       ) {
+        await sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs())
         await notifyRunoutBoardWinners(ctx, matchId, 2)
       }
       return

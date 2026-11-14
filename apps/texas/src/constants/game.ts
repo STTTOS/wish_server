@@ -32,7 +32,8 @@ export const GAME_WS_ACTION_REQUIRED_DELAY_MS = 1200
 
 /**
  * Core `pendingFlowOps` 节拍：两次进街（含跑马连续翻牌）之间的间隔。
- * 单次跑马摊牌后、推送 `game-end` 前亦用此时长；二次跑马终局见 `GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS`。
+ * 单次摊牌后推送 `game-end` 前、以及二次跑马第二跑河牌 `game-stage-changed` → `runout-run-result` 亦用此时长。
+ * `runout-run-result` → `game-end` 见 `GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS`。
  * `game-stage-changed` 在事件处理中立即推送，此值不推迟该 WS。
  */
 export const GAME_WS_STAGE_CHANGED_DELAY_MS = 2200
