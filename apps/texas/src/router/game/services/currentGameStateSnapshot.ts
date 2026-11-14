@@ -83,7 +83,7 @@ export type FetchCurrentGameStatePayload = {
   /** 进行中的二次跑马协商；超时后服务端会默认否并清掉 */
   runoutConsentOffer: {
     matchId: number
-    allInUserIds: number[]
+    stillInUserIds: number[]
     deadlineAt: number
     timeoutMs: number
     serverNow: number
@@ -333,7 +333,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
       ) {
         runoutConsentOffer = {
           matchId: consent.matchId,
-          allInUserIds: [...consent.allInUserIds],
+          stillInUserIds: [...consent.stillInUserIds],
           deadlineAt: consent.deadlineAt,
           timeoutMs: GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
           serverNow: Date.now()

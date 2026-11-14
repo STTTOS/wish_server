@@ -4,7 +4,7 @@ import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../../constants/game'
 
 export type RunoutConsentSession = {
   matchId: number
-  allInUserIds: number[]
+  stillInUserIds: number[]
   deadlineAt: number
   votes: Map<number, boolean>
   timer: ReturnType<typeof setTimeout> | null
@@ -46,10 +46,10 @@ type StartArgs = {
   roomKey: string
   roomId: number
   matchId: number
-  allInUserIds: number[]
+  stillInUserIds: number[]
   notifyOffer: (data: {
     matchId: number
-    allInUserIds: number[]
+    stillInUserIds: number[]
     deadlineAt: number
     timeoutMs: number
     serverNow: number
@@ -57,10 +57,10 @@ type StartArgs = {
 }
 
 /**
- * 启动跑马协商：推 offer，超时默认否；全员同意才 runCount=2。
+ * 启动跑马协商：推 offer，超时默认否；仍在场全员同意才 runCount=2。
  */
 export function startRunoutConsentSession(args: StartArgs): void {
-  const { roomKey, roomId, matchId, allInUserIds, notifyOffer } = args
+  const { roomKey, roomId, matchId, stillInUserIds, notifyOffer } = args
   clearRunoutConsentSession(roomKey)
 
   const serverNow = Date.now()
@@ -68,7 +68,7 @@ export function startRunoutConsentSession(args: StartArgs): void {
   const deadlineAt = serverNow + timeoutMs
   const session: RunoutConsentSession = {
     matchId,
-    allInUserIds: [...allInUserIds],
+    stillInUserIds: [...stillInUserIds],
     deadlineAt,
     votes: new Map(),
     timer: null,
@@ -78,13 +78,13 @@ export function startRunoutConsentSession(args: StartArgs): void {
 
   notifyOffer({
     matchId,
-    allInUserIds: session.allInUserIds,
+    stillInUserIds: session.stillInUserIds,
     deadlineAt,
     timeoutMs,
     serverNow
   })
 
-  if (session.allInUserIds.length === 0) {
+  if (session.stillInUserIds.length === 0) {
     // 避开仍持有 room drain lock 的同步路径，防止 finalizer 二次加锁死锁
     setTimeout(() => {
       void finalizeRunoutConsent(roomKey, roomId)
@@ -98,7 +98,7 @@ export function startRunoutConsentSession(args: StartArgs): void {
 }
 
 /**
- * 记录投票；收齐后结算。非 allIn / 已结束返回 false。
+ * 记录投票；收齐后结算。非仍在场 / 已结束返回 false。
  */
 export function recordRunoutConsentVote(
   roomKey: string,
@@ -110,19 +110,19 @@ export function recordRunoutConsentVote(
   if (!session || session.resolved) {
     return { ok: false, message: '当前无跑马协商' }
   }
-  if (!session.allInUserIds.includes(userId)) {
+  if (!session.stillInUserIds.includes(userId)) {
     return { ok: false, message: '你无需参与本次协商' }
   }
   session.votes.set(userId, agree)
-  if (session.votes.size >= session.allInUserIds.length) {
+  if (session.votes.size >= session.stillInUserIds.length) {
     void finalizeRunoutConsent(roomKey, roomId)
   }
   return { ok: true }
 }
 
 function decideRunCount(session: RunoutConsentSession): 1 | 2 {
-  if (session.allInUserIds.length === 0) return 1
-  const allAgree = session.allInUserIds.every(
+  if (session.stillInUserIds.length === 0) return 1
+  const allAgree = session.stillInUserIds.every(
     (id) => session.votes.get(id) === true
   )
   return allAgree ? 2 : 1
@@ -141,7 +141,7 @@ async function finalizeRunoutConsent(
   }
 
   const runCount = decideRunCount(session)
-  const votes = session.allInUserIds.map((userId) => ({
+  const votes = session.stillInUserIds.map((userId) => ({
     userId,
     agree: session.votes.get(userId) === true
   }))

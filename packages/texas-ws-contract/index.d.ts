@@ -74,10 +74,10 @@ export type WsGameStageChangedData = {
   boardReset?: boolean
 }
 
-/** 跑马协商：询问 all-in 玩家是否同意两次跑马。 */
+/** 跑马协商：询问仍在场玩家是否同意两次跑马（含跟注未全押）。 */
 export type WsRunoutConsentOfferData = {
   matchId: number
-  allInUserIds: number[]
+  stillInUserIds: number[]
   deadlineAt: number
   timeoutMs: number
   serverNow: number

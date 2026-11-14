@@ -950,7 +950,7 @@ async function processTexasDomainEvent(
         roomKey,
         roomId,
         matchId,
-        allInUserIds: e.payload.allInUserIds,
+        stillInUserIds: e.payload.stillInUserIds,
         notifyOffer: (data) => wsGateway.notifyRunoutConsentOffer(roomKey, data)
       })
       return
