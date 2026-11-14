@@ -822,6 +822,11 @@ router.post(matchApi('/replayTape'), async (ctx) => {
     },
     tape: replay.tape,
     tapeIssues: replay.tapeIssues,
-    settleList
+    settleList,
+    /** 双跑落库快照（含 `seats`）；回放合成 runout 席位标签优先于此 */
+    settlementRuns:
+      matchInfo.runCount === 2 && matchInfo.settlementRuns != null
+        ? matchInfo.settlementRuns
+        : null
   })
 })

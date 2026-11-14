@@ -111,6 +111,13 @@ export type WsRunoutConsentResolvedData = {
   votes: Array<{ userId: number; agree: boolean }>
 }
 
+/** 二次跑马：某跑仍在摊牌的各座牌力（与 `runout-run-result.seats` / `runs[].seats` 同形）。 */
+export type WsRunoutRunSeatRank = {
+  userId: number
+  rankCategory?: RankCategory
+  rankSignature?: RankSignature
+}
+
 /** 二次跑马：某一跑结束时的收池赢家 + 该跑最大牌型（按该跑公牌比牌；平分时多人）。 */
 export type WsRunoutRunResultData = {
   matchId: number
@@ -128,11 +135,7 @@ export type WsRunoutRunResultData = {
    * 仍在摊牌中的各座本跑牌力；客户端手牌底「牌型」标签。
    * 缺省时客户端仅能给赢家贴 `bestRankCategory`。
    */
-  seats?: Array<{
-    userId: number
-    rankCategory?: RankCategory
-    rankSignature?: RankSignature
-  }>
+  seats?: WsRunoutRunSeatRank[]
   winners: Array<{
     userId: number
     name: string
@@ -231,6 +234,11 @@ export type WsGameEndRunItem = {
   bestRankSignature?: RankSignature
   bestRankStrength?: number
   winnerUserIds?: number[]
+  /**
+   * 仍在摊牌的各座本跑牌力；战绩详情 / 回放 / 终局 `runs[]` 席位标签权威。
+   * 旧局可能缺省，客户端可回退本地按 board+手牌重算。
+   */
+  seats?: WsRunoutRunSeatRank[]
 }
 
 /**
@@ -240,7 +248,8 @@ export type WsGameEndRunItem = {
  * - **勿**把顶层 `bestRankSignature` / `bestRankCategory` / `bestPokes` 当「整手最大牌」
  *   （服务端可省略；仅对应其中一跑，易误导）。
  * - 每跑牌型 / 公牌 / 牌力收池人：看 `runs[]`（中途另有 `runout-run-result`）。
- * - 结算席位：展示 `settleList[].wager`；皇冠/高亮用净赢（如 `wager > 0`），勿用顶层签名。
+ * - 各座本跑牌型标签：看 `runs[].seats`（落库 `Match.settlementRuns[].seats`）。
+ * - 结算席位金额：展示 `settleList[].wager`；皇冠/高亮用净赢（如 `wager > 0`），勿用顶层签名。
  */
 export type WsGameEndData = {
   matchId: number

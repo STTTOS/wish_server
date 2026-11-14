@@ -56,6 +56,29 @@ function parseSettlementRunsJson(raw: unknown): WsGameEndRunItem[] | undefined {
         (id): id is number => typeof id === 'number' && Number.isFinite(id)
       )
     }
+    if (Array.isArray(r.seats)) {
+      const seats = r.seats
+        .map((row) => {
+          if (row == null || typeof row !== 'object') return null
+          const s = row as Record<string, unknown>
+          const userId = Number(s.userId)
+          if (!Number.isFinite(userId)) return null
+          return {
+            userId,
+            ...(typeof s.rankCategory === 'string'
+              ? { rankCategory: s.rankCategory as RankCategory }
+              : {}),
+            ...(typeof s.rankSignature === 'string' &&
+            String(s.rankSignature).trim()
+              ? {
+                  rankSignature: String(s.rankSignature).trim() as RankSignature
+                }
+              : {})
+          }
+        })
+        .filter((x): x is NonNullable<typeof x> => x != null)
+      if (seats.length > 0) item.seats = seats
+    }
     runs.push(item)
   }
   return runs.length > 0 ? runs : undefined

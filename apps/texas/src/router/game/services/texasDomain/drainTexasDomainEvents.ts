@@ -1,7 +1,10 @@
 import type { ActionType } from '@prisma/texas-client'
 import type { TexasEventContext } from './texasEventContext'
-import type { Player, RankSignature } from 'texas-poker-core'
-import type { WsMatchOverview } from '@wishufree/texas-ws-contract'
+import type { Player, RankCategory, RankSignature } from 'texas-poker-core'
+import type {
+  WsMatchOverview,
+  WsRunoutRunSeatRank
+} from '@wishufree/texas-ws-contract'
 
 import { Prisma } from '@prisma/texas-client'
 import {
@@ -55,6 +58,48 @@ function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
 }
 
+/** 当前摊牌评估表 → 仍在局内各座本跑牌力（须先 `evaluateRunoutBoard`）。 */
+function collectStillInRunoutSeats(
+  texas: TexasEventContext['texas']
+): WsRunoutRunSeatRank[] {
+  return texas.dealer.getPlayersStillInGame().map((pl) => {
+    const ev = texas.controller.getShowdownEvalForPlayer(pl)
+    return {
+      userId: pl.getUserInfo().id,
+      ...(ev?.rankCategory != null
+        ? { rankCategory: ev.rankCategory as RankCategory }
+        : {}),
+      ...(ev?.rankSignature != null
+        ? { rankSignature: ev.rankSignature as RankSignature }
+        : {})
+    }
+  })
+}
+
+/**
+ * 某跑 seats：优先中途 `runout-run-result` 缓存；缺则按该跑公牌现算。
+ * 调用方若现算了非第一跑，应再 `evaluateRunoutBoard(1)` 恢复终局落库用的席位牌力。
+ */
+function resolveSeatsForSettlementRun(
+  ctx: TexasEventContext,
+  runIndex: 1 | 2
+): WsRunoutRunSeatRank[] {
+  const cached = gameRuntimeRegistry
+    .getRunoutRunResults(ctx.roomKey)
+    .find((r) => r.runIndex === runIndex)?.seats
+  if (Array.isArray(cached) && cached.length > 0) {
+    return cached.map((s) => ({
+      userId: s.userId,
+      ...(s.rankCategory != null ? { rankCategory: s.rankCategory } : {}),
+      ...(s.rankSignature != null
+        ? { rankSignature: s.rankSignature as RankSignature }
+        : {})
+    }))
+  }
+  ctx.texas.controller.evaluateRunoutBoard(runIndex)
+  return collectStillInRunoutSeats(ctx.texas)
+}
+
 /** 按指定跑公牌比牌，取仍在摊牌中的赢家（平分时多人）；牌力以 Core `evaluateRunoutBoard` 为准。 */
 async function notifyRunoutBoardWinners(
   ctx: TexasEventContext,
@@ -69,7 +114,6 @@ async function notifyRunoutBoardWinners(
     const seatedById = new Map(
       texas.dealer.players.map((p) => [p.getUserInfo().id, p] as const)
     )
-    const stillIn = texas.dealer.getPlayersStillInGame()
     const bestPokes = userIds
       .map((id) => {
         const pl = seatedById.get(id)
@@ -79,16 +123,7 @@ async function notifyRunoutBoardWinners(
         return Array.isArray(five) && five.length > 0 ? five : null
       })
       .filter((row): row is NonNullable<typeof row> => row != null)
-    const seats = stillIn.map((pl) => {
-      const ev = texas.controller.getShowdownEvalForPlayer(pl)
-      return {
-        userId: pl.getUserInfo().id,
-        ...(ev?.rankCategory != null ? { rankCategory: ev.rankCategory } : {}),
-        ...(ev?.rankSignature != null
-          ? { rankSignature: ev.rankSignature as RankSignature }
-          : {})
-      }
-    })
+    const seats = collectStillInRunoutSeats(texas)
     const rows = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: {
@@ -415,13 +450,14 @@ async function handleHandEnded(
   clearPlayerTurnTimeout(roomKey)
 
   gameRuntimeRegistry.clearRunoutHandsRevealed(roomKey)
-  gameRuntimeRegistry.clearRunoutRunResults(roomKey)
+  // 勿过早 clearRunoutRunResults：落库 `settlementRuns[].seats` 优先复用中途缓存
 
   try {
     const gameEndAt = new Date()
     const currentMatchId = getRuntime().currentMatchId
     if (currentMatchId == null) {
       logger.error('HandEnded skipped: currentMatchId is null')
+      gameRuntimeRegistry.clearRunoutRunResults(roomKey)
       return
     }
 
@@ -585,10 +621,21 @@ async function handleHandEnded(
     const settlementRunsPayload =
       p.runs == null
         ? null
-        : p.runs.map((run, idx) => ({
-            ...run,
-            awards: storedRunAwards?.[idx] ?? []
-          }))
+        : p.runs.map((run, idx) => {
+            const runIndex = (run.runIndex === 2 ? 2 : 1) as 1 | 2
+            const seats =
+              runCount === 2 ? resolveSeatsForSettlementRun(ctx, runIndex) : []
+            return {
+              ...run,
+              awards: storedRunAwards?.[idx] ?? [],
+              ...(seats.length > 0 ? { seats } : {})
+            }
+          })
+    // 现算 seats 可能切到第二跑评估表；与 core HandEnded 一致，落库前回到第一跑
+    if (runCount === 2 && p.runs != null) {
+      texas.controller.evaluateRunoutBoard(1)
+    }
+    gameRuntimeRegistry.clearRunoutRunResults(roomKey)
     await match.update({
       where: { id: currentMatchId },
       data: {
@@ -711,19 +758,23 @@ async function handleHandEnded(
       bestPokes: dualRunout ? [] : p.bestPokes ?? [],
       totalBetAmount,
       runCount,
-      ...(p.runs
+      ...(settlementRunsPayload != null
         ? {
-            runs: p.runs.map((r) => ({
-              runIndex: r.runIndex,
-              boardPokes: r.boardPokes,
-              bestPokes: r.bestPokes,
-              bestRankCategory: r.bestRankCategory,
-              bestRankSignature: r.bestRankSignature,
-              bestRankStrength: r.bestRankStrength,
-              ...(r.winnerUserIds != null
-                ? { winnerUserIds: r.winnerUserIds }
-                : {})
-            }))
+            runs: settlementRunsPayload.map((r) => {
+              const seats = (r as { seats?: WsRunoutRunSeatRank[] }).seats
+              return {
+                runIndex: r.runIndex,
+                boardPokes: r.boardPokes,
+                bestPokes: r.bestPokes,
+                bestRankCategory: r.bestRankCategory,
+                bestRankSignature: r.bestRankSignature,
+                bestRankStrength: r.bestRankStrength,
+                ...(r.winnerUserIds != null
+                  ? { winnerUserIds: r.winnerUserIds }
+                  : {}),
+                ...(Array.isArray(seats) && seats.length > 0 ? { seats } : {})
+              }
+            })
           }
         : {})
     }))
@@ -792,6 +843,7 @@ async function handleHandEnded(
     maybeStartNextHandCountdown(roomId)
   } catch (err) {
     logger.error('HandEnded handler failed', err)
+    gameRuntimeRegistry.clearRunoutRunResults(roomKey)
   }
 }
 
