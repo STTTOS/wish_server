@@ -26,6 +26,11 @@ import {
   loadMatchCompositeReadModelFromDbTape
 } from '../game/services/matchReplayReadModel'
 import {
+  computeRunWagers,
+  mapsFromWinnerUserIds,
+  mapsFromStoredRunAwards
+} from '../game/services/texasDomain/runoutSettleAwards'
+import {
   settleRecordVisibleFields,
   sortSettleRecordsByOutcome,
   projectSettleRecordsForMatchDetail,
@@ -552,6 +557,7 @@ router.post(matchApi('/detail'), async (ctx) => {
             }
           },
           id: true,
+          userId: true,
           role: true,
           isFold: true,
           wager: true,
@@ -617,10 +623,49 @@ router.post(matchApi('/detail'), async (ctx) => {
     ...restMatchInfo
   } = matchInfo
 
-  const settleRecords = projectSettleRecordsForMatchDetail(playerMatchRecords, {
-    viewerUserId,
-    matchEnded: endedAt != null
-  })
+  const settleRecordsBase = projectSettleRecordsForMatchDetail(
+    playerMatchRecords,
+    {
+      viewerUserId,
+      matchEnded: endedAt != null
+    }
+  )
+
+  const potTotal = Number(restMatchInfo.totalBetAmount ?? 0)
+  const settlementRuns = Array.isArray(restMatchInfo.settlementRuns)
+    ? (restMatchInfo.settlementRuns as Array<{
+        awards?: unknown
+        winnerUserIds?: number[]
+      }>)
+    : null
+  const runAwardMaps =
+    restMatchInfo.runCount === 2
+      ? mapsFromStoredRunAwards(
+          settlementRuns?.map((r) => r?.awards) ?? null
+        ) ??
+        mapsFromWinnerUserIds({
+          potTotal,
+          runs: settlementRuns ?? []
+        })
+      : null
+  const settleRecords =
+    runAwardMaps == null
+      ? settleRecordsBase
+      : settleRecordsBase.map((row) => {
+          const totalBet = Number(
+            playerMatchRecords.find((r) => r.userId === row.userId)
+              ?.totalBetAmount ?? 0
+          )
+          return {
+            ...row,
+            runWagers: computeRunWagers({
+              userId: row.userId,
+              totalBetAmount: totalBet,
+              potTotal,
+              runAwards: runAwardMaps
+            })
+          }
+        })
 
   const actionRecords = records.map(
     ({ user: { id: userId, ...user }, createdAt, ...record }) => ({

@@ -20,6 +20,7 @@ import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
+import { computeRunWagers, runAwardsFromPoolMaps } from './runoutSettleAwards'
 import { projectDisciplineForHandSafe } from '../../../../discipline/projectFromHand'
 import { scoreDisciplineForHandSafe } from '../../../../discipline/scoreProjectedHand'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
@@ -484,6 +485,15 @@ async function handleHandEnded(
       ])
     )
 
+    const totalBetAmount = texas.pool.totalAmount
+    const runCount = (p.runCount ?? 1) as 1 | 2
+    const poolWithRunAwards = texas.pool as {
+      runAwards?: [Map<number, number>, Map<number, number>] | null
+    }
+    const poolRunAwards =
+      runCount === 2 ? poolWithRunAwards.runAwards ?? null : null
+    const storedRunAwards = runAwardsFromPoolMaps(poolRunAwards)
+
     const buildSettleListForViewer = (viewerUserId: number) =>
       sortedSeated.map((pl) => {
         const userId = pl.getUserInfo().id
@@ -495,6 +505,15 @@ async function handleHandEnded(
         if (hideHoleFromViewer) {
           handPokes = []
         }
+        const runWagers =
+          poolRunAwards != null
+            ? computeRunWagers({
+                userId,
+                totalBetAmount: Math.round(pl.totalBetAmount ?? 0),
+                potTotal: totalBetAmount,
+                runAwards: poolRunAwards
+              })
+            : undefined
         return {
           userId,
           name: profile?.name ?? pl.getUserInfo().name ?? `玩家${userId}`,
@@ -503,6 +522,7 @@ async function handleHandEnded(
           pokerBackgroundKey: profile?.pokerBackgroundKey ?? 'default',
           balance: pl.balance,
           wager: pl.wager,
+          ...(runWagers != null ? { runWagers } : {}),
           sevenTwoBonusPaid:
             sevenTwoBonusByUserId.paidByUserId.get(userId) ?? 0,
           sevenTwoBonusReceived:
@@ -527,10 +547,15 @@ async function handleHandEnded(
         }
       })
 
-    const totalBetAmount = texas.pool.totalAmount
-    const runCount = (p.runCount ?? 1) as 1 | 2
     const run2Board =
       runCount === 2 && p.runs?.[1]?.boardPokes ? p.runs[1].boardPokes : null
+    const settlementRunsPayload =
+      p.runs == null
+        ? null
+        : p.runs.map((run, idx) => ({
+            ...run,
+            awards: storedRunAwards?.[idx] ?? []
+          }))
     await match.update({
       where: { id: currentMatchId },
       data: {
@@ -541,9 +566,9 @@ async function handleHandEnded(
             : (run2Board as Prisma.InputJsonValue),
         runCount,
         settlementRuns:
-          p.runs == null
+          settlementRunsPayload == null
             ? Prisma.JsonNull
-            : (p.runs as unknown as Prisma.InputJsonValue),
+            : (settlementRunsPayload as unknown as Prisma.InputJsonValue),
         bestRankCategory: p.bestRankCategory,
         bestRankSignature: bestRankSignatureFromHandEnded(p),
         endedAt: gameEndAt,

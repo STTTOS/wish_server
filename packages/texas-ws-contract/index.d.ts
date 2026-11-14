@@ -157,6 +157,9 @@ export type WsPlayerProfileItem = {
   pokerBackgroundKey: string
 }
 
+/** 二次跑马时每跑净输赢；与整手 wager 之和一致（不含 27o） */
+export type WsGameEndRunWagers = [number, number]
+
 export type WsGameEndSettleItem = {
   userId: number
   name: string
@@ -165,6 +168,8 @@ export type WsGameEndSettleItem = {
   pokerBackgroundKey: string | null
   balance: number
   wager: number
+  /** 二次跑马：每跑净输赢；缺省表示非二次 */
+  runWagers?: WsGameEndRunWagers
   sevenTwoBonusPaid: number
   sevenTwoBonusReceived: number
   isAllIn: boolean
@@ -184,6 +189,7 @@ export type WsGameEndRunItem = {
   bestRankCategory?: RankCategory
   bestRankSignature?: RankSignature
   bestRankStrength?: number
+  winnerUserIds?: number[]
 }
 
 export type WsGameEndData = {
