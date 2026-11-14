@@ -273,6 +273,11 @@ class SocketServer {
       }
 
       this.#handleGameRoomConnect(roomKey, userId)
+      /**
+       * `player-hand-dealt` 为单播、不进 `game-room-replay`。重连后若本手进行中且在座有手牌，
+       * 在 replay 之后补发一次，避免客户端手牌被 roles-assigned 清空后无法恢复。
+       */
+      this.#resyncHoleCardsOnGameConnect(roomKey, roomId, userId)
       this.#notifyGameRoomWaiters(roomKey)
       this.#notifyEnteringProgress(roomKey)
 
@@ -867,6 +872,31 @@ class SocketServer {
    */
   #handleGameRoomConnect(channel: string, userId: number) {
     this.#applyGameRoomOnSeatPresenceIfConnected(channel, userId)
+  }
+
+  /**
+   * `/game` 连接且 replay 之后：本手进行中的在座玩家补发私牌单播。
+   * 客户端对「中途补牌」不重播发牌 cinematic（见 reducePlayerHandDealt）。
+   */
+  #resyncHoleCardsOnGameConnect(
+    roomKey: string,
+    roomId: number,
+    userId: number
+  ) {
+    const texas = gameRuntimeRegistry.getTexas(roomKey)
+    if (!texas) return
+    if (texas.controller.status !== 'in_hand') return
+    if (texas.room.getPlayerSeatStatusById(userId) !== 'on-set') return
+    const player = texas.dealer.getById(userId)
+    if (!player || !texas.dealer.has(player)) return
+    const handPokes = player.getHandPokes()
+    if (!Array.isArray(handPokes) || handPokes.length === 0) return
+    const matchId = gameRuntimeRegistry.getCurrentMatchId(roomKey)
+    if (matchId == null || !Number.isInteger(matchId) || matchId <= 0) return
+    this.broadcastGameToUser(userId, {
+      type: 'player-hand-dealt',
+      data: { matchId, roomId, handPokes }
+    })
   }
 
   /**
