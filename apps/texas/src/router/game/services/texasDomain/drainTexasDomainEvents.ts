@@ -49,7 +49,7 @@ function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
 }
 
-/** 按指定跑公牌比牌，取仍在摊牌中的赢家（平分时多人）。 */
+/** 按指定跑公牌比牌，取仍在摊牌中的赢家（平分时多人）；牌力以 Core `evaluateRunoutBoard` 为准。 */
 async function notifyRunoutBoardWinners(
   ctx: TexasEventContext,
   matchId: number,
@@ -57,13 +57,12 @@ async function notifyRunoutBoardWinners(
 ): Promise<void> {
   const { texas, roomKey, wsGateway } = ctx
   try {
-    const board = texas.controller.getBoardForRun(runIndex)
-    texas.controller.applyShowdownRanksForBoard(board)
-    const stillIn = texas.dealer.getPlayersStillInGame()
-    if (stillIn.length === 0) return
-    const maxStrength = Math.max(...stillIn.map((p) => p.rankStrength))
-    const winners = stillIn.filter((p) => p.rankStrength === maxStrength)
-    const userIds = winners.map((p) => p.getUserInfo().id)
+    const evaluated = texas.controller.evaluateRunoutBoard(runIndex)
+    const userIds = evaluated.winnerUserIds
+    if (userIds.length === 0) return
+    const seatedById = new Map(
+      texas.dealer.players.map((p) => [p.getUserInfo().id, p] as const)
+    )
     const rows = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: {
@@ -74,26 +73,30 @@ async function notifyRunoutBoardWinners(
       }
     })
     const byId = new Map(rows.map((r) => [r.id, r]))
-    const top = winners[0]!
-    const bestRankSignature = rankSignatureForWs(top)
-    const bestRankCategory = top.rankCategory
-    wsGateway.notifyRunoutRunResult(roomKey, {
+    const payload = {
       matchId,
       runIndex,
-      ...(bestRankCategory != null ? { bestRankCategory } : {}),
-      ...(bestRankSignature != null ? { bestRankSignature } : {}),
-      winners: winners.map((p) => {
-        const id = p.getUserInfo().id
+      ...(evaluated.bestRankCategory != null
+        ? { bestRankCategory: evaluated.bestRankCategory }
+        : {}),
+      ...(evaluated.bestRankSignature != null
+        ? {
+            bestRankSignature: evaluated.bestRankSignature as RankSignature
+          }
+        : {}),
+      winners: userIds.map((id) => {
         const row = byId.get(id)
-        const info = p.getUserInfo()
+        const info = seatedById.get(id)?.getUserInfo()
         return {
           userId: id,
-          name: row?.name ?? info.name ?? `玩家${id}`,
+          name: row?.name ?? info?.name ?? `玩家${id}`,
           avatarUrl: row?.avatarUrl ?? null,
           avatarKey: row?.avatarKey ?? 'cartoon/default'
         }
       })
-    })
+    }
+    gameRuntimeRegistry.setRunoutRunResult(roomKey, payload)
+    wsGateway.notifyRunoutRunResult(roomKey, payload)
   } catch (err) {
     logger.error(
       `[runout] notifyRunoutBoardWinners failed matchId=${matchId} run=${runIndex}`,
@@ -384,6 +387,7 @@ async function handleHandEnded(
   clearPlayerTurnTimeout(roomKey)
 
   gameRuntimeRegistry.clearRunoutHandsRevealed(roomKey)
+  gameRuntimeRegistry.clearRunoutRunResults(roomKey)
 
   try {
     const gameEndAt = new Date()
@@ -727,6 +731,7 @@ async function processTexasDomainEvent(
   switch (e.type) {
     case 'RolesAssigned': {
       gameRuntimeRegistry.clearRunoutHandsRevealed(roomKey)
+      gameRuntimeRegistry.clearRunoutRunResults(roomKey)
       getRuntime().matchStartedAt = Date.now()
       const currentMatchId = getRuntime().currentMatchId
       if (currentMatchId == null) {

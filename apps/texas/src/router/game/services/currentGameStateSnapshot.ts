@@ -1,6 +1,7 @@
 import type { Texas, Stage, Player, HandLifecycle } from 'texas-poker-core'
 import type {
   WsGameEndData,
+  WsRunoutProgressData,
   WsGameTableRosterData,
   WsGameTableRosterSeat,
   WsGameTableRosterWatcher,
@@ -87,6 +88,8 @@ export type FetchCurrentGameStatePayload = {
     timeoutMs: number
     serverNow: number
   } | null
+  /** 二次跑马进行中：已完成各跑结果，供客户端 hydrate 左侧面板 */
+  runoutProgress: WsRunoutProgressData | null
 }
 
 async function loadUserProfilesByIds(userIds: number[]): Promise<
@@ -307,6 +310,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
   let runoutHandsRevealed: WsRunoutHandsRevealedData | null = null
   let runoutConsentOffer: FetchCurrentGameStatePayload['runoutConsentOffer'] =
     null
+  let runoutProgress: WsRunoutProgressData | null = null
 
   if (currentMatchId != null) {
     if (handLifecycle === 'in_hand') {
@@ -333,6 +337,17 @@ export async function buildFetchCurrentGameStatePayload(input: {
           deadlineAt: consent.deadlineAt,
           timeoutMs: GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
           serverNow: Date.now()
+        }
+      }
+      if (texas.controller.runCount === 2) {
+        const results = gameRuntimeRegistry
+          .getRunoutRunResults(roomKey)
+          .filter((r) => r.matchId === currentMatchId)
+        runoutProgress = {
+          matchId: currentMatchId,
+          runCount: 2,
+          runIndex: texas.controller.runIndex === 2 ? 2 : 1,
+          results
         }
       }
     } else if (
@@ -372,6 +387,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
     },
     lastGameEnd,
     runoutHandsRevealed,
-    runoutConsentOffer
+    runoutConsentOffer,
+    runoutProgress
   }
 }

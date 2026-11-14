@@ -105,6 +105,15 @@ export type WsRunoutRunResultData = {
   }>
 }
 
+/** HTTP 快照：二次跑马进行中的进度（重连 / 中途入桌 hydrate）。 */
+export type WsRunoutProgressData = {
+  matchId: number
+  runCount: 2
+  runIndex: 1 | 2
+  /** 已完成的各跑结果（按 runIndex 升序） */
+  results: WsRunoutRunResultData[]
+}
+
 /** 进入跑马路时对仍在摊牌中的玩家同步亮底牌（每手至多一次；不受进街 pacing 影响）。 */
 export type WsRunoutHandsRevealedData = {
   matchId: number

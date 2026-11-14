@@ -1,6 +1,9 @@
 import type { Texas } from 'texas-poker-core'
 import type { StartRoomInfo, MatchRollbackManager } from './types'
-import type { WsRunoutHandsRevealedData } from '@wishufree/texas-ws-contract'
+import type {
+  WsRunoutRunResultData,
+  WsRunoutHandsRevealedData
+} from '@wishufree/texas-ws-contract'
 
 import { logger } from '../../../logger'
 import { clearRoomEventDrainLock } from './texasDomain/roomEventDrainLock'
@@ -50,6 +53,8 @@ export type GameRuntime = {
   rosterSeq: number
   /** 本手跑马路已亮底牌；HTTP 快照与 WS replay 对齐，新手 `RolesAssigned` 时清空。 */
   runoutHandsRevealed: WsRunoutHandsRevealedData | null
+  /** 本手各跑 `runout-run-result`；新手 / HandEnded 清空，供 HTTP 快照 hydrate。 */
+  runoutRunResultsByIndex: Partial<Record<1 | 2, WsRunoutRunResultData>> | null
 }
 
 /**
@@ -176,6 +181,29 @@ export class GameRuntimeRegistry {
 
   clearRunoutHandsRevealed(roomKey: string): void {
     this.setRunoutHandsRevealed(roomKey, null)
+  }
+
+  setRunoutRunResult(roomKey: string, data: WsRunoutRunResultData): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    const runIndex = data.runIndex === 2 ? 2 : 1
+    const prev = runtime.runoutRunResultsByIndex ?? {}
+    runtime.runoutRunResultsByIndex = { ...prev, [runIndex]: data }
+  }
+
+  getRunoutRunResults(roomKey: string): WsRunoutRunResultData[] {
+    const byIndex = this.#runtimes.get(roomKey)?.runoutRunResultsByIndex
+    if (byIndex == null) return []
+    const out: WsRunoutRunResultData[] = []
+    if (byIndex[1] != null) out.push(byIndex[1])
+    if (byIndex[2] != null) out.push(byIndex[2])
+    return out
+  }
+
+  clearRunoutRunResults(roomKey: string): void {
+    const runtime = this.#runtimes.get(roomKey)
+    if (!runtime) return
+    runtime.runoutRunResultsByIndex = null
   }
 
   setQuitBlockedUntilBlindsPosted(roomKey: string, blocked: boolean): void {
