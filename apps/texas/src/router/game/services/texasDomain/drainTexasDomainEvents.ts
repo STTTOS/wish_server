@@ -74,9 +74,14 @@ async function notifyRunoutBoardWinners(
       }
     })
     const byId = new Map(rows.map((r) => [r.id, r]))
+    const top = winners[0]!
+    const bestRankSignature = rankSignatureForWs(top)
+    const bestRankCategory = top.rankCategory
     wsGateway.notifyRunoutRunResult(roomKey, {
       matchId,
       runIndex,
+      ...(bestRankCategory != null ? { bestRankCategory } : {}),
+      ...(bestRankSignature != null ? { bestRankSignature } : {}),
       winners: winners.map((p) => {
         const id = p.getUserInfo().id
         const row = byId.get(id)

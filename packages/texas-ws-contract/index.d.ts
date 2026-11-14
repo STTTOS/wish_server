@@ -89,10 +89,14 @@ export type WsRunoutConsentResolvedData = {
   votes: Array<{ userId: number; agree: boolean }>
 }
 
-/** 二次跑马：某一跑结束时的收池赢家（按该跑公牌比牌；平分时多人）。 */
+/** 二次跑马：某一跑结束时的收池赢家 + 该跑最大牌型（按该跑公牌比牌；平分时多人）。 */
 export type WsRunoutRunResultData = {
   matchId: number
   runIndex: 1 | 2
+  /** 本跑桌上最大牌型类别；比牌失败时可缺省 */
+  bestRankCategory?: RankCategory
+  /** 本跑桌上最大牌力签名；客户端公牌上方条与左侧两跑面板共用 */
+  bestRankSignature?: RankSignature
   winners: Array<{
     userId: number
     name: string
