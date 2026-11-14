@@ -492,15 +492,11 @@ async function handleHandEnded(
 
     const totalBetAmount = texas.pool.totalAmount
     const runCount = (p.runCount ?? 1) as 1 | 2
-    // 权威：PotAwarded.runAllocations（core≥1.4.41）；兼容旧包再回退 pool.runAwards
+    // 权威：PotAwarded.runAllocations；旧 core 无该字段时回退 pool.runAwards
     const potAwardedEv = settleEvents.find((e) => e.type === 'PotAwarded')
     const runAllocationsFromEvent =
       potAwardedEv?.type === 'PotAwarded'
-        ? (
-            potAwardedEv.payload as {
-              runAllocations?: Array<Array<{ userId: number; amount: number }>>
-            }
-          ).runAllocations
+        ? potAwardedEv.payload.runAllocations
         : undefined
     const storedRunAwards =
       runCount === 2
