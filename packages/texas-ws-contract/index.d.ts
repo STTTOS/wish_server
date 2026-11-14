@@ -187,6 +187,27 @@ export type WsMatchOverview = {
   playerProfiles: WsPlayerProfileItem[]
 }
 
+/**
+ * 本房累计输赢曲线（方案 C）：
+ * - X = 本房已结束对局顺序 `handIndex` 1..N（全员共用）
+ * - Y = 累计 `∑wager`；未参与的局沿用上一手有效值；尚未入座前为 `null`
+ */
+export type WsMatchWagerCurveSeriesItem = {
+  userId: number
+  /** 与 `handCount` 等长；`null` = 该手前尚未入座 */
+  cumulatives: Array<number | null>
+  /** 与 `handCount` 等长；该手是否有 PlayerMatchRecord */
+  participated: boolean[]
+}
+
+export type WsMatchWagerCurve = {
+  roomId: number
+  handCount: number
+  matchIds: number[]
+  series: WsMatchWagerCurveSeriesItem[]
+  playerProfiles: WsPlayerProfileItem[]
+}
+
 export type WsPlayerProfileItem = {
   userId: number
   name: string
