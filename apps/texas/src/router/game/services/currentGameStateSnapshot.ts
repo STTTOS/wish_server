@@ -15,13 +15,16 @@ import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { buildLastGameEndForViewer } from './lastGameEndSnapshot'
 import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../constants/game'
-import { getRunoutConsentSession } from './texasDomain/runoutConsentSession'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
   getLatestGameRoomSeq,
   getGameRoomReplayEpoch
 } from '../../../SockeServer/gameRoomWsReplayBuffer'
+import {
+  getRunoutConsentSession,
+  buildRunoutConsentVoteProgress
+} from './texasDomain/runoutConsentSession'
 
 export type FetchCurrentGameStatePayload = {
   roomGameStatus: string
@@ -87,6 +90,7 @@ export type FetchCurrentGameStatePayload = {
     deadlineAt: number
     timeoutMs: number
     serverNow: number
+    votes: Array<{ userId: number; agree: boolean }>
   } | null
   /** 二次跑马进行中：已完成各跑结果，供客户端 hydrate 左侧面板 */
   runoutProgress: WsRunoutProgressData | null
@@ -331,12 +335,14 @@ export async function buildFetchCurrentGameStatePayload(input: {
         consent.matchId === currentMatchId &&
         consent.deadlineAt > Date.now()
       ) {
+        const progress = buildRunoutConsentVoteProgress(consent)
         runoutConsentOffer = {
           matchId: consent.matchId,
           stillInUserIds: [...consent.stillInUserIds],
           deadlineAt: consent.deadlineAt,
           timeoutMs: GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
-          serverNow: Date.now()
+          serverNow: progress.serverNow,
+          votes: progress.votes
         }
       }
       if (texas.controller.runCount === 2) {

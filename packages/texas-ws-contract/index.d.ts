@@ -74,6 +74,12 @@ export type WsGameStageChangedData = {
   boardReset?: boolean
 }
 
+/** 跑马协商单票；进度广播与 hydrate 共用。 */
+export type WsRunoutConsentVoteEntry = {
+  userId: number
+  agree: boolean
+}
+
 /** 跑马协商：询问仍在场玩家是否同意两次跑马（含跟注未全押）。 */
 export type WsRunoutConsentOfferData = {
   matchId: number
@@ -81,6 +87,22 @@ export type WsRunoutConsentOfferData = {
   deadlineAt: number
   timeoutMs: number
   serverNow: number
+  /** 已投票者；开局为空，快照 hydrate 带回当前进度 */
+  votes?: WsRunoutConsentVoteEntry[]
+}
+
+/**
+ * 跑马协商投票进度（每次有人回复后广播）。
+ * 客户端用 `votes` 更新头像条；未投者不在数组中。
+ */
+export type WsRunoutConsentVoteData = {
+  matchId: number
+  stillInUserIds: number[]
+  votes: WsRunoutConsentVoteEntry[]
+  agreedCount: number
+  pendingCount: number
+  serverNow: number
+  deadlineAt: number
 }
 
 export type WsRunoutConsentResolvedData = {
@@ -415,6 +437,7 @@ export type WsEventDataMap = {
   'player-action-taken': WsPlayerActionTakenData
   'game-stage-changed': WsGameStageChangedData
   'runout-consent-offer': WsRunoutConsentOfferData
+  'runout-consent-vote': WsRunoutConsentVoteData
   'runout-consent-resolved': WsRunoutConsentResolvedData
   'runout-run-result': WsRunoutRunResultData
   'runout-hands-revealed': WsRunoutHandsRevealedData

@@ -14,6 +14,7 @@ type Input = {
 
 /**
  * all-in 玩家回复是否同意二次跑马。
+ * 进度广播由 session.notifyVote（drain 注入）完成，此处不重复推送。
  */
 export class RunoutConsentReplyUseCase {
   async execute(input: Input): Promise<ApiVoidResult> {

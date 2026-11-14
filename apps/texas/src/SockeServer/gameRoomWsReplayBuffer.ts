@@ -20,7 +20,7 @@
  *
  * 典型入缓冲事件（经 `broadcastGameRoom`）：`player-roles-assigned`、`game-start`、
  * `game-blinds-posted`、`player-action-required`、`player-action-taken`、`game-stage-changed`、
- * **`runout-consent-offer`**、**`runout-consent-resolved`**、**`runout-run-result`**、
+ * **`runout-consent-offer`**、**`runout-consent-vote`**、**`runout-consent-resolved`**、**`runout-run-result`**、
  * **`runout-hands-revealed`**、`game-end`、`next-hand-countdown-started`、
  * `next-hand-countdown-cancelled` 等。
  *

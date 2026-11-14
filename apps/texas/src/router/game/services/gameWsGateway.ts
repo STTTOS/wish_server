@@ -85,6 +85,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'runout-consent-offer', data })
   }
 
+  notifyRunoutConsentVote(
+    roomKey: string,
+    data: WsMessage<'runout-consent-vote'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'runout-consent-vote', data })
+  }
+
   notifyRunoutConsentResolved(
     roomKey: string,
     data: WsMessage<'runout-consent-resolved'>['data']

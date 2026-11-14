@@ -2,6 +2,18 @@ import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../../constants/game'
 
+export type RunoutConsentVoteRow = { userId: number; agree: boolean }
+
+export type RunoutConsentProgressPayload = {
+  matchId: number
+  stillInUserIds: number[]
+  votes: RunoutConsentVoteRow[]
+  agreedCount: number
+  pendingCount: number
+  serverNow: number
+  deadlineAt: number
+}
+
 export type RunoutConsentSession = {
   matchId: number
   stillInUserIds: number[]
@@ -9,6 +21,7 @@ export type RunoutConsentSession = {
   votes: Map<number, boolean>
   timer: ReturnType<typeof setTimeout> | null
   resolved: boolean
+  notifyVote: ((data: RunoutConsentProgressPayload) => void) | null
 }
 
 const sessions = new Map<string, RunoutConsentSession>()
@@ -42,6 +55,33 @@ export function clearRunoutConsentSession(roomKey: string): void {
   sessions.delete(roomKey)
 }
 
+export function buildRunoutConsentProgress(
+  session: RunoutConsentSession
+): RunoutConsentProgressPayload {
+  const votes: RunoutConsentVoteRow[] = []
+  for (const userId of session.stillInUserIds) {
+    if (!session.votes.has(userId)) continue
+    votes.push({ userId, agree: session.votes.get(userId) === true })
+  }
+  const agreedCount = votes.filter((v) => v.agree).length
+  const pendingCount = Math.max(
+    0,
+    session.stillInUserIds.length - session.votes.size
+  )
+  return {
+    matchId: session.matchId,
+    stillInUserIds: [...session.stillInUserIds],
+    votes,
+    agreedCount,
+    pendingCount,
+    serverNow: Date.now(),
+    deadlineAt: session.deadlineAt
+  }
+}
+
+/** snapshot 既有引用名 */
+export const buildRunoutConsentVoteProgress = buildRunoutConsentProgress
+
 type StartArgs = {
   roomKey: string
   roomId: number
@@ -53,14 +93,17 @@ type StartArgs = {
     deadlineAt: number
     timeoutMs: number
     serverNow: number
+    votes: RunoutConsentVoteRow[]
   }) => void
+  notifyVote: (data: RunoutConsentProgressPayload) => void
 }
 
 /**
  * 启动跑马协商：推 offer，超时默认否；仍在场全员同意才 runCount=2。
  */
 export function startRunoutConsentSession(args: StartArgs): void {
-  const { roomKey, roomId, matchId, stillInUserIds, notifyOffer } = args
+  const { roomKey, roomId, matchId, stillInUserIds, notifyOffer, notifyVote } =
+    args
   clearRunoutConsentSession(roomKey)
 
   const serverNow = Date.now()
@@ -72,7 +115,8 @@ export function startRunoutConsentSession(args: StartArgs): void {
     deadlineAt,
     votes: new Map(),
     timer: null,
-    resolved: false
+    resolved: false,
+    notifyVote
   }
   sessions.set(roomKey, session)
 
@@ -81,7 +125,8 @@ export function startRunoutConsentSession(args: StartArgs): void {
     stillInUserIds: session.stillInUserIds,
     deadlineAt,
     timeoutMs,
-    serverNow
+    serverNow,
+    votes: []
   })
 
   if (session.stillInUserIds.length === 0) {
@@ -98,7 +143,7 @@ export function startRunoutConsentSession(args: StartArgs): void {
 }
 
 /**
- * 记录投票；收齐后结算。非仍在场 / 已结束返回 false。
+ * 记录投票；先广播进度，收齐后再结算。非仍在场 / 已结束返回 false。
  */
 export function recordRunoutConsentVote(
   roomKey: string,
@@ -114,6 +159,11 @@ export function recordRunoutConsentVote(
     return { ok: false, message: '你无需参与本次协商' }
   }
   session.votes.set(userId, agree)
+  try {
+    session.notifyVote?.(buildRunoutConsentProgress(session))
+  } catch (err) {
+    logger.error(`[runout consent] notifyVote failed roomKey=${roomKey}`, err)
+  }
   if (session.votes.size >= session.stillInUserIds.length) {
     void finalizeRunoutConsent(roomKey, roomId)
   }

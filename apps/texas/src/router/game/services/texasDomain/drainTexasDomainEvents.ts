@@ -1026,7 +1026,9 @@ async function processTexasDomainEvent(
         roomId,
         matchId,
         stillInUserIds: e.payload.stillInUserIds,
-        notifyOffer: (data) => wsGateway.notifyRunoutConsentOffer(roomKey, data)
+        notifyOffer: (data) =>
+          wsGateway.notifyRunoutConsentOffer(roomKey, data),
+        notifyVote: (data) => wsGateway.notifyRunoutConsentVote(roomKey, data)
       })
       return
     }
