@@ -26,6 +26,7 @@ import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
 import { projectDisciplineForHandSafe } from '../../../../discipline/projectFromHand'
 import { scoreDisciplineForHandSafe } from '../../../../discipline/scoreProjectedHand'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
+import { resolveHonorRankCategories } from '../../../../styleStats/honorRankCategories'
 import { applyStyleStatsForHandSafe } from '../../../../styleStats/applyStyleStatsForHand'
 import {
   clearPlayerTurnTimeout,
@@ -690,12 +691,20 @@ async function handleHandEnded(
             },
             data: settleFields
           })
-          await ensureAchievementMailsByRank(
-            tx,
+          // 双跑：两跑大牌均可解锁成就（幂等按 tier）
+          const honorRanks = resolveHonorRankCategories({
+            isFold,
             userId,
-            pl.rankCategory ?? null,
-            isFold
-          )
+            fallbackRank: pl.rankCategory ?? null,
+            handPokes: pl.getHandPokes(),
+            runCount,
+            commonPokes: p.pokesRevealed,
+            commonPokesRun2: run2Board,
+            settlementRuns: settlementRunsPayload
+          })
+          for (const rc of honorRanks) {
+            await ensureAchievementMailsByRank(tx, userId, rc, isFold)
+          }
         } catch (err) {
           if (
             err instanceof Prisma.PrismaClientKnownRequestError &&

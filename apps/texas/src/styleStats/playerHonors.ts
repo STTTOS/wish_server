@@ -2,6 +2,10 @@ import type { Prisma, RankCategory } from '@prisma/texas-client'
 
 import { logger } from '../logger'
 import prisma, { playerHonorsStat, playerMatchRecord } from '../models'
+import {
+  parseHonorPokes,
+  resolveHonorRankCategories
+} from './honorRankCategories'
 
 export type PlayerHonorsDto = {
   /** 参与手数（PlayerMatchRecord 行数） */
@@ -16,7 +20,11 @@ type Tx = Prisma.TransactionClient
 export type HonorSeatDelta = {
   userId: number
   isFold: boolean
-  rankCategory: RankCategory | null
+  /**
+   * 本手计入荣誉的牌型（单跑 0~1 个；双跑每跑各可计一次）。
+   * 手数仍只 +1。
+   */
+  rankCategories: RankCategory[]
 }
 
 export type HonorCounters = {
@@ -26,7 +34,7 @@ export type HonorCounters = {
   fourOfKindCount: number
 }
 
-/** 单座一手对荣誉计数的增量（与旧 getPlayerHonors 口径一致） */
+/** 单座一手对荣誉计数的增量（双跑可在同一手里累加多次大牌）。 */
 export const honorDeltaForSeat = (seat: HonorSeatDelta): HonorCounters => {
   const d: HonorCounters = {
     hands: 1,
@@ -34,10 +42,11 @@ export const honorDeltaForSeat = (seat: HonorSeatDelta): HonorCounters => {
     straightFlushCount: 0,
     fourOfKindCount: 0
   }
-  if (!seat.isFold) {
-    if (seat.rankCategory === 'z') d.royalFlushCount = 1
-    if (seat.rankCategory === 'y') d.straightFlushCount = 1
-    if (seat.rankCategory === 'x') d.fourOfKindCount = 1
+  if (seat.isFold) return d
+  for (const rankCategory of seat.rankCategories) {
+    if (rankCategory === 'z') d.royalFlushCount += 1
+    if (rankCategory === 'y') d.straightFlushCount += 1
+    if (rankCategory === 'x') d.fourOfKindCount += 1
   }
   return d
 }
@@ -85,7 +94,7 @@ export const applyHandHonorsDeltas = async (
 
 /**
  * 公开荣誉统计：读物化表（O(1)）。
- * 大牌成就仅计未弃牌手（与历史 match/overview 一致）。
+ * 大牌成就仅计未弃牌手；双跑两跑分别计入。
  */
 export const getPlayerHonors = async (
   userId: number
@@ -108,8 +117,7 @@ export const getPlayerHonors = async (
 }
 
 /**
- * 从 PlayerMatchRecord 全量重建荣誉物化（上线/纠偏用）。
- * 不依赖 style 已应用标记。
+ * 从 PlayerMatchRecord（+ 双跑 Match 公牌/seats）全量重建荣誉物化。
  */
 export const rebuildPlayerHonorsFromRecords = async (opts?: {
   batchSize?: number
@@ -136,16 +144,35 @@ export const rebuildPlayerHonorsFromRecords = async (opts?: {
         id: true,
         userId: true,
         isFold: true,
-        rankCategory: true
+        rankCategory: true,
+        handPokes: true,
+        match: {
+          select: {
+            runCount: true,
+            commonPokes: true,
+            commonPokesRun2: true,
+            settlementRuns: true
+          }
+        }
       }
     })
     if (rows.length === 0) break
 
     for (const r of rows) {
+      const rankCategories = resolveHonorRankCategories({
+        isFold: r.isFold,
+        userId: r.userId,
+        fallbackRank: r.rankCategory,
+        handPokes: parseHonorPokes(r.handPokes),
+        runCount: r.match.runCount,
+        commonPokes: r.match.commonPokes,
+        commonPokesRun2: r.match.commonPokesRun2,
+        settlementRuns: r.match.settlementRuns
+      })
       const delta = honorDeltaForSeat({
         userId: r.userId,
         isFold: r.isFold,
-        rankCategory: r.rankCategory
+        rankCategories
       })
       const prev = totals.get(r.userId)
       if (prev == null) {

@@ -3,6 +3,10 @@ import { Prisma, type RankCategory } from '@prisma/texas-client'
 
 import prisma from '../models'
 import { logger } from '../logger'
+import {
+  parseHonorPokes,
+  resolveHonorRankCategories
+} from '../styleStats/honorRankCategories'
 
 const ACHIEVEMENT_MAIL_EXPIRE_DAYS = 30
 const COMPENSATION_JOB_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -230,31 +234,54 @@ export async function ensureAchievementMailsByRank(
 }
 
 export async function runAchievementMailCompensationOnce(): Promise<void> {
+  // 含双跑：仅 rankCategory 大牌、或 runCount=2（第二跑大牌可能只在 seats）
   const rows = await prisma.playerMatchRecord.findMany({
     where: {
       isFold: false,
-      rankCategory: { in: ['x', 'y', 'z'] }
+      OR: [
+        { rankCategory: { in: ['x', 'y', 'z'] } },
+        { match: { runCount: 2 } }
+      ]
     },
     select: {
       userId: true,
-      rankCategory: true
+      rankCategory: true,
+      handPokes: true,
+      match: {
+        select: {
+          runCount: true,
+          commonPokes: true,
+          commonPokesRun2: true,
+          settlementRuns: true
+        }
+      }
     }
   })
   if (rows.length === 0) return
-  const byUser = new Map<number, Array<{ rankCategory: RankCategory }>>()
+  const byUser = new Map<number, Set<AchievementTierKey>>()
   for (const row of rows) {
-    const rank = row.rankCategory
-    if (!rank) continue
-    if (!byUser.has(row.userId)) byUser.set(row.userId, [])
-    byUser.get(row.userId)!.push({ rankCategory: rank })
-  }
-  let processed = 0
-  for (const [userId, rks] of byUser.entries()) {
-    const tiers = new Set<AchievementTierKey>()
-    for (const row of rks) {
-      const tier = RANK_TO_TIER[row.rankCategory]
+    const ranks = resolveHonorRankCategories({
+      isFold: false,
+      userId: row.userId,
+      fallbackRank: row.rankCategory,
+      handPokes: parseHonorPokes(row.handPokes),
+      runCount: row.match.runCount,
+      commonPokes: row.match.commonPokes,
+      commonPokesRun2: row.match.commonPokesRun2,
+      settlementRuns: row.match.settlementRuns
+    })
+    let tiers = byUser.get(row.userId)
+    if (tiers == null) {
+      tiers = new Set()
+      byUser.set(row.userId, tiers)
+    }
+    for (const rank of ranks) {
+      const tier = RANK_TO_TIER[rank]
       if (tier) tiers.add(tier)
     }
+  }
+  let processed = 0
+  for (const [userId, tiers] of byUser.entries()) {
     if (tiers.size === 0) continue
     await prisma.$transaction(async (tx) => {
       await upsertAchievementDefinitions(tx)

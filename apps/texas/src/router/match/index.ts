@@ -13,6 +13,7 @@ import { ROOM_TABLE_TYPES } from '../../constants/game'
 import { HTTP_STATUS } from '../../constants/httpStatus'
 import response, { withList } from '../../utils/response'
 import { timeFormat, apiPrefixClient } from '../../config'
+import { getPlayerHonors } from '../../styleStats/playerHonors'
 import { fetchMatchOverviewForRoom } from '../game/services/matchOverviewAggregation'
 import {
   user,
@@ -401,7 +402,7 @@ router.post(matchApi('/rooms'), async (ctx) => {
 
 /**
  * 战绩总览：当前用户总对局数、allIn 次数、弃牌次数；
- * 牌型成就（皇家同花顺 / 同花顺 / 四条）仅统计未弃牌手，与成就奖励一致。
+ * 牌型成就（皇家同花顺 / 同花顺 / 四条）读荣誉物化表（双跑两跑分别计入，与成就奖励一致）。
  */
 router.post(matchApi('/overview'), async (ctx) => {
   const viewerUserId = ctx.state.user!.id
@@ -422,16 +423,18 @@ router.post(matchApi('/overview'), async (ctx) => {
     return
   }
 
-  const records = await playerMatchRecord.findMany({
-    where: { userId: targetUserId },
-    select: {
-      isAllIn: true,
-      isFold: true,
-      rankCategory: true,
-      wager: true,
-      totalBetAmount: true
-    }
-  })
+  const [records, honors] = await Promise.all([
+    playerMatchRecord.findMany({
+      where: { userId: targetUserId },
+      select: {
+        isAllIn: true,
+        isFold: true,
+        wager: true,
+        totalBetAmount: true
+      }
+    }),
+    getPlayerHonors(targetUserId)
+  ])
 
   const totalMatches = records.length
 
@@ -439,9 +442,6 @@ router.post(matchApi('/overview'), async (ctx) => {
   /** All-In 局中 wager>0 的局数；胜率 = allInWinCount / allInCount */
   let allInWinCount = 0
   let foldCount = 0
-  let royalFlushCount = 0
-  let straightFlushCount = 0
-  let fourOfKindCount = 0
   let winMatchCount = 0
   let loseMatchCount = 0
   let tieMatchCount = 0
@@ -454,12 +454,6 @@ router.post(matchApi('/overview'), async (ctx) => {
 
   records.forEach((r) => {
     if (r.isFold) foldCount += 1
-
-    if (!r.isFold) {
-      if (r.rankCategory === 'z') royalFlushCount += 1
-      if (r.rankCategory === 'y') straightFlushCount += 1
-      if (r.rankCategory === 'x') fourOfKindCount += 1
-    }
 
     const wager = r.wager ?? 0
     if (r.isAllIn) {
@@ -482,9 +476,9 @@ router.post(matchApi('/overview'), async (ctx) => {
     allInCount,
     allInWinCount,
     foldCount,
-    royalFlushCount,
-    straightFlushCount,
-    fourOfKindCount,
+    royalFlushCount: honors.royalFlushCount,
+    straightFlushCount: honors.straightFlushCount,
+    fourOfKindCount: honors.fourOfKindCount,
     winMatchCount,
     loseMatchCount,
     tieMatchCount,

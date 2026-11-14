@@ -7,16 +7,17 @@ import { logger } from '../logger'
 import { applyHandHonorsDeltas } from './playerHonors'
 import { applyHandStyleDeltas } from './applyIncremental'
 import {
+  parseHonorPokes,
+  resolveHonorRankCategories
+} from './honorRankCategories'
+import {
   STYLE_SCOPE_ALL,
   STYLE_STATS_VERSION,
   type StyleHandInput,
   computeHandStyleDeltas
 } from './engine'
 
-const parsePokes = (raw: unknown): string[] => {
-  if (!Array.isArray(raw)) return []
-  return raw.filter((x): x is string => typeof x === 'string')
-}
+const parsePokes = parseHonorPokes
 
 /**
  * 一手结算后更新牌风物化表。失败只打日志，不抛给结算主路径。
@@ -36,6 +37,9 @@ export const applyStyleStatsForHand = async (matchId: number) => {
       id: true,
       lowestBetAmount: true,
       commonPokes: true,
+      commonPokesRun2: true,
+      runCount: true,
+      settlementRuns: true,
       boardThroughStage: true,
       room: { select: { tableType: true } },
       records: {
@@ -119,7 +123,16 @@ export const applyStyleStatsForHand = async (matchId: number) => {
       seats: matchRow.playerMatchRecords.map((p) => ({
         userId: p.userId,
         isFold: p.isFold,
-        rankCategory: p.rankCategory
+        rankCategories: resolveHonorRankCategories({
+          isFold: p.isFold,
+          userId: p.userId,
+          fallbackRank: p.rankCategory,
+          handPokes: parsePokes(p.handPokes),
+          runCount: matchRow.runCount,
+          commonPokes: matchRow.commonPokes,
+          commonPokesRun2: matchRow.commonPokesRun2,
+          settlementRuns: matchRow.settlementRuns
+        })
       }))
     })
   })
