@@ -20,7 +20,6 @@ import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 import { fetchMatchOverviewForRoom } from '../matchOverviewAggregation'
 import { handleFatalTexasEngineError } from './handleFatalTexasEngineError'
 import { ensureAchievementMailsByRank } from '../../../../services/mailReward'
-import { computeRunWagers, runAwardsFromPoolMaps } from './runoutSettleAwards'
 import { projectDisciplineForHandSafe } from '../../../../discipline/projectFromHand'
 import { scoreDisciplineForHandSafe } from '../../../../discipline/scoreProjectedHand'
 import { maybeStartNextHandCountdown } from '../../../../gameRuntime/nextHandCountdown'
@@ -45,6 +44,12 @@ import {
   setRunoutConsentFinalizer,
   startRunoutConsentSession
 } from './runoutConsentSession'
+import {
+  computeRunWagers,
+  runAwardsFromPoolMaps,
+  mapsFromStoredRunAwards,
+  normalizeStoredRunAwards
+} from './runoutSettleAwards'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -487,12 +492,22 @@ async function handleHandEnded(
 
     const totalBetAmount = texas.pool.totalAmount
     const runCount = (p.runCount ?? 1) as 1 | 2
-    const poolWithRunAwards = texas.pool as {
-      runAwards?: [Map<number, number>, Map<number, number>] | null
-    }
-    const poolRunAwards =
-      runCount === 2 ? poolWithRunAwards.runAwards ?? null : null
-    const storedRunAwards = runAwardsFromPoolMaps(poolRunAwards)
+    // 权威：PotAwarded.runAllocations（core≥1.4.41）；兼容旧包再回退 pool.runAwards
+    const potAwardedEv = settleEvents.find((e) => e.type === 'PotAwarded')
+    const runAllocationsFromEvent =
+      potAwardedEv?.type === 'PotAwarded'
+        ? (
+            potAwardedEv.payload as {
+              runAllocations?: Array<Array<{ userId: number; amount: number }>>
+            }
+          ).runAllocations
+        : undefined
+    const storedRunAwards =
+      runCount === 2
+        ? normalizeStoredRunAwards(runAllocationsFromEvent) ??
+          runAwardsFromPoolMaps(texas.pool.runAwards ?? null)
+        : null
+    const poolRunAwards = mapsFromStoredRunAwards(storedRunAwards)
 
     const buildSettleListForViewer = (viewerUserId: number) =>
       sortedSeated.map((pl) => {

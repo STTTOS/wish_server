@@ -1,6 +1,9 @@
 /**
  * 二次跑马：把每跑分到的毛筹码，按「该跑半池占底池比例」摊还本人投入，得到每跑净输赢。
  * 与整手 `Player.earn` 后的净 `wager` 之和一致（未计 27o 等局外加减）。
+ *
+ * 毛额权威：`PotAwarded.runAllocations` → 落库 `Match.settlementRuns[].awards`。
+ * 勿用 `winnerUserIds` 均分半池（边池下牌力最大 ≠ 实际分到筹码）。
  */
 export function computeRunWagers(args: {
   userId: number
@@ -20,9 +23,19 @@ export function computeRunWagers(args: {
   return [award1 - share1, award2 - share2]
 }
 
+export type StoredRunAwards = Array<Array<{ userId: number; amount: number }>>
+
+/** 从 `PotAwarded.runAllocations` 或 Pool 映射得到可落库数组 */
+export function normalizeStoredRunAwards(
+  runAllocations: StoredRunAwards | null | undefined
+): StoredRunAwards | null {
+  if (!Array.isArray(runAllocations) || runAllocations.length < 2) return null
+  return runAllocations
+}
+
 export function runAwardsFromPoolMaps(
   runAwards: [ReadonlyMap<number, number>, ReadonlyMap<number, number>] | null
-): Array<Array<{ userId: number; amount: number }>> | null {
+): StoredRunAwards | null {
   if (runAwards == null) return null
   return runAwards.map((m) =>
     Array.from(m.entries()).map(([userId, amount]) => ({ userId, amount }))

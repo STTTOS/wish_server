@@ -630,13 +630,13 @@ model Match {
   totalBetAmount    Float?
   // 本手公共牌实际发到哪一街（与引擎 onGameEnd.endStage 一致；可能与 lastActionStage 不同，如 turn 全下后发到 river）
   boardThroughStage Stage?
-  // 公共牌（第一跑 / 唯一跑）
+  // 公共牌（第一跑 / 唯一跑）；与 settlementRuns[0].boardPokes 对齐（冗余索引）
   commonPokes       Json?
-  /// 二次跑马第二跑完整公牌；单次跑马为 null
+  /// 第二跑公牌冗余索引（= settlementRuns[1].boardPokes）；列表/旧客户端用；详情以 settlementRuns 为准
   commonPokesRun2   Json?
   /// 跑马次数：1=单次（默认），2=协商二次
   runCount          Int           @default(1)
-  /// 每跑结算快照（board / best*）；单次可空
+  /// 二次跑马每跑 SSOT：board / best* / winnerUserIds（牌力最大）/ awards（每跑毛额，与 PotAwarded.runAllocations 一致）。awards≠winnerUserIds（边池）
   settlementRuns    Json?
   // 存储计算后的最大牌力
   bestRankCategory  RankCategory?
