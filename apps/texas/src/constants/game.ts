@@ -35,3 +35,6 @@ export const GAME_WS_ACTION_REQUIRED_DELAY_MS = 1200
  * `game-stage-changed` 在事件处理中立即推送，此值不推迟该 WS。
  */
 export const GAME_WS_STAGE_CHANGED_DELAY_MS = 2200
+
+/** 跑马二次协商：all-in 玩家投票窗口；超时默认否。 */
+export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 6000

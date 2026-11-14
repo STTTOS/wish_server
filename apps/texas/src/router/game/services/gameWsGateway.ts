@@ -78,6 +78,20 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'runout-hands-revealed', data })
   }
 
+  notifyRunoutConsentOffer(
+    roomKey: string,
+    data: WsMessage<'runout-consent-offer'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'runout-consent-offer', data })
+  }
+
+  notifyRunoutConsentResolved(
+    roomKey: string,
+    data: WsMessage<'runout-consent-resolved'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'runout-consent-resolved', data })
+  }
+
   notifyGameStart(roomKey: string, data: WsMessage<'game-start'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }

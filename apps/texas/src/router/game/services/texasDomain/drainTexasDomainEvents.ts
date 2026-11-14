@@ -13,6 +13,7 @@ import {
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
 import { withRoomEventDrainLock } from './roomEventDrainLock'
+import { getTexasEventContextForRoom } from './texasEventContext'
 import { appendMatchDomainEventTape } from './matchDomainEventTape'
 import { CUSTOM_27O_REWARD_TIERS } from '../../../../constants/game'
 import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
@@ -38,6 +39,11 @@ import prisma, {
   room as roomModel,
   matchStageTimeRecord
 } from '../../../../models'
+import {
+  clearRunoutConsentSession,
+  setRunoutConsentFinalizer,
+  startRunoutConsentSession
+} from './runoutConsentSession'
 
 function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
@@ -278,7 +284,7 @@ async function appendMatchDomainEventTapeFromCtx(
   }
 }
 
-async function interpretTexasDomainEvents(
+export async function interpretTexasDomainEvents(
   ctx: TexasEventContext,
   events: readonly TexasDomainEvent[]
 ): Promise<void> {
@@ -465,10 +471,22 @@ async function handleHandEnded(
       })
 
     const totalBetAmount = texas.pool.totalAmount
+    const runCount = (p.runCount ?? 1) as 1 | 2
+    const run2Board =
+      runCount === 2 && p.runs?.[1]?.boardPokes ? p.runs[1].boardPokes : null
     await match.update({
       where: { id: currentMatchId },
       data: {
         commonPokes: p.pokesRevealed,
+        commonPokesRun2:
+          run2Board == null
+            ? Prisma.JsonNull
+            : (run2Board as Prisma.InputJsonValue),
+        runCount,
+        settlementRuns:
+          p.runs == null
+            ? Prisma.JsonNull
+            : (p.runs as unknown as Prisma.InputJsonValue),
         bestRankCategory: p.bestRankCategory,
         bestRankSignature: bestRankSignatureFromHandEnded(p),
         endedAt: gameEndAt,
@@ -550,6 +568,7 @@ async function handleHandEnded(
       await sleep(gameRuntimeConfig.getGameWsStageChangedDelayMs())
     }
 
+    clearRunoutConsentSession(roomKey)
     wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
       matchId: currentMatchId,
       settleList: buildSettleListForViewer(viewerUserId),
@@ -561,7 +580,20 @@ async function handleHandEnded(
         (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
       ),
       bestPokes: p.bestPokes ?? [],
-      totalBetAmount
+      totalBetAmount,
+      runCount,
+      ...(p.runs
+        ? {
+            runs: p.runs.map((r) => ({
+              runIndex: r.runIndex,
+              boardPokes: r.boardPokes,
+              bestPokes: r.bestPokes,
+              bestRankCategory: r.bestRankCategory,
+              bestRankSignature: r.bestRankSignature,
+              bestRankStrength: r.bestRankStrength
+            }))
+          }
+        : {})
     }))
     if (sevenTwoAutoShownUserIds.size > 0) {
       for (const userId of sevenTwoAutoShownUserIds) {
@@ -853,12 +885,25 @@ async function processTexasDomainEvent(
       })
       return
     }
+    case 'RunoutConsentRequired': {
+      const matchId = getRuntime().currentMatchId
+      if (matchId == null) return
+      startRunoutConsentSession({
+        roomKey,
+        roomId,
+        matchId,
+        allInUserIds: e.payload.allInUserIds,
+        notifyOffer: (data) => wsGateway.notifyRunoutConsentOffer(roomKey, data)
+      })
+      return
+    }
     case 'RunoutHandsRevealed': {
       const matchId = getRuntime().currentMatchId
       if (matchId == null) return
       const payload = {
         matchId,
-        revealedHands: e.payload.revealedHands
+        revealedHands: e.payload.revealedHands,
+        runCount: e.payload.runCount ?? 1
       }
       gameRuntimeRegistry.setRunoutHandsRevealed(roomKey, payload)
       wsGateway.notifyRunoutHandsRevealed(roomKey, payload)
@@ -869,16 +914,19 @@ async function processTexasDomainEvent(
       if (matchId == null) return
       // `update` 按 matchId_stage 在记录不存在时会抛 Prisma P2025（Record not found）。
       // 跑马路多段亮牌时，后续 fromStage 可能从未 insert（未为纯亮牌街建表），故用 updateMany：无行则 0 更新、不抛错。
-      await matchStageTimeRecord.updateMany({
-        where: {
-          matchId,
-          stage: e.payload.fromStage,
-          endAt: null
-        },
-        data: { endAt: new Date() }
-      })
+      // boardReset（第二跑起点）不写街时间。
+      if (!e.payload.boardReset) {
+        await matchStageTimeRecord.updateMany({
+          where: {
+            matchId,
+            stage: e.payload.fromStage,
+            endAt: null
+          },
+          data: { endAt: new Date() }
+        })
+      }
       // 跑马路仅亮公牌：关闭 fromStage 即可，不为 toStage 建新行
-      if (e.payload.advanceKind !== 'runout_reveal') {
+      if (e.payload.advanceKind !== 'runout_reveal' && !e.payload.boardReset) {
         await matchStageTimeRecord.create({
           data: { matchId, stage: e.payload.toStage }
         })
@@ -887,7 +935,9 @@ async function processTexasDomainEvent(
         matchId,
         stage: e.payload.toStage,
         advanceKind: e.payload.advanceKind,
-        pokesToReveal: e.payload.pokesRevealedThisStep
+        pokesToReveal: e.payload.pokesRevealedThisStep,
+        ...(e.payload.runIndex != null ? { runIndex: e.payload.runIndex } : {}),
+        ...(e.payload.boardReset ? { boardReset: true } : {})
       })
       return
     }
@@ -956,7 +1006,7 @@ async function processTexasDomainEvent(
   }
 }
 
-async function drainBufferedDomainEvents(
+export async function drainBufferedDomainEvents(
   ctx: TexasEventContext
 ): Promise<void> {
   for (;;) {
@@ -968,11 +1018,28 @@ async function drainBufferedDomainEvents(
   }
 }
 
+setRunoutConsentFinalizer(async ({ roomKey, runCount, matchId, votes }) => {
+  const ctx = getTexasEventContextForRoom(roomKey)
+  ctx.wsGateway.notifyRunoutConsentResolved(roomKey, {
+    matchId,
+    runCount,
+    votes
+  })
+  const texas = gameRuntimeRegistry.getTexas(roomKey)
+  if (!texas) return
+  await withRoomEventDrainLock(roomKey, async () => {
+    const events = texas.resolveRunoutConsent(runCount)
+    await interpretTexasDomainEvents(ctx, events)
+    await drainBufferedDomainEvents(ctx)
+    await drainPendingFlowQueueWithPacing(ctx)
+  })
+})
+
 /**
  * Core 固定使用 `pendingFlowOps`：行动结束后先等 `actionRequired` 间隔，再按队列消费进街/交权；
  * 连续进街之间再等 `stageChanged` 间隔。
  */
-async function drainPendingFlowQueueWithPacing(
+export async function drainPendingFlowQueueWithPacing(
   ctx: TexasEventContext
 ): Promise<void> {
   const texas = ctx.texas

@@ -17,6 +17,7 @@ import { SubmitTopUpPlanUseCase } from './services/topUpPlanUseCase'
 import { respondFromApiResult } from '../../utils/respondFromApiResult'
 import { BUILT_IN_VOICE_USER_COOLDOWN_MS } from './builtInVoiceConstants'
 import { ShowMyHandPokesUseCase } from './services/showMyHandPokesUseCase'
+import { RunoutConsentReplyUseCase } from './services/runoutConsentReplyUseCase'
 import { isAllowedBuiltInVoiceName } from '../../constants/clientAssetIdValidation'
 import { NextHandTopUpRequestUseCase } from './services/nextHandTopUpRequestUseCase'
 import { buildFetchCurrentGameStatePayload } from './services/currentGameStateSnapshot'
@@ -54,6 +55,7 @@ const gameWsGateway = new GameWsGateway()
 const quitGameUseCase = new QuitGameUseCase(gameWsGateway)
 const joinGameUseCase = new JoinGameUseCase()
 const showMyHandPokesUseCase = new ShowMyHandPokesUseCase(gameWsGateway)
+const runoutConsentReplyUseCase = new RunoutConsentReplyUseCase()
 
 // 客户端：获取游戏基础配置, 使用get方法, 客户端缓存
 router.get(gameClientApi('/config'), async (ctx) => {
@@ -289,6 +291,45 @@ router.post(gameClientApi('/showMyHandPokes'), async (ctx) => {
     matchId
   })
   respondFromApiResult(ctx, result, { okMessage: '成功' })
+})
+
+/**
+ * 跑马二次协商投票（仅 all-in 玩家；超时默认否）。
+ * body: { roomId, matchId, agree: boolean }
+ */
+router.post(gameClientApi('/runoutConsentReply'), async (ctx) => {
+  const body = ctx.request.body as {
+    roomId?: unknown
+    matchId?: unknown
+    agree?: unknown
+  }
+  const roomId = Number(body?.roomId)
+  const matchId = Number(body?.matchId)
+  const userId = ctx.state.user!.id
+  const agree = body?.agree
+
+  if (
+    !roomId ||
+    !Number.isInteger(roomId) ||
+    !matchId ||
+    !Number.isInteger(matchId) ||
+    typeof agree !== 'boolean'
+  ) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      '参数异常：需要 roomId、matchId、agree'
+    )
+    return
+  }
+
+  const result = await runoutConsentReplyUseCase.execute({
+    userId,
+    roomId,
+    matchId,
+    agree
+  })
+  respondFromApiResult(ctx, result, { okMessage: '已提交' })
 })
 
 router.post(gameClientApi('/takeAction'), async (ctx) => {

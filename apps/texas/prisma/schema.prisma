@@ -630,8 +630,14 @@ model Match {
   totalBetAmount    Float?
   // 本手公共牌实际发到哪一街（与引擎 onGameEnd.endStage 一致；可能与 lastActionStage 不同，如 turn 全下后发到 river）
   boardThroughStage Stage?
-  // 公共牌
+  // 公共牌（第一跑 / 唯一跑）
   commonPokes       Json?
+  /// 二次跑马第二跑完整公牌；单次跑马为 null
+  commonPokesRun2   Json?
+  /// 跑马次数：1=单次（默认），2=协商二次
+  runCount          Int           @default(1)
+  /// 每跑结算快照（board / best*）；单次可空
+  settlementRuns    Json?
   // 存储计算后的最大牌力
   bestRankCategory  RankCategory?
   /// 与 bestPokes[0] 对应的 texas-poker-core 牌力签名（如 `q14+13+12+11+9`）

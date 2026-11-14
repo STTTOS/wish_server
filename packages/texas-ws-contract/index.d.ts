@@ -65,6 +65,28 @@ export type WsGameStageChangedData = {
   /** 进街原因：正常下注轮结束 / 跑马路亮牌。 */
   advanceKind: 'betting_round_complete' | 'runout_reveal'
   pokesToReveal: Poke[]
+  /** 二次跑马第几跑；缺省视为 1 */
+  runIndex?: 1 | 2
+  /**
+   * 第二跑开始：客户端应将本跑将揭示的公牌位先置 hidden。
+   * 此时 `pokesToReveal` 通常为空，`stage` 回到协商时的阶段。
+   */
+  boardReset?: boolean
+}
+
+/** 跑马协商：询问 all-in 玩家是否同意两次跑马。 */
+export type WsRunoutConsentOfferData = {
+  matchId: number
+  allInUserIds: number[]
+  deadlineAt: number
+  timeoutMs: number
+  serverNow: number
+}
+
+export type WsRunoutConsentResolvedData = {
+  matchId: number
+  runCount: 1 | 2
+  votes: Array<{ userId: number; agree: boolean }>
 }
 
 /** 进入跑马路时对仍在摊牌中的玩家同步亮底牌（每手至多一次；不受进街 pacing 影响）。 */
@@ -74,6 +96,7 @@ export type WsRunoutHandsRevealedData = {
     userId: number
     handPokes: Poke[]
   }>
+  runCount?: 1 | 2
 }
 
 export type WsMatchOverviewWagerItem = {
@@ -129,6 +152,15 @@ export type WsGameEndSettleItem = {
   rankSignature?: RankSignature
 }
 
+export type WsGameEndRunItem = {
+  runIndex: 1 | 2
+  boardPokes: Poke[]
+  bestPokes?: Array<Poke[]>
+  bestRankCategory?: RankCategory
+  bestRankSignature?: RankSignature
+  bestRankStrength?: number
+}
+
 export type WsGameEndData = {
   matchId: number
   settleList: WsGameEndSettleItem[]
@@ -140,6 +172,9 @@ export type WsGameEndData = {
   gameDuration: number
   bestPokes: Array<Poke[]>
   totalBetAmount: number
+  /** 跑马次数；缺省视为 1 */
+  runCount?: 1 | 2
+  runs?: WsGameEndRunItem[]
 }
 
 export type WsGameEnteringData = {
@@ -310,6 +345,8 @@ export type WsEventDataMap = {
   'player-action-required': WsPlayerActionRequiredData
   'player-action-taken': WsPlayerActionTakenData
   'game-stage-changed': WsGameStageChangedData
+  'runout-consent-offer': WsRunoutConsentOfferData
+  'runout-consent-resolved': WsRunoutConsentResolvedData
   'runout-hands-revealed': WsRunoutHandsRevealedData
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData
@@ -449,6 +486,12 @@ export type PostGameTakeActionParams = {
 export type PostGameShowMyHandPokesParams = {
   roomId: number
   matchId: number
+}
+
+export type PostGameRunoutConsentReplyParams = {
+  roomId: number
+  matchId: number
+  agree: boolean
 }
 
 export type PostGameSendBuiltInVoiceParams = {

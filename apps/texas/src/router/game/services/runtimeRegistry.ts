@@ -4,6 +4,7 @@ import type { WsRunoutHandsRevealedData } from '@wishufree/texas-ws-contract'
 
 import { logger } from '../../../logger'
 import { clearRoomEventDrainLock } from './texasDomain/roomEventDrainLock'
+import { clearRunoutConsentSession } from './texasDomain/runoutConsentSession'
 import { clearGameRoomWsReplay } from '../../../SockeServer/gameRoomWsReplayBuffer'
 
 type RuntimeDestroyListener = (roomKey: string, roomId: number) => void
@@ -317,6 +318,7 @@ export class GameRuntimeRegistry {
     }
 
     clearRoomEventDrainLock(roomKey)
+    clearRunoutConsentSession(roomKey)
     this.#runtimes.delete(roomKey)
     clearGameRoomWsReplay(roomKey)
 

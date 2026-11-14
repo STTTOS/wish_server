@@ -13,6 +13,8 @@ import prisma from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { buildLastGameEndForViewer } from './lastGameEndSnapshot'
+import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../constants/game'
+import { getRunoutConsentSession } from './texasDomain/runoutConsentSession'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
@@ -77,6 +79,14 @@ export type FetchCurrentGameStatePayload = {
   lastGameEnd: WsGameEndData | null
   /** 本手跑马路已亮底牌（不含请求用户本人）；`in_hand` 且已触发 runout 时有值 */
   runoutHandsRevealed: WsRunoutHandsRevealedData | null
+  /** 进行中的二次跑马协商；超时后服务端会默认否并清掉 */
+  runoutConsentOffer: {
+    matchId: number
+    allInUserIds: number[]
+    deadlineAt: number
+    timeoutMs: number
+    serverNow: number
+  } | null
 }
 
 async function loadUserProfilesByIds(userIds: number[]): Promise<
@@ -295,6 +305,8 @@ export async function buildFetchCurrentGameStatePayload(input: {
 
   let lastGameEnd: WsGameEndData | null = null
   let runoutHandsRevealed: WsRunoutHandsRevealedData | null = null
+  let runoutConsentOffer: FetchCurrentGameStatePayload['runoutConsentOffer'] =
+    null
 
   if (currentMatchId != null) {
     if (handLifecycle === 'in_hand') {
@@ -304,7 +316,23 @@ export async function buildFetchCurrentGameStatePayload(input: {
           matchId: cached.matchId,
           revealedHands: (cached.revealedHands ?? []).filter(
             (row) => row.userId !== userId
-          )
+          ),
+          runCount: cached.runCount
+        }
+      }
+      const consent = getRunoutConsentSession(roomKey)
+      if (
+        consent &&
+        !consent.resolved &&
+        consent.matchId === currentMatchId &&
+        consent.deadlineAt > Date.now()
+      ) {
+        runoutConsentOffer = {
+          matchId: consent.matchId,
+          allInUserIds: [...consent.allInUserIds],
+          deadlineAt: consent.deadlineAt,
+          timeoutMs: GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
+          serverNow: Date.now()
         }
       }
     } else if (
@@ -343,6 +371,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
       autoTopUpEnabled: gameRuntimeRegistry.isAutoTopUpEnabled(roomKey, userId)
     },
     lastGameEnd,
-    runoutHandsRevealed
+    runoutHandsRevealed,
+    runoutConsentOffer
   }
 }
