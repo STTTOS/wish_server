@@ -22,14 +22,13 @@ import {
   playerMatchRecord
 } from '../../models'
 import {
+  computeRunWagers,
+  mapsFromStoredRunAwards
+} from '../game/services/texasDomain/runoutSettleAwards'
+import {
   loadMatchReplayTapeForViewer,
   loadMatchCompositeReadModelFromDbTape
 } from '../game/services/matchReplayReadModel'
-import {
-  computeRunWagers,
-  mapsFromWinnerUserIds,
-  mapsFromStoredRunAwards
-} from '../game/services/texasDomain/runoutSettleAwards'
 import {
   settleRecordVisibleFields,
   sortSettleRecordsByOutcome,
@@ -638,15 +637,10 @@ router.post(matchApi('/detail'), async (ctx) => {
         winnerUserIds?: number[]
       }>)
     : null
+  // 仅信任落库 awards；勿用 winnerUserIds 均分半池（边池会算错钱）
   const runAwardMaps =
     restMatchInfo.runCount === 2
-      ? mapsFromStoredRunAwards(
-          settlementRuns?.map((r) => r?.awards) ?? null
-        ) ??
-        mapsFromWinnerUserIds({
-          potTotal,
-          runs: settlementRuns ?? []
-        })
+      ? mapsFromStoredRunAwards(settlementRuns?.map((r) => r?.awards) ?? null)
       : null
   const settleRecords =
     runAwardMaps == null

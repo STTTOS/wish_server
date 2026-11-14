@@ -70,32 +70,3 @@ export function mapsFromStoredRunAwards(
   if (run1.size === 0 && run2.size === 0) return null
   return [run1, run2]
 }
-
-/**
- * 无 awards 落库时：用每跑 winnerUserIds + 半池均分还原毛额（兼容旧 settlementRuns）。
- */
-export function mapsFromWinnerUserIds(args: {
-  potTotal: number
-  runs: ReadonlyArray<{ winnerUserIds?: number[] | null } | null | undefined>
-}): [Map<number, number>, Map<number, number>] | null {
-  if (!(args.potTotal > 0) || args.runs.length < 2) return null
-  const half1 = Math.ceil(args.potTotal / 2)
-  const half2 = args.potTotal - half1
-  const build = (winners: number[] | null | undefined, half: number) => {
-    const m = new Map<number, number>()
-    const ids = (winners ?? []).filter((id) => Number.isFinite(id))
-    if (ids.length === 0 || !(half > 0)) return m
-    const base = Math.floor(half / ids.length)
-    let rem = half - base * ids.length
-    for (const id of ids) {
-      const extra = rem > 0 ? 1 : 0
-      if (rem > 0) rem -= 1
-      m.set(id, base + extra)
-    }
-    return m
-  }
-  const run1 = build(args.runs[0]?.winnerUserIds, half1)
-  const run2 = build(args.runs[1]?.winnerUserIds, half2)
-  if (run1.size === 0 && run2.size === 0) return null
-  return [run1, run2]
-}
