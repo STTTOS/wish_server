@@ -662,17 +662,26 @@ async function handleHandEnded(
     }
 
     clearRunoutConsentSession(roomKey)
+    // 二次跑马：顶层 best* 只对应其中一跑，易误导；牌力看 runs[]，席位看 wager
+    const dualRunout = runCount === 2
+    const singleRunBestSignature = dualRunout
+      ? null
+      : bestRankSignatureFromHandEnded(p)
     wsGateway.notifyGameEndPerViewer(roomKey, (viewerUserId) => ({
       matchId: currentMatchId,
       settleList: buildSettleListForViewer(viewerUserId),
       matchOverview,
       boardThroughStage: p.endStage,
-      bestRankCategory: p.bestRankCategory,
-      bestRankSignature: bestRankSignatureFromHandEnded(p) ?? undefined,
+      ...(!dualRunout && p.bestRankCategory != null
+        ? { bestRankCategory: p.bestRankCategory }
+        : {}),
+      ...(singleRunBestSignature != null
+        ? { bestRankSignature: singleRunBestSignature }
+        : {}),
       gameDuration: Math.floor(
         (gameEndAt.getTime() - getRuntime().matchStartedAt) / 1000
       ),
-      bestPokes: p.bestPokes ?? [],
+      bestPokes: dualRunout ? [] : p.bestPokes ?? [],
       totalBetAmount,
       runCount,
       ...(p.runs
@@ -683,7 +692,10 @@ async function handleHandEnded(
               bestPokes: r.bestPokes,
               bestRankCategory: r.bestRankCategory,
               bestRankSignature: r.bestRankSignature,
-              bestRankStrength: r.bestRankStrength
+              bestRankStrength: r.bestRankStrength,
+              ...(r.winnerUserIds != null
+                ? { winnerUserIds: r.winnerUserIds }
+                : {})
             }))
           }
         : {})

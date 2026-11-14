@@ -157,7 +157,10 @@ export type WsPlayerProfileItem = {
   pokerBackgroundKey: string
 }
 
-/** 二次跑马时每跑净输赢；与整手 wager 之和一致（不含 27o） */
+/**
+ * 二次跑马时每跑净输赢；与整手 `wager` 之和一致（不含 27o）。
+ * 局间结算 UI 以 `wager` 为主；本字段可选，客户端默认可不展示。
+ */
 export type WsGameEndRunWagers = [number, number]
 
 export type WsGameEndSettleItem = {
@@ -167,8 +170,9 @@ export type WsGameEndSettleItem = {
   avatarKey: string
   pokerBackgroundKey: string | null
   balance: number
+  /** 整手净输赢（含 27o）；二次跑马结算席位应优先展示本字段 */
   wager: number
-  /** 二次跑马：每跑净输赢；缺省表示非二次 */
+  /** 二次跑马：每跑净输赢；缺省表示非二次。结算默认可不渲染 */
   runWagers?: WsGameEndRunWagers
   sevenTwoBonusPaid: number
   sevenTwoBonusReceived: number
@@ -182,6 +186,7 @@ export type WsGameEndSettleItem = {
   rankSignature?: RankSignature
 }
 
+/** 二次跑马每跑展示快照；牌力 SSOT。边池下 `winnerUserIds` ≠ 实际分筹金额。 */
 export type WsGameEndRunItem = {
   runIndex: 1 | 2
   boardPokes: Poke[]
@@ -192,19 +197,38 @@ export type WsGameEndRunItem = {
   winnerUserIds?: number[]
 }
 
+/**
+ * `game-end` / 局间 `lastGameEnd`。
+ *
+ * **二次跑马（`runCount === 2`）消费约定：**
+ * - **勿**把顶层 `bestRankSignature` / `bestRankCategory` / `bestPokes` 当「整手最大牌」
+ *   （服务端可省略；仅对应其中一跑，易误导）。
+ * - 每跑牌型 / 公牌 / 牌力收池人：看 `runs[]`（中途另有 `runout-run-result`）。
+ * - 结算席位：展示 `settleList[].wager`；皇冠/高亮用净赢（如 `wager > 0`），勿用顶层签名。
+ */
 export type WsGameEndData = {
   matchId: number
   settleList: WsGameEndSettleItem[]
   matchOverview: WsMatchOverview
   boardThroughStage: StageEnum
+  /**
+   * 单次跑马：桌上最大牌型。二次跑马时服务端应省略（见 `runs[]`）。
+   */
   bestRankCategory?: RankCategory
-  /** 与 `bestPokes[0]` 对应的牌力签名；摊牌时下发，独赢弃牌可无此字段。 */
+  /**
+   * 单次跑马：与 `bestPokes[0]` 对应的牌力签名；独赢弃牌可无。
+   * 二次跑马时服务端应省略，客户端勿当整手最大牌。
+   */
   bestRankSignature?: RankSignature
   gameDuration: number
+  /**
+   * 单次跑马：桌上最大五张组合。二次跑马时应为空数组，见 `runs[].bestPokes`。
+   */
   bestPokes: Array<Poke[]>
   totalBetAmount: number
   /** 跑马次数；缺省视为 1 */
   runCount?: 1 | 2
+  /** 二次跑马每跑快照；`runCount === 2` 时为牌力展示权威 */
   runs?: WsGameEndRunItem[]
 }
 

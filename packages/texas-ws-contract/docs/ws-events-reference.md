@@ -202,6 +202,12 @@ type WsMessage<T extends WsEventType = WsEventType> = {
 
 用途：本手结束结算。
 
+**二次跑马（`runCount === 2`）客户端约定：**
+
+- 顶层 `bestRankSignature` / `bestRankCategory` / `bestPokes` **不是**整手最大牌（服务端可省略；`bestPokes` 为空数组）。每跑牌力看 `runs[]`（中途另有 `runout-run-result`）。
+- 结算席位优先展示 `settleList[].wager`；皇冠/高亮用净赢（如 `wager > 0`），勿用顶层签名。
+- `runWagers` 可选，局间默认可不渲染。
+
 ```ts
 {
   matchId: number
@@ -209,6 +215,8 @@ type WsMessage<T extends WsEventType = WsEventType> = {
     userId: number
     balance: number
     wager: number
+    /** 二次跑马每跑净输赢；可选 */
+    runWagers?: [number, number]
     isAllIn: boolean
     isFold: boolean
     handPokes: Poke[]
@@ -217,15 +225,24 @@ type WsMessage<T extends WsEventType = WsEventType> = {
     rankCategory?: RankCategory
     rankSignature?: string
   }>
-  pokesToReveal: Poke[]
-  lastActionStage: StageEnum   // 最后一轮可操作下注结束时的阶段（引擎 currentStage）
   boardThroughStage: StageEnum // 公共牌发到哪一街（引擎 endStage）
-  bestRankCategory: RankCategory
-  /** 与 `bestPokes[0]` 一致（texas-poker-core `RankSignature`）；独赢弃牌等可无 */
+  /** 单次跑马桌上最大；二次跑马应省略 */
+  bestRankCategory?: RankCategory
+  /** 单次跑马签名；二次跑马应省略 */
   bestRankSignature?: string
   gameDuration: number   // 秒
+  /** 单次跑马最大五张；二次跑马为空数组，见 runs[] */
   bestPokes: Array<Poke[]>
   totalBetAmount: number
+  runCount?: 1 | 2
+  runs?: Array<{
+    runIndex: 1 | 2
+    boardPokes: Poke[]
+    bestPokes?: Array<Poke[]>
+    bestRankCategory?: RankCategory
+    bestRankSignature?: string
+    winnerUserIds?: number[]
+  }>
 }
 ```
 
