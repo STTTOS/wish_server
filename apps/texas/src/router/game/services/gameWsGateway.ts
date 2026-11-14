@@ -92,6 +92,13 @@ export class GameWsGateway {
     ws.broadcastGameRoom(roomKey, { type: 'runout-consent-resolved', data })
   }
 
+  notifyRunoutRunResult(
+    roomKey: string,
+    data: WsMessage<'runout-run-result'>['data']
+  ) {
+    ws.broadcastGameRoom(roomKey, { type: 'runout-run-result', data })
+  }
+
   notifyGameStart(roomKey: string, data: WsMessage<'game-start'>['data']) {
     ws.broadcastGameRoom(roomKey, { type: 'game-start', data })
   }

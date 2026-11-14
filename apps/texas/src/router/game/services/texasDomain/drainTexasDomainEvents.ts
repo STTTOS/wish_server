@@ -49,6 +49,54 @@ function sleep(ms: number): Promise<void> {
   return ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms))
 }
 
+/** 按指定跑公牌比牌，取仍在摊牌中的赢家（平分时多人）。 */
+async function notifyRunoutBoardWinners(
+  ctx: TexasEventContext,
+  matchId: number,
+  runIndex: 1 | 2
+): Promise<void> {
+  const { texas, roomKey, wsGateway } = ctx
+  try {
+    const board = texas.controller.getBoardForRun(runIndex)
+    texas.controller.applyShowdownRanksForBoard(board)
+    const stillIn = texas.dealer.getPlayersStillInGame()
+    if (stillIn.length === 0) return
+    const maxStrength = Math.max(...stillIn.map((p) => p.rankStrength))
+    const winners = stillIn.filter((p) => p.rankStrength === maxStrength)
+    const userIds = winners.map((p) => p.getUserInfo().id)
+    const rows = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+        avatarKey: true
+      }
+    })
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    wsGateway.notifyRunoutRunResult(roomKey, {
+      matchId,
+      runIndex,
+      winners: winners.map((p) => {
+        const id = p.getUserInfo().id
+        const row = byId.get(id)
+        const info = p.getUserInfo()
+        return {
+          userId: id,
+          name: row?.name ?? info.name ?? `玩家${id}`,
+          avatarUrl: row?.avatarUrl ?? null,
+          avatarKey: row?.avatarKey ?? 'cartoon/default'
+        }
+      })
+    })
+  } catch (err) {
+    logger.error(
+      `[runout] notifyRunoutBoardWinners failed matchId=${matchId} run=${runIndex}`,
+      err
+    )
+  }
+}
+
 /** 较新 core 的 `HandEnded` 含 `bestRankSignature`；兼容依赖包类型尚未升级的情况。 */
 function bestRankSignatureFromHandEnded(
   payload: Extract<TexasDomainEvent, { type: 'HandEnded' }>['payload']
@@ -931,6 +979,13 @@ async function processTexasDomainEvent(
           data: { matchId, stage: e.payload.toStage }
         })
       }
+
+      // 第一跑河牌已在上一事件下发；boardReset 前：推收池名单 + 两跑间隔，再重置公牌
+      if (e.payload.boardReset) {
+        await notifyRunoutBoardWinners(ctx, matchId, 1)
+        await sleep(gameRuntimeConfig.getRunoutInterRunDelayMs())
+      }
+
       wsGateway.notifyStageChanged(roomKey, {
         matchId,
         stage: e.payload.toStage,
@@ -939,6 +994,16 @@ async function processTexasDomainEvent(
         ...(e.payload.runIndex != null ? { runIndex: e.payload.runIndex } : {}),
         ...(e.payload.boardReset ? { boardReset: true } : {})
       })
+
+      // 第二跑河牌亮完：推本跑收池名单（随后 HandEnded）
+      if (
+        e.payload.advanceKind === 'runout_reveal' &&
+        !e.payload.boardReset &&
+        e.payload.runIndex === 2 &&
+        e.payload.toStage === 'river'
+      ) {
+        await notifyRunoutBoardWinners(ctx, matchId, 2)
+      }
       return
     }
     case 'TurnOffered': {

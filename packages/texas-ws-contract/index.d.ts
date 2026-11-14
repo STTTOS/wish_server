@@ -89,6 +89,18 @@ export type WsRunoutConsentResolvedData = {
   votes: Array<{ userId: number; agree: boolean }>
 }
 
+/** 二次跑马：某一跑结束时的收池赢家（按该跑公牌比牌；平分时多人）。 */
+export type WsRunoutRunResultData = {
+  matchId: number
+  runIndex: 1 | 2
+  winners: Array<{
+    userId: number
+    name: string
+    avatarUrl: string | null
+    avatarKey: string
+  }>
+}
+
 /** 进入跑马路时对仍在摊牌中的玩家同步亮底牌（每手至多一次；不受进街 pacing 影响）。 */
 export type WsRunoutHandsRevealedData = {
   matchId: number
@@ -347,6 +359,7 @@ export type WsEventDataMap = {
   'game-stage-changed': WsGameStageChangedData
   'runout-consent-offer': WsRunoutConsentOfferData
   'runout-consent-resolved': WsRunoutConsentResolvedData
+  'runout-run-result': WsRunoutRunResultData
   'runout-hands-revealed': WsRunoutHandsRevealedData
   'game-end': WsGameEndData
   'player-chip-top-up': WsPlayerChipTopUpData

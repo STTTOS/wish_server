@@ -57,7 +57,7 @@ type StartArgs = {
 }
 
 /**
- * 启动跑马协商：推 offer，6s 超时默认否；全员同意才 runCount=2。
+ * 启动跑马协商：推 offer，超时默认否；全员同意才 runCount=2。
  */
 export function startRunoutConsentSession(args: StartArgs): void {
   const { roomKey, roomId, matchId, allInUserIds, notifyOffer } = args

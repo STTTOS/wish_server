@@ -1,7 +1,8 @@
 import { logger } from '../logger'
 import {
   GAME_WS_STAGE_CHANGED_DELAY_MS,
-  GAME_WS_ACTION_REQUIRED_DELAY_MS
+  GAME_WS_ACTION_REQUIRED_DELAY_MS,
+  GAME_WS_RUNOUT_INTER_RUN_DELAY_MS
 } from '../constants/game'
 import {
   NEXT_HAND_DEAL_AFTER_END_MS,
@@ -31,6 +32,8 @@ export type GameRuntimeConfigPatch = {
   actionRequiredWsDelayMs?: unknown
   /** `pendingFlowOps` 连续进街间隔；摊牌后 `game-end` 推送前停顿亦用此值（不推迟 `game-stage-changed` 本身） */
   stageChangedWsDelayMs?: unknown
+  /** 二次跑马：第一跑河牌后到第二跑 boardReset 前的停顿 */
+  runoutInterRunDelayMs?: unknown
   /** 首局进桌后延迟再分配角色 */
   startGameBeforeAssignRolesDelayMs?: unknown
   /** `game-end` 后延迟再推 `next-hand-countdown-started` */
@@ -50,6 +53,8 @@ export type GameRuntimeConfigSnapshot = {
   actionRequiredWsDelayMs: number
   /** 连续进街间隔与摊牌后 `game-end` 前停顿（毫秒） */
   stageChangedWsDelayMs: number
+  /** 二次跑马两跑之间停顿（毫秒） */
+  runoutInterRunDelayMs: number
   /** 首局进桌后延迟再分配角色（毫秒） */
   startGameBeforeAssignRolesDelayMs: number
   /** `game-end` 后延迟再推局间倒计时（毫秒） */
@@ -72,6 +77,7 @@ export type GameRuntimeConfigSnapshot = {
 export class GameRuntimeConfigStore {
   #actionRequiredDelayMs = GAME_WS_ACTION_REQUIRED_DELAY_MS
   #stageChangedDelayMs = GAME_WS_STAGE_CHANGED_DELAY_MS
+  #runoutInterRunDelayMs = GAME_WS_RUNOUT_INTER_RUN_DELAY_MS
   #startGameBeforeAssignRolesDelayMs = DEFAULT_START_GAME_BEFORE_ASSIGN_ROLES_MS
 
   #nextHandCountdownPushDelayMs = NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
@@ -86,6 +92,10 @@ export class GameRuntimeConfigStore {
 
   getGameWsStageChangedDelayMs(): number {
     return this.#stageChangedDelayMs
+  }
+
+  getRunoutInterRunDelayMs(): number {
+    return this.#runoutInterRunDelayMs
   }
 
   getStartGameBeforeAssignRolesDelayMs(): number {
@@ -120,6 +130,7 @@ export class GameRuntimeConfigStore {
     return {
       actionRequiredWsDelayMs: this.#actionRequiredDelayMs,
       stageChangedWsDelayMs: this.#stageChangedDelayMs,
+      runoutInterRunDelayMs: this.#runoutInterRunDelayMs,
       startGameBeforeAssignRolesDelayMs:
         this.#startGameBeforeAssignRolesDelayMs,
       nextHandCountdownPushDelayMs: this.#nextHandCountdownPushDelayMs,
@@ -148,6 +159,7 @@ export class GameRuntimeConfigStore {
 
     let nextActionReq = this.#actionRequiredDelayMs
     let nextStageCh = this.#stageChangedDelayMs
+    let nextRunoutInter = this.#runoutInterRunDelayMs
     let nextStartAssign = this.#startGameBeforeAssignRolesDelayMs
     let nextPushDelay = this.#nextHandCountdownPushDelayMs
     let nextLockOff = this.#nextHandLockAtOffsetMs
@@ -177,6 +189,11 @@ export class GameRuntimeConfigStore {
       const r = applyMs(input.stageChangedWsDelayMs, 'stageChangedWsDelayMs')
       if (!r.ok) return r
       nextStageCh = r.v
+    }
+    if (input.runoutInterRunDelayMs !== undefined) {
+      const r = applyMs(input.runoutInterRunDelayMs, 'runoutInterRunDelayMs')
+      if (!r.ok) return r
+      nextRunoutInter = r.v
     }
     if (input.startGameBeforeAssignRolesDelayMs !== undefined) {
       const r = applyMs(
@@ -232,6 +249,7 @@ export class GameRuntimeConfigStore {
 
     this.#actionRequiredDelayMs = nextActionReq
     this.#stageChangedDelayMs = nextStageCh
+    this.#runoutInterRunDelayMs = nextRunoutInter
     this.#startGameBeforeAssignRolesDelayMs = nextStartAssign
     this.#nextHandCountdownPushDelayMs = nextPushDelay
     this.#nextHandLockAtOffsetMs = nextLockOff

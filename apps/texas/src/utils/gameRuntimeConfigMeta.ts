@@ -8,6 +8,7 @@ export type RuntimeConfigFieldDef = {
   key:
     | 'actionRequiredWsDelayMs'
     | 'stageChangedWsDelayMs'
+    | 'runoutInterRunDelayMs'
     | 'startGameBeforeAssignRolesDelayMs'
     | 'nextHandCountdownPushDelayMs'
     | 'nextHandLockAtOffsetMs'
@@ -40,6 +41,15 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     maxMs: 120_000,
     description:
       '引擎在「待处理操作队列」里连续推进多条 WS 时，相邻两条之间的间隔（例如翻公牌、切换街道）。摊牌后、在推送本手 `game-end` 之前的停顿也复用该值（不推迟 `game-stage-changed` 本身）。过小玩家看不清街面变化，过大拖慢节奏。单位：毫秒。'
+  },
+  {
+    key: 'runoutInterRunDelayMs',
+    label: '二次跑马两跑间隔',
+    group: 'websocket',
+    minMs: 0,
+    maxMs: 120_000,
+    description:
+      '协商二次跑马时：第一跑河牌揭示之后、第二跑公牌重置（boardReset）之前的额外停顿，便于看清第一跑结果。默认 4000ms；与进街间隔独立。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

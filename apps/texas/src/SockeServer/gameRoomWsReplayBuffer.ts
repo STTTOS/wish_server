@@ -20,8 +20,9 @@
  *
  * 典型入缓冲事件（经 `broadcastGameRoom`）：`player-roles-assigned`、`game-start`、
  * `game-blinds-posted`、`player-action-required`、`player-action-taken`、`game-stage-changed`、
- * **`runout-consent-offer`**、**`runout-consent-resolved`**、**`runout-hands-revealed`**、
- * `game-end`、`next-hand-countdown-started`、`next-hand-countdown-cancelled` 等。
+ * **`runout-consent-offer`**、**`runout-consent-resolved`**、**`runout-run-result`**、
+ * **`runout-hands-revealed`**、`game-end`、`next-hand-countdown-started`、
+ * `next-hand-countdown-cancelled` 等。
  *
  * ## 关键步骤（与 SockeServer 的配合）
  *
