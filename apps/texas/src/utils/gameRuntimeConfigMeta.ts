@@ -59,7 +59,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '二次跑马第二跑河牌与收池结果推送之后、本手 `game-end` 之前的停顿，便于看清第二跑再进入结算。默认 3200ms；与进街间隔、两跑间隔均独立。单位：毫秒。'
+      '二次跑马第二跑河牌与收池结果推送之后、本手 `game-end` 之前的短停顿（牌力已在本跑 `runout-run-result` 展示，此处主要为切入 wager 结算留过渡）。默认 400ms；与进街间隔、两跑间隔均独立。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

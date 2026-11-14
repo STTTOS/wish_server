@@ -50,4 +50,4 @@ export const GAME_WS_RUNOUT_INTER_RUN_DELAY_MS = 4000
  * 二次跑马：第二跑河牌 / `runout-run-result` 之后、推送 `game-end` 前的停顿。
  * 可被 `gameRuntimeConfig.runoutToGameEndDelayMs` 覆盖。
  */
-export const GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS = 3200
+export const GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS = 400
