@@ -69,6 +69,26 @@ async function notifyRunoutBoardWinners(
     const seatedById = new Map(
       texas.dealer.players.map((p) => [p.getUserInfo().id, p] as const)
     )
+    const stillIn = texas.dealer.getPlayersStillInGame()
+    const bestPokes = userIds
+      .map((id) => {
+        const pl = seatedById.get(id)
+        if (pl == null) return null
+        const ev = texas.controller.getShowdownEvalForPlayer(pl)
+        const five = ev?.bestFiveCards
+        return Array.isArray(five) && five.length > 0 ? five : null
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null)
+    const seats = stillIn.map((pl) => {
+      const ev = texas.controller.getShowdownEvalForPlayer(pl)
+      return {
+        userId: pl.getUserInfo().id,
+        ...(ev?.rankCategory != null ? { rankCategory: ev.rankCategory } : {}),
+        ...(ev?.rankSignature != null
+          ? { rankSignature: ev.rankSignature as RankSignature }
+          : {})
+      }
+    })
     const rows = await prisma.user.findMany({
       where: { id: { in: userIds } },
       select: {
@@ -90,6 +110,8 @@ async function notifyRunoutBoardWinners(
             bestRankSignature: evaluated.bestRankSignature as RankSignature
           }
         : {}),
+      ...(bestPokes.length > 0 ? { bestPokes } : {}),
+      ...(seats.length > 0 ? { seats } : {}),
       winners: userIds.map((id) => {
         const row = byId.get(id)
         const info = seatedById.get(id)?.getUserInfo()

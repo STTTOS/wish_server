@@ -97,6 +97,20 @@ export type WsRunoutRunResultData = {
   bestRankCategory?: RankCategory
   /** 本跑桌上最大牌力签名；客户端公牌上方条与左侧两跑面板共用 */
   bestRankSignature?: RankSignature
+  /**
+   * 本跑桌上最大五张组合（并列赢家各一组）；客户端公牌/手牌高亮 dim 用。
+   * 与 `game-end.runs[].bestPokes` 同语义。
+   */
+  bestPokes?: Array<Poke[]>
+  /**
+   * 仍在摊牌中的各座本跑牌力；客户端手牌底「牌型」标签。
+   * 缺省时客户端仅能给赢家贴 `bestRankCategory`。
+   */
+  seats?: Array<{
+    userId: number
+    rankCategory?: RankCategory
+    rankSignature?: RankSignature
+  }>
   winners: Array<{
     userId: number
     name: string
