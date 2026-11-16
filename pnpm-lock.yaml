@@ -72,8 +72,8 @@ importers:
         specifier: ^4.8.1
         version: 4.8.1
       texas-poker-core:
-        specifier: ^1.4.41
-        version: 1.4.41
+        specifier: ^1.4.42
+        version: 1.4.42
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -848,6 +848,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   JSONStream@1.3.5:
     resolution: {integrity: sha512-E+iruNOY8VV9s4JEbe1aNEm6MiszPRr/UfcHMz0TQh1BXSxHK+ASV1R6W4HpjBhSeS+54PIsAMCBmwD06LLsqQ==}
@@ -1175,6 +1176,7 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   dargs@8.1.0:
     resolution: {integrity: sha512-wAV9QHOsNbwnWdNW2FYvE1P56wtgSbM+3SZcdGiWQILwVjACCXDCI3Ai8QlCjMDB8YK5zySiXZYBiwGmNY3lnw==}
@@ -1520,6 +1522,7 @@ packages:
   git-raw-commits@4.0.0:
     resolution: {integrity: sha512-ICsMM1Wk8xSGMowkOmPrzo2Fgmfo4bMHLNX6ytHjajRJUqvHOw/TFapQ+QG75c3X/tTDDhOSRPGC52dDbNM8FQ==}
     engines: {node: '>=16'}
+    deprecated: Deprecated and no longer maintained. Use @conventional-changelog/git-client instead.
     hasBin: true
 
   glob-parent@5.1.2:
@@ -1831,6 +1834,7 @@ packages:
   koa-router@12.0.1:
     resolution: {integrity: sha512-gaDdj3GtzoLoeosacd50kBBTnnh3B9AYxDThQUo4sfUyXdOhY6ku1qyZKW88tQCRgc3Sw6ChXYXWZwwgjOxE0w==}
     engines: {node: '>= 12'}
+    deprecated: 'Please use @koa/router instead, starting from v9! '
 
   koa-send@5.0.1:
     resolution: {integrity: sha512-tmcyQ/wXXuxpDxyNXv5yNNkdAMdFRqwtegBXUaowiQzUKqJehttS0x2j0eOZDQAyloAth5w6wwBImnFzkUz3pQ==}
@@ -2484,8 +2488,8 @@ packages:
   texas-poker-core@1.4.21:
     resolution: {integrity: sha512-sBX3k5fAKxNouozUAkNcMKfaBSsflx4Iru6/HvbuW3LbSal6CDbiWcePx5n2LFEtAB7LB9C4pm/GYkc24ga3sQ==}
 
-  texas-poker-core@1.4.41:
-    resolution: {integrity: sha512-s2ssEcRfoqo/pT9a95IwKmjiMuKDBuA025SzQNzUousuEgptG6CCQGJdMw2W1nZzvfUrCSD1bLI5gvrhrzoV6g==}
+  texas-poker-core@1.4.42:
+    resolution: {integrity: sha512-dHXXcdu7/NsRUOqE4K0PR2oBl++LxdfJlBoqDOiZRaQlwm9iqbOYnP7Mq0D7pLvk8fSo7iiXkOMuD50kjhB+vg==}
 
   text-extensions@2.4.0:
     resolution: {integrity: sha512-te/NtwBwfiNRLf9Ijqx3T0nlqZiQ2XrrtBvu+cLL8ZRrGkO0NHTug8MYFKyoSrv/sHTaSKfilUkizV6XhxMJ3g==}
@@ -5034,7 +5038,7 @@ snapshots:
       core-js: 3.42.0
       ramda: 0.30.1
 
-  texas-poker-core@1.4.41:
+  texas-poker-core@1.4.42:
     dependencies:
       core-js: 3.42.0
       ramda: 0.30.1
