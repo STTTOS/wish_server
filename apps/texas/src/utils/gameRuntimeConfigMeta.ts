@@ -79,7 +79,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '否决或投票窗口超时后，先锁票并等待此时长再关弹窗、开单次跑马（否决可见否决者；超时避免弹窗关与翻牌叠帧）。默认 1600ms；为 0 则立即结算。单位：毫秒。'
+      '全员同意、否决或投票窗口超时后，先锁票并等待此时长再关弹窗、开跑马（避免弹窗关与翻牌叠帧；否决可见否决者）。默认 1600ms；为 0 则立即结算。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

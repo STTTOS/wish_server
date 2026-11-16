@@ -23,8 +23,8 @@ export type RunoutConsentSession = {
   timer: ReturnType<typeof setTimeout> | null
   resolved: boolean
   /**
-   * 已进入结束窗 pacing（否决或超时）：拒绝后续投票，但尚未 `finalize`
-   *（弹窗仍在：否决可看否决者；超时可避弹窗关与翻牌叠帧）。
+   * 已进入结束窗 pacing（全员同意 / 否决 / 超时）：拒绝后续投票，但尚未 `finalize`
+   *（弹窗仍在，避免关窗瞬间与翻牌 / 二次跑马叠帧）。
    */
   voteLocked: boolean
   notifyVote: ((data: RunoutConsentProgressPayload) => void) | null
@@ -105,8 +105,9 @@ type StartArgs = {
 }
 
 /**
- * 启动跑马协商：推 offer，超时默认否；全员同意 → 二次；
- * 任一否决 / 窗口超时 → pacing 后单次（避免弹窗关与翻牌叠帧）。
+ * 启动跑马协商：推 offer，超时默认否。
+ * 全员同意 → pacing 后二次；任一否决 / 窗口超时 → pacing 后单次
+ *（避免弹窗关与翻牌 / 二次跑马叠帧）。
  */
 export function startRunoutConsentSession(args: StartArgs): void {
   const { roomKey, roomId, matchId, stillInUserIds, notifyOffer, notifyVote } =
@@ -158,8 +159,8 @@ function clearSessionTimer(session: RunoutConsentSession): void {
 }
 
 /**
- * 锁票 + pacing 后再 finalize（否决 / 超时共用）。
- * 客户端已可展示「协商结束中」或否决者，再开单次跑马。
+ * 锁票 + pacing 后再 finalize（全员同意 / 否决 / 超时共用）。
+ * 给客户端留出结束态展示，再关弹窗开跑马。
  */
 function scheduleEndWindowFinalize(
   roomKey: string,
@@ -181,9 +182,8 @@ function scheduleEndWindowFinalize(
 
 /**
  * 记录投票；先广播进度。
- * - 全员同意：立即结算（二次）
+ * - 全员同意：锁票 + pacing 后结算（二次）
  * - 任一否决：锁票 + pacing 后结算（单次）
- * - 收齐且无否决：同上立即结算
  */
 export function recordRunoutConsentVote(
   roomKey: string,
@@ -218,8 +218,7 @@ export function recordRunoutConsentVote(
     (id) => session.votes.get(id) === true
   )
   if (allVoted && allAgree) {
-    clearSessionTimer(session)
-    void finalizeRunoutConsent(roomKey, roomId)
+    scheduleEndWindowFinalize(roomKey, roomId, session)
   }
   return { ok: true }
 }
