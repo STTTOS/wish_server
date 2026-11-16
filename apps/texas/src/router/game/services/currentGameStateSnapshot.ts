@@ -14,7 +14,7 @@ import prisma from '../../../models'
 import { gameRuntimeRegistry } from './runtimeRegistry'
 import { getCurrentMatchIdWithFallback } from './currentMatch'
 import { buildLastGameEndForViewer } from './lastGameEndSnapshot'
-import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../constants/game'
+import { gameRuntimeConfig } from '../../../utils/gameRuntimeConfig'
 import { getNextHandCountdownSnapshot } from '../../../gameRuntime/nextHandCountdown'
 import { getScheduledPlayerTurnDeadline } from './texasDomain/playerTurnTimeoutScheduler'
 import {
@@ -333,14 +333,15 @@ export async function buildFetchCurrentGameStatePayload(input: {
         consent &&
         !consent.resolved &&
         consent.matchId === currentMatchId &&
-        consent.deadlineAt > Date.now()
+        // 否决 pacing 中 deadline 可能已过，仍须 hydrate 弹窗
+        (consent.voteLocked || consent.deadlineAt > Date.now())
       ) {
         const progress = buildRunoutConsentVoteProgress(consent)
         runoutConsentOffer = {
           matchId: consent.matchId,
           stillInUserIds: [...consent.stillInUserIds],
           deadlineAt: consent.deadlineAt,
-          timeoutMs: GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
+          timeoutMs: gameRuntimeConfig.getRunoutConsentTimeoutMs(),
           serverNow: progress.serverNow,
           votes: progress.votes
         }

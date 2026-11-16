@@ -1,6 +1,6 @@
 import { logger } from '../../../../logger'
 import { gameRuntimeRegistry } from '../runtimeRegistry'
-import { GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS } from '../../../../constants/game'
+import { gameRuntimeConfig } from '../../../../utils/gameRuntimeConfig'
 
 export type RunoutConsentVoteRow = { userId: number; agree: boolean }
 
@@ -19,8 +19,14 @@ export type RunoutConsentSession = {
   stillInUserIds: number[]
   deadlineAt: number
   votes: Map<number, boolean>
+  /** 投票窗口超时 / 否决 pacing 共用；清会话时一并清 */
   timer: ReturnType<typeof setTimeout> | null
   resolved: boolean
+  /**
+   * 已出现否决并进入 pacing：拒绝后续投票，但尚未 `finalize`
+   *（弹窗仍在，供展示否决者）。
+   */
+  voteLocked: boolean
   notifyVote: ((data: RunoutConsentProgressPayload) => void) | null
 }
 
@@ -99,7 +105,7 @@ type StartArgs = {
 }
 
 /**
- * 启动跑马协商：推 offer，超时默认否；仍在场全员同意才 runCount=2。
+ * 启动跑马协商：推 offer，超时默认否；全员同意 → 二次；任一否决 → pacing 后单次。
  */
 export function startRunoutConsentSession(args: StartArgs): void {
   const { roomKey, roomId, matchId, stillInUserIds, notifyOffer, notifyVote } =
@@ -107,7 +113,7 @@ export function startRunoutConsentSession(args: StartArgs): void {
   clearRunoutConsentSession(roomKey)
 
   const serverNow = Date.now()
-  const timeoutMs = GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS
+  const timeoutMs = gameRuntimeConfig.getRunoutConsentTimeoutMs()
   const deadlineAt = serverNow + timeoutMs
   const session: RunoutConsentSession = {
     matchId,
@@ -116,6 +122,7 @@ export function startRunoutConsentSession(args: StartArgs): void {
     votes: new Map(),
     timer: null,
     resolved: false,
+    voteLocked: false,
     notifyVote
   }
   sessions.set(roomKey, session)
@@ -142,8 +149,37 @@ export function startRunoutConsentSession(args: StartArgs): void {
   }, timeoutMs)
 }
 
+function clearSessionTimer(session: RunoutConsentSession): void {
+  if (session.timer) {
+    clearTimeout(session.timer)
+    session.timer = null
+  }
+}
+
+/** 任一否决：锁票 + pacing 后再 finalize（单次跑马）。 */
+function scheduleVetoFinalize(
+  roomKey: string,
+  roomId: number,
+  session: RunoutConsentSession
+): void {
+  if (session.voteLocked || session.resolved) return
+  session.voteLocked = true
+  clearSessionTimer(session)
+  const pacingMs = gameRuntimeConfig.getRunoutConsentVetoPacingMs()
+  if (pacingMs <= 0) {
+    void finalizeRunoutConsent(roomKey, roomId)
+    return
+  }
+  session.timer = setTimeout(() => {
+    void finalizeRunoutConsent(roomKey, roomId)
+  }, pacingMs)
+}
+
 /**
- * 记录投票；先广播进度，收齐后再结算。非仍在场 / 已结束返回 false。
+ * 记录投票；先广播进度。
+ * - 全员同意：立即结算（二次）
+ * - 任一否决：锁票 + pacing 后结算（单次）
+ * - 收齐且无否决：同上立即结算
  */
 export function recordRunoutConsentVote(
   roomKey: string,
@@ -155,6 +191,9 @@ export function recordRunoutConsentVote(
   if (!session || session.resolved) {
     return { ok: false, message: '当前无跑马协商' }
   }
+  if (session.voteLocked) {
+    return { ok: false, message: '已有人否决，协商即将结束' }
+  }
   if (!session.stillInUserIds.includes(userId)) {
     return { ok: false, message: '你无需参与本次协商' }
   }
@@ -164,7 +203,18 @@ export function recordRunoutConsentVote(
   } catch (err) {
     logger.error(`[runout consent] notifyVote failed roomKey=${roomKey}`, err)
   }
-  if (session.votes.size >= session.stillInUserIds.length) {
+
+  if (agree === false) {
+    scheduleVetoFinalize(roomKey, roomId, session)
+    return { ok: true }
+  }
+
+  const allVoted = session.votes.size >= session.stillInUserIds.length
+  const allAgree = session.stillInUserIds.every(
+    (id) => session.votes.get(id) === true
+  )
+  if (allVoted && allAgree) {
+    clearSessionTimer(session)
     void finalizeRunoutConsent(roomKey, roomId)
   }
   return { ok: true }
@@ -185,10 +235,8 @@ async function finalizeRunoutConsent(
   const session = sessions.get(roomKey)
   if (!session || session.resolved) return
   session.resolved = true
-  if (session.timer) {
-    clearTimeout(session.timer)
-    session.timer = null
-  }
+  session.voteLocked = true
+  clearSessionTimer(session)
 
   const runCount = decideRunCount(session)
   const votes = session.stillInUserIds.map((userId) => ({

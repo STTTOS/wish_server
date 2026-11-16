@@ -10,6 +10,8 @@ export type RuntimeConfigFieldDef = {
     | 'stageChangedWsDelayMs'
     | 'runoutInterRunDelayMs'
     | 'runoutToGameEndDelayMs'
+    | 'runoutConsentTimeoutMs'
+    | 'runoutConsentVetoPacingMs'
     | 'startGameBeforeAssignRolesDelayMs'
     | 'nextHandCountdownPushDelayMs'
     | 'nextHandLockAtOffsetMs'
@@ -60,6 +62,24 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     maxMs: 120_000,
     description:
       '二次跑马第二跑 `runout-run-result` 之后、本手 `game-end` 之前的短停顿（牌力已在本跑结果展示，此处主要为切入 wager 结算留过渡）。默认 400ms；河牌 `game-stage-changed` → 本跑结果见「进街 / 阶段 WS 间隔」。单位：毫秒。'
+  },
+  {
+    key: 'runoutConsentTimeoutMs',
+    label: '跑马协商投票倒计时',
+    group: 'websocket',
+    minMs: 0,
+    maxMs: 120_000,
+    description:
+      '摊牌后二次跑马协商：仍在局玩家的投票窗口。超时未全员同意则按否决处理（单次跑马）。默认 8000ms。单位：毫秒。'
+  },
+  {
+    key: 'runoutConsentVetoPacingMs',
+    label: '跑马协商否决后 pacing',
+    group: 'websocket',
+    minMs: 0,
+    maxMs: 120_000,
+    description:
+      '任一玩家否决后，先广播投票进度并锁票，再等待此时长才关闭协商弹窗并开单次跑马，便于全桌看清否决者。默认 1600ms；为 0 则立即结算。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

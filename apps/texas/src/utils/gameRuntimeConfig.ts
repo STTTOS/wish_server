@@ -1,17 +1,19 @@
 import { logger } from '../logger'
 import {
-  GAME_WS_STAGE_CHANGED_DELAY_MS,
-  GAME_WS_ACTION_REQUIRED_DELAY_MS,
-  GAME_WS_RUNOUT_INTER_RUN_DELAY_MS,
-  GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS
-} from '../constants/game'
-import {
   NEXT_HAND_DEAL_AFTER_END_MS,
   NEXT_HAND_LOCK_AT_OFFSET_MS,
   NEXT_HAND_START_AFTER_DEAL_MS,
   NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS,
   NEXT_HAND_LOCKED_TAIL_BEFORE_ENDS_MS
 } from '../gameRuntime/nextHandConstants'
+import {
+  GAME_WS_STAGE_CHANGED_DELAY_MS,
+  GAME_WS_ACTION_REQUIRED_DELAY_MS,
+  GAME_WS_RUNOUT_INTER_RUN_DELAY_MS,
+  GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS,
+  GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS,
+  GAME_WS_RUNOUT_CONSENT_VETO_PACING_MS
+} from '../constants/game'
 
 const MIN_MS = 0
 const MAX_MS = 120_000
@@ -37,6 +39,10 @@ export type GameRuntimeConfigPatch = {
   runoutInterRunDelayMs?: unknown
   /** 二次跑马：第二跑结束后到 `game-end` 前的停顿 */
   runoutToGameEndDelayMs?: unknown
+  /** 跑马协商投票窗口；超时默认否 */
+  runoutConsentTimeoutMs?: unknown
+  /** 任一否决后关弹窗 / 开单次跑马前的展示 pacing */
+  runoutConsentVetoPacingMs?: unknown
   /** 首局进桌后延迟再分配角色 */
   startGameBeforeAssignRolesDelayMs?: unknown
   /** `game-end` 后延迟再推 `next-hand-countdown-started` */
@@ -60,6 +66,10 @@ export type GameRuntimeConfigSnapshot = {
   runoutInterRunDelayMs: number
   /** 二次跑马第二跑结束后到 `game-end` 前停顿（毫秒） */
   runoutToGameEndDelayMs: number
+  /** 跑马协商投票窗口（毫秒） */
+  runoutConsentTimeoutMs: number
+  /** 否决后关弹窗 pacing（毫秒） */
+  runoutConsentVetoPacingMs: number
   /** 首局进桌后延迟再分配角色（毫秒） */
   startGameBeforeAssignRolesDelayMs: number
   /** `game-end` 后延迟再推局间倒计时（毫秒） */
@@ -84,6 +94,8 @@ export class GameRuntimeConfigStore {
   #stageChangedDelayMs = GAME_WS_STAGE_CHANGED_DELAY_MS
   #runoutInterRunDelayMs = GAME_WS_RUNOUT_INTER_RUN_DELAY_MS
   #runoutToGameEndDelayMs = GAME_WS_RUNOUT_TO_GAME_END_DELAY_MS
+  #runoutConsentTimeoutMs = GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS
+  #runoutConsentVetoPacingMs = GAME_WS_RUNOUT_CONSENT_VETO_PACING_MS
   #startGameBeforeAssignRolesDelayMs = DEFAULT_START_GAME_BEFORE_ASSIGN_ROLES_MS
 
   #nextHandCountdownPushDelayMs = NEXT_HAND_COUNTDOWN_PUSH_DELAY_MS
@@ -106,6 +118,14 @@ export class GameRuntimeConfigStore {
 
   getRunoutToGameEndDelayMs(): number {
     return this.#runoutToGameEndDelayMs
+  }
+
+  getRunoutConsentTimeoutMs(): number {
+    return this.#runoutConsentTimeoutMs
+  }
+
+  getRunoutConsentVetoPacingMs(): number {
+    return this.#runoutConsentVetoPacingMs
   }
 
   getStartGameBeforeAssignRolesDelayMs(): number {
@@ -142,6 +162,8 @@ export class GameRuntimeConfigStore {
       stageChangedWsDelayMs: this.#stageChangedDelayMs,
       runoutInterRunDelayMs: this.#runoutInterRunDelayMs,
       runoutToGameEndDelayMs: this.#runoutToGameEndDelayMs,
+      runoutConsentTimeoutMs: this.#runoutConsentTimeoutMs,
+      runoutConsentVetoPacingMs: this.#runoutConsentVetoPacingMs,
       startGameBeforeAssignRolesDelayMs:
         this.#startGameBeforeAssignRolesDelayMs,
       nextHandCountdownPushDelayMs: this.#nextHandCountdownPushDelayMs,
@@ -172,6 +194,8 @@ export class GameRuntimeConfigStore {
     let nextStageCh = this.#stageChangedDelayMs
     let nextRunoutInter = this.#runoutInterRunDelayMs
     let nextRunoutToEnd = this.#runoutToGameEndDelayMs
+    let nextConsentTimeout = this.#runoutConsentTimeoutMs
+    let nextConsentVetoPacing = this.#runoutConsentVetoPacingMs
     let nextStartAssign = this.#startGameBeforeAssignRolesDelayMs
     let nextPushDelay = this.#nextHandCountdownPushDelayMs
     let nextLockOff = this.#nextHandLockAtOffsetMs
@@ -211,6 +235,19 @@ export class GameRuntimeConfigStore {
       const r = applyMs(input.runoutToGameEndDelayMs, 'runoutToGameEndDelayMs')
       if (!r.ok) return r
       nextRunoutToEnd = r.v
+    }
+    if (input.runoutConsentTimeoutMs !== undefined) {
+      const r = applyMs(input.runoutConsentTimeoutMs, 'runoutConsentTimeoutMs')
+      if (!r.ok) return r
+      nextConsentTimeout = r.v
+    }
+    if (input.runoutConsentVetoPacingMs !== undefined) {
+      const r = applyMs(
+        input.runoutConsentVetoPacingMs,
+        'runoutConsentVetoPacingMs'
+      )
+      if (!r.ok) return r
+      nextConsentVetoPacing = r.v
     }
     if (input.startGameBeforeAssignRolesDelayMs !== undefined) {
       const r = applyMs(
@@ -268,6 +305,8 @@ export class GameRuntimeConfigStore {
     this.#stageChangedDelayMs = nextStageCh
     this.#runoutInterRunDelayMs = nextRunoutInter
     this.#runoutToGameEndDelayMs = nextRunoutToEnd
+    this.#runoutConsentTimeoutMs = nextConsentTimeout
+    this.#runoutConsentVetoPacingMs = nextConsentVetoPacing
     this.#startGameBeforeAssignRolesDelayMs = nextStartAssign
     this.#nextHandCountdownPushDelayMs = nextPushDelay
     this.#nextHandLockAtOffsetMs = nextLockOff
