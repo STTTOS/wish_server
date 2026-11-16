@@ -70,7 +70,7 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
     minMs: 0,
     maxMs: 120_000,
     description:
-      '摊牌后二次跑马协商：仍在局玩家的投票窗口。超时未全员同意则按否决处理（单次跑马）。默认 8000ms。单位：毫秒。'
+      '摊牌后二次跑马协商：仍在局玩家的投票窗口。超时未全员同意则按否决处理（单次跑马）。默认 10000ms。单位：毫秒。'
   },
   {
     key: 'runoutConsentVetoPacingMs',

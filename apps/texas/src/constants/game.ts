@@ -42,7 +42,7 @@ export const GAME_WS_STAGE_CHANGED_DELAY_MS = 2200
  * 跑马二次协商：仍在摊牌中的玩家投票窗口；超时默认否。
  * 可被 `gameRuntimeConfig.runoutConsentTimeoutMs` 覆盖。
  */
-export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 8000
+export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 10000
 
 /**
  * 任一否决后：广播进度 → 关弹窗 / 开单次跑马 前的展示停顿（让全桌看见否决者）。
