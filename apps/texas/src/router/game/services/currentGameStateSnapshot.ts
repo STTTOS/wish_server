@@ -333,7 +333,7 @@ export async function buildFetchCurrentGameStatePayload(input: {
         consent &&
         !consent.resolved &&
         consent.matchId === currentMatchId &&
-        // 否决 pacing 中 deadline 可能已过，仍须 hydrate 弹窗
+        // 结束窗 pacing（否决/超时）中 deadline 可能已过，仍须 hydrate 弹窗
         (consent.voteLocked || consent.deadlineAt > Date.now())
       ) {
         const progress = buildRunoutConsentVoteProgress(consent)

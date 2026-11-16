@@ -74,12 +74,12 @@ export const runtimeConfigFieldDefinitions: RuntimeConfigFieldDef[] = [
   },
   {
     key: 'runoutConsentVetoPacingMs',
-    label: '跑马协商否决后 pacing',
+    label: '跑马协商结束窗 pacing',
     group: 'websocket',
     minMs: 0,
     maxMs: 120_000,
     description:
-      '任一玩家否决后，先广播投票进度并锁票，再等待此时长才关闭协商弹窗并开单次跑马，便于全桌看清否决者。默认 1600ms；为 0 则立即结算。单位：毫秒。'
+      '否决或投票窗口超时后，先锁票并等待此时长再关弹窗、开单次跑马（否决可见否决者；超时避免弹窗关与翻牌叠帧）。默认 1600ms；为 0 则立即结算。单位：毫秒。'
   },
   {
     key: 'startGameBeforeAssignRolesDelayMs',

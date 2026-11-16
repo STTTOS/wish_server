@@ -45,7 +45,8 @@ export const GAME_WS_STAGE_CHANGED_DELAY_MS = 2200
 export const GAME_WS_RUNOUT_CONSENT_TIMEOUT_MS = 10000
 
 /**
- * 任一否决后：广播进度 → 关弹窗 / 开单次跑马 前的展示停顿（让全桌看见否决者）。
+ * 否决或投票窗口超时后：关弹窗 / 开单次跑马前的展示停顿
+ *（否决可见否决者；超时避免弹窗关与翻牌叠帧）。
  * 可被 `gameRuntimeConfig.runoutConsentVetoPacingMs` 覆盖。
  */
 export const GAME_WS_RUNOUT_CONSENT_VETO_PACING_MS = 1600
