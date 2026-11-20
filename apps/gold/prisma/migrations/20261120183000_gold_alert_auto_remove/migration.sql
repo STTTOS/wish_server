@@ -1,0 +1,1 @@
+ALTER TABLE `GoldPriceAlert` ADD COLUMN `removeAfterTrigger` BOOLEAN NOT NULL DEFAULT true;

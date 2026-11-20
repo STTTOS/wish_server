@@ -102,15 +102,18 @@ model GoldPushRegistration {
   @@index([expoPushToken])
 }
 
-/// 服务端价位提醒（元/克；由 App 同步）
+/// 服务端价位提醒（由 App 同步；美元或元/克）
 model GoldPriceAlert {
   id              BigInt            @id @default(autoincrement())
   sessionId       BigInt
   clientAlertId   String            @db.VarChar(64)
   label           String            @db.VarChar(128)
-  targetCnyG      Float
+  quoteUnit       String            @default("cnyG") @db.VarChar(8)
+  targetCnyG      Float?
+  targetUsdOz     Float?
   tolerancePct    Float             @default(0.2)
   enabled         Boolean           @default(true)
+  removeAfterTrigger Boolean        @default(true)
   lastTriggeredAt BigInt?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt

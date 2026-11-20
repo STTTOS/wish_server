@@ -3,6 +3,8 @@ import { logger } from '../logger'
 
 export const PRICE_ALERT_COOLDOWN_MS = 10 * 60_000
 
+export type PriceAlertQuoteUnit = 'usdOz' | 'cnyG';
+
 export function priceInBand(
   price: number,
   target: number,
@@ -10,6 +12,10 @@ export function priceInBand(
 ): boolean {
   const eps = (target * tolerancePct) / 100
   return price >= target - eps && price <= target + eps
+}
+
+function resolveQuoteUnit(u?: string): PriceAlertQuoteUnit {
+  return u === 'usdOz' ? 'usdOz' : 'cnyG'
 }
 
 type ExpoPushTicket = {
@@ -20,7 +26,8 @@ type ExpoPushTicket = {
 export async function sendExpoPush(
   token: string,
   title: string,
-  body: string
+  body: string,
+  data?: Record<string, unknown>
 ): Promise<boolean> {
   try {
     const res = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -35,7 +42,8 @@ export async function sendExpoPush(
         title,
         body,
         priority: 'high',
-        channelId: 'price-alerts'
+        channelId: 'price-alerts',
+        data: data ?? {}
       })
     })
     const json = (await res.json()) as { data?: ExpoPushTicket[] }
@@ -112,10 +120,32 @@ export async function upsertPushRegistration(
 export type AlertSyncRow = {
   clientAlertId: string;
   label: string;
-  targetCnyG: number;
+  quoteUnit?: PriceAlertQuoteUnit;
+  targetCnyG?: number;
+  targetUsdOz?: number;
   tolerancePct: number;
   enabled: boolean;
+  removeAfterTrigger?: boolean;
 };
+
+function normalizeSyncRow(r: AlertSyncRow): {
+  quoteUnit: PriceAlertQuoteUnit;
+  targetCnyG: number | null;
+  targetUsdOz: number | null;
+  label: string;
+} | null {
+  const quoteUnit = resolveQuoteUnit(r.quoteUnit)
+  if (quoteUnit === 'usdOz') {
+    const oz = Math.round(Number(r.targetUsdOz))
+    if (!(oz > 0)) return null
+    const label = r.label.slice(0, 128) || `触及 $${oz}/oz`
+    return { quoteUnit, targetCnyG: null, targetUsdOz: oz, label }
+  }
+  const target = Math.round(Number(r.targetCnyG) * 100) / 100
+  if (!(target > 0)) return null
+  const label = r.label.slice(0, 128) || `触及 ${target} 元/克`
+  return { quoteUnit: 'cnyG', targetCnyG: target, targetUsdOz: null, label }
+}
 
 export async function syncSessionPriceAlerts(
   sessionId: bigint,
@@ -134,9 +164,10 @@ export async function syncSessionPriceAlerts(
   })
 
   for (const r of rows) {
-    const target = Math.round(r.targetCnyG * 100) / 100
-    if (!(target > 0)) continue
+    const norm = normalizeSyncRow(r)
+    if (!norm) continue
     const tol = Math.min(5, Math.max(0.01, r.tolerancePct))
+    const removeAfterTrigger = r.removeAfterTrigger !== false
     await prisma.goldPriceAlert.upsert({
       where: {
         sessionId_clientAlertId: {
@@ -147,26 +178,81 @@ export async function syncSessionPriceAlerts(
       create: {
         sessionId,
         clientAlertId: r.clientAlertId,
-        label: r.label.slice(0, 128) || `触及 ${target} 元/克`,
-        targetCnyG: target,
+        label: norm.label,
+        quoteUnit: norm.quoteUnit,
+        targetCnyG: norm.targetCnyG,
+        targetUsdOz: norm.targetUsdOz,
         tolerancePct: tol,
-        enabled: r.enabled
+        enabled: r.enabled,
+        removeAfterTrigger
       },
       update: {
-        label: r.label.slice(0, 128) || `触及 ${target} 元/克`,
-        targetCnyG: target,
+        label: norm.label,
+        quoteUnit: norm.quoteUnit,
+        targetCnyG: norm.targetCnyG,
+        targetUsdOz: norm.targetUsdOz,
         tolerancePct: tol,
-        enabled: r.enabled
+        enabled: r.enabled,
+        removeAfterTrigger
       }
     })
   }
 }
 
+export type SpotForAlert = {
+  cnyG: number | null;
+  usdOz: number | null;
+};
+
+function alertTriggered(
+  alert: {
+    quoteUnit: string;
+    targetCnyG: number | null;
+    targetUsdOz: number | null;
+    tolerancePct: number;
+  },
+  spot: SpotForAlert
+): boolean {
+  const unit = resolveQuoteUnit(alert.quoteUnit)
+  if (unit === 'usdOz') {
+    const t = alert.targetUsdOz
+    const p = spot.usdOz
+    if (t == null || !(t > 0) || p == null || !(p > 0)) return false
+    return priceInBand(p, t, alert.tolerancePct)
+  }
+  const t = alert.targetCnyG
+  const p = spot.cnyG
+  if (t == null || !(t > 0) || p == null || !(p > 0)) return false
+  return priceInBand(p, t, alert.tolerancePct)
+}
+
+function alertPushBody(
+  alert: {
+    label: string;
+    quoteUnit: string;
+  },
+  spot: SpotForAlert
+): string {
+  const unit = resolveQuoteUnit(alert.quoteUnit)
+  if (unit === 'usdOz' && spot.usdOz != null) {
+    return `${alert.label} · 现价约 $${spot.usdOz.toFixed(1)}/oz`
+  }
+  if (spot.cnyG != null) {
+    return `${alert.label} · 现价约 ${spot.cnyG.toFixed(2)} 元/克`
+  }
+  return alert.label
+}
+
 export async function evaluatePriceAlerts(
-  cnyG: number | null,
+  spot: SpotForAlert,
   now = Date.now()
 ) {
-  if (cnyG == null || !(cnyG > 0)) return
+  if (
+    (spot.cnyG == null || !(spot.cnyG > 0)) &&
+    (spot.usdOz == null || !(spot.usdOz > 0))
+  ) {
+    return
+  }
 
   const rows = await prisma.goldPriceAlert.findMany({
     where: { enabled: true },
@@ -187,16 +273,24 @@ export async function evaluatePriceAlerts(
         continue
     }
 
-    if (!priceInBand(cnyG, alert.targetCnyG, alert.tolerancePct)) continue
+    if (!alertTriggered(alert, spot)) continue
 
     const title = 'Alke · 金价提醒'
-    const body = `${alert.label} · 现价约 ${cnyG.toFixed(2)} 元/克`
-    const ok = await sendExpoPush(push.expoPushToken, title, body)
+    const body = alertPushBody(alert, spot)
+    const ok = await sendExpoPush(push.expoPushToken, title, body, {
+      type: 'price_alert',
+      clientAlertId: alert.clientAlertId,
+      removeAfterTrigger: alert.removeAfterTrigger
+    })
     if (!ok) continue
 
-    await prisma.goldPriceAlert.update({
-      where: { id: alert.id },
-      data: { lastTriggeredAt: BigInt(now) }
-    })
+    if (alert.removeAfterTrigger) {
+      await prisma.goldPriceAlert.delete({ where: { id: alert.id } })
+    } else {
+      await prisma.goldPriceAlert.update({
+        where: { id: alert.id },
+        data: { lastTriggeredAt: BigInt(now) }
+      })
+    }
   }
 }

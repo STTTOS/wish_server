@@ -118,9 +118,10 @@ async function persistQuote() {
     logger.warn('roll today daily bar failed', err)
   }
 
-  void evaluatePriceAlerts(quote.cnyG ?? null).catch((err) =>
-    logger.warn('price alert push failed', err)
-  )
+  void evaluatePriceAlerts({
+    cnyG: quote.cnyG ?? null,
+    usdOz: quote.usdOz ?? null
+  }).catch((err) => logger.warn('price alert push failed', err))
 
   return quote
 }
