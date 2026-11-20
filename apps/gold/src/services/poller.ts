@@ -9,6 +9,7 @@ import { rollTodayFromSpot } from './dailySync'
 import { fetchQuote, fetchUsdCny } from './fetchQuote'
 import { isGoldMarketOpen, nextMarketOpenAt } from './marketHours'
 import { recordPollEvent } from './pollLog'
+import { evaluatePriceAlerts } from './goldPush'
 
 let timer: NodeJS.Timeout | null = null
 let inFlight = false
@@ -116,6 +117,10 @@ async function persistQuote() {
   } catch (err) {
     logger.warn('roll today daily bar failed', err)
   }
+
+  void evaluatePriceAlerts(quote.cnyG ?? null).catch((err) =>
+    logger.warn('price alert push failed', err)
+  )
 
   return quote
 }

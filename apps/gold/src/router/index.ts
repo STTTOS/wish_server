@@ -22,6 +22,11 @@ import {
   logoutGoldSession,
   normalizePlatform
 } from '../services/goldAuth'
+import {
+  syncSessionPriceAlerts,
+  upsertPushRegistration,
+  type AlertSyncRow
+} from '../services/goldPush'
 import response from '../utils/response'
 
 const router = new Router({ prefix: apiPrefix })
@@ -118,6 +123,56 @@ router.post('/auth/login', async (ctx) => {
     return
   }
   response.success(ctx, result.data)
+})
+
+router.post('/push/register', async (ctx) => {
+  const session = ctx.state.goldSession as
+    | { id: bigint; userId: bigint; deviceId: string }
+    | undefined
+  if (!session) {
+    response.error(
+      ctx,
+      HTTP_STATUS.UNAUTHORIZED,
+      '需要登录会话',
+      null,
+      'UNAUTHORIZED'
+    )
+    return
+  }
+  const body = (ctx.request.body || {}) as { expoPushToken?: string }
+  const token = String(body.expoPushToken || '').trim()
+  if (!token) {
+    response.error(ctx, HTTP_STATUS.BAD_REQUEST, '缺少 expoPushToken')
+    return
+  }
+  try {
+    await upsertPushRegistration(session, token)
+    response.success(ctx, { registered: true })
+  } catch (e) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      e instanceof Error ? e.message : '注册推送失败'
+    )
+  }
+})
+
+router.put('/push/alerts', async (ctx) => {
+  const session = ctx.state.goldSession as { id: bigint } | undefined
+  if (!session) {
+    response.error(
+      ctx,
+      HTTP_STATUS.UNAUTHORIZED,
+      '需要登录会话',
+      null,
+      'UNAUTHORIZED'
+    )
+    return
+  }
+  const body = (ctx.request.body || {}) as { alerts?: AlertSyncRow[] }
+  const rows = Array.isArray(body.alerts) ? body.alerts : []
+  await syncSessionPriceAlerts(session.id, rows)
+  response.success(ctx, { count: rows.length })
 })
 
 router.post('/auth/logout', async (ctx) => {

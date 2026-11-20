@@ -83,9 +83,41 @@ model GoldAuthSession {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        GoldUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  push        GoldPushRegistration?
+  priceAlerts GoldPriceAlert[]
 
   @@unique([userId, platform])
   @@index([accessToken])
+}
+
+/// 移动端 Expo Push Token（绑会话；登出删会话即停推）
+model GoldPushRegistration {
+  id            BigInt            @id @default(autoincrement())
+  sessionId     BigInt            @unique
+  expoPushToken String            @db.VarChar(255)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  session       GoldAuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([expoPushToken])
+}
+
+/// 服务端价位提醒（元/克；由 App 同步）
+model GoldPriceAlert {
+  id              BigInt            @id @default(autoincrement())
+  sessionId       BigInt
+  clientAlertId   String            @db.VarChar(64)
+  label           String            @db.VarChar(128)
+  targetCnyG      Float
+  tolerancePct    Float             @default(0.2)
+  enabled         Boolean           @default(true)
+  lastTriggeredAt BigInt?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  session         GoldAuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, clientAlertId])
+  @@index([sessionId, enabled])
 }
 
 /// 采价失败 / skip 轻量日志（成功不写；短窗合并 count；约保留 7 天）

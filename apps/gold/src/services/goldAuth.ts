@@ -2,6 +2,7 @@ import { randomBytes } from 'crypto'
 
 import prisma from '../models'
 import { verifyPassword } from '../utils/password'
+import { revokeOtherUsersPushOnDevice } from './goldPush'
 
 export type GoldPlatform = 'desktop' | 'mobile';
 
@@ -50,6 +51,8 @@ export async function loginGoldUser(opts: {
 
   const accessToken = newAccessToken()
   const expiresAt = expiresAtMs()
+
+  await revokeOtherUsersPushOnDevice(user.id, deviceId)
 
   const session = await prisma.goldAuthSession.upsert({
     where: {
