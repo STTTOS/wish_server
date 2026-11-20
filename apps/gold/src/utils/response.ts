@@ -15,12 +15,14 @@ export function error(
   ctx: Context,
   status: number,
   message: string,
-  details: unknown = null
+  details: unknown = null,
+  code?: string
 ) {
   ctx.status = status
   ctx.body = {
     ok: false,
     message,
+    ...(code ? { code } : {}),
     details
   }
 }

@@ -6,7 +6,7 @@ import router from './router'
 import { logger } from './logger'
 import response from './utils/response'
 import { HTTP_STATUS } from './constants/httpStatus'
-import { requireApiToken } from './middleware/requireApiToken'
+import { requireGoldAuth } from './middleware/requireGoldAuth'
 
 export function createApp() {
   const app = new Koa()
@@ -31,7 +31,7 @@ export function createApp() {
   )
 
   app.use(koaBody({ json: true, urlencoded: true }))
-  app.use(requireApiToken)
+  app.use(requireGoldAuth)
   app.use(router.routes())
   app.use(router.allowedMethods())
 

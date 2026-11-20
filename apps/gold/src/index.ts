@@ -9,11 +9,14 @@ import {
 } from './services/dailySync'
 import { runYesterdayDailyQuality } from './services/dailyQuality'
 import { kickPricePoller, startPricePoller } from './services/poller'
+import { ensureGoldSeedUser } from './services/goldAuthSeed'
 
 async function bootstrap() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is required')
   }
+
+  await ensureGoldSeedUser()
 
   const app = createApp()
 

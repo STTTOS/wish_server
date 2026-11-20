@@ -17,6 +17,11 @@ import {
   clampMinAmpCnyG,
   clampSwingHours
 } from '../services/swingFeatures'
+import {
+  loginGoldUser,
+  logoutGoldSession,
+  normalizePlatform
+} from '../services/goldAuth'
 import response from '../utils/response'
 
 const router = new Router({ prefix: apiPrefix })
@@ -69,6 +74,61 @@ function queryNumber(
   const n = Number(Array.isArray(raw) ? raw[0] : raw)
   return Number.isFinite(n) ? n : fallback
 }
+
+router.post('/auth/login', async (ctx) => {
+  const body = (ctx.request.body || {}) as {
+    username?: string;
+    password?: string;
+    platform?: string;
+    deviceId?: string;
+  }
+  const platform = normalizePlatform(String(body.platform || ''))
+  if (!platform) {
+    response.error(
+      ctx,
+      HTTP_STATUS.BAD_REQUEST,
+      'platform 须为 desktop 或 mobile'
+    )
+    return
+  }
+  const result = await loginGoldUser({
+    username: String(body.username || ''),
+    password: String(body.password || ''),
+    platform,
+    deviceId: String(body.deviceId || '')
+  })
+  if (result.kind === 'invalid') {
+    response.error(
+      ctx,
+      HTTP_STATUS.UNAUTHORIZED,
+      '账号或密码错误',
+      null,
+      'INVALID_CREDENTIALS'
+    )
+    return
+  }
+  if (result.kind === 'device_conflict') {
+    response.error(
+      ctx,
+      HTTP_STATUS.CONFLICT,
+      '该平台已有其他设备登录，请先在原设备退出',
+      null,
+      'DEVICE_CONFLICT'
+    )
+    return
+  }
+  response.success(ctx, result.data)
+})
+
+router.post('/auth/logout', async (ctx) => {
+  const header = ctx.get('authorization') || ''
+  const token = header.toLowerCase().startsWith('bearer ')
+    ? header.slice(7).trim()
+    : ''
+  const body = (ctx.request.body || {}) as { deviceId?: string }
+  await logoutGoldSession(token, String(body.deviceId || ''))
+  response.success(ctx, { ok: true })
+})
 
 router.get('/health', async (ctx) => {
   const latest = await prisma.tick.findFirst({ orderBy: { ts: 'desc' } })

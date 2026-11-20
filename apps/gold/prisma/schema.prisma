@@ -62,6 +62,32 @@ model DailyQuality {
   updatedAt         DateTime @updatedAt
 }
 
+/// 金价服务登录用户（桌面/移动 App，非德州账号）
+model GoldUser {
+  id           BigInt            @id @default(autoincrement())
+  username     String            @unique @db.VarChar(64)
+  passwordHash String            @db.VarChar(255)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  sessions     GoldAuthSession[]
+}
+
+/// 每用户每平台仅一条会话（desktop / mobile 各一）
+model GoldAuthSession {
+  id          BigInt   @id @default(autoincrement())
+  userId      BigInt
+  platform    String   @db.VarChar(16)
+  deviceId    String   @db.VarChar(64)
+  accessToken String   @unique @db.VarChar(128)
+  expiresAt   BigInt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        GoldUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([accessToken])
+}
+
 /// 采价失败 / skip 轻量日志（成功不写；短窗合并 count；约保留 7 天）
 model PollLog {
   id        BigInt   @id @default(autoincrement())

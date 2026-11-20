@@ -38,13 +38,17 @@ pnpm run dev
 
 ## API
 
-统一响应：`{ ok, message, data }`。若配置了 `GOLD_API_TOKEN`，除 `/api/health` 外需：
+统一响应：`{ ok, message, data }`（失败时可带 `code`）。除 `/api/health`、`POST /api/auth/login` 外需：
 
-- `Authorization: Bearer <token>`，或
-- `X-Gold-Token: <token>`
+- `Authorization: Bearer <accessToken>`（`POST /api/auth/login` 换取），或
+- 遗留：`GOLD_API_TOKEN` 静态 Bearer（仅运维脚本）
+
+**单端单设备**：同一用户 `desktop` / `mobile` 各只允许一个 `deviceId`；PC 与手机可同时在线。
 
 | 方法 | 路径                              | 说明                                                         |
 | ---- | --------------------------------- | ------------------------------------------------------------ |
+| POST | `/api/auth/login`                 | 账号登录，返回 `accessToken`                                 |
+| POST | `/api/auth/logout`                | 退出（Bearer + body.deviceId）                               |
 | GET  | `/api/health`                     | 探活 + 采价状态 + 最新 tick 延迟                             |
 | GET  | `/api/poll-logs?limit=&kind=`     | 采价失败 / skip 轻量日志（成功不写；短窗合并）               |
 | GET  | `/api/spot`                       | 最新一条 tick                                                |
