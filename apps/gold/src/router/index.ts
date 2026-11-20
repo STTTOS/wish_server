@@ -112,16 +112,6 @@ router.post('/auth/login', async (ctx) => {
     )
     return
   }
-  if (result.kind === 'device_conflict') {
-    response.error(
-      ctx,
-      HTTP_STATUS.CONFLICT,
-      '该平台已有其他设备登录，请先在原设备退出',
-      null,
-      'DEVICE_CONFLICT'
-    )
-    return
-  }
   response.success(ctx, result.data)
 })
 

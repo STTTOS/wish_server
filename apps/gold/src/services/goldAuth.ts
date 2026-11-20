@@ -39,16 +39,6 @@ export async function loginGoldUser(opts: {
     return { kind: 'invalid' as const }
   }
 
-  const existing = await prisma.goldAuthSession.findUnique({
-    where: {
-      userId_platform: { userId: user.id, platform: opts.platform }
-    }
-  })
-
-  if (existing && existing.deviceId !== deviceId) {
-    return { kind: 'device_conflict' as const }
-  }
-
   const accessToken = newAccessToken()
   const expiresAt = expiresAtMs()
 

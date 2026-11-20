@@ -43,7 +43,7 @@ pnpm run dev
 - `Authorization: Bearer <accessToken>`（`POST /api/auth/login` 换取），或
 - 遗留：`GOLD_API_TOKEN` 静态 Bearer（仅运维脚本）
 
-**单端单设备**：同一用户 `desktop` / `mobile` 各只允许一个 `deviceId`；PC 与手机可同时在线。
+**单端单会话**：`desktop` / `mobile` 各一条会话；新设备登录**顶替**同平台旧 token（无需先在旧机退出）；PC 与手机可同时在线。
 
 | 方法 | 路径                              | 说明                                                         |
 | ---- | --------------------------------- | ------------------------------------------------------------ |
